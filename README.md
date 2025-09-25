@@ -17,6 +17,7 @@ The main goal is to provide a simple, one-command setup and an easy-to-use menu 
     - Managing an IP whitelist for accessing the UI.
     - Viewing live logs for both services.
     - Checking the status of the services.
+    - Updating the entire script suite from GitHub.
 - **Portable**: Uses the user's home directory (`$HOME`) for all file paths, avoiding hardcoded paths.
 
 ## Prerequisites
@@ -28,20 +29,30 @@ Before you begin, ensure you have the following installed on your system:
 2.  **NVIDIA GPU Drivers**: Required for GPU acceleration.
 3.  **NVIDIA Container Toolkit**: Allows Docker containers to access the GPU.
     - Install Toolkit: `https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html`
-4.  **`wget`**: Used by the scripts to download models. (e.g., `sudo apt-get install wget`)
+4.  **`curl` and `wget`**: Used by the scripts to download the installer and models. (e.g., `sudo apt-get install curl wget`)
 5.  **`tput`**: Used for colored output in the manager script (usually included in `ncurses`).
 
 ## How to Use
 
-### 1. Initial Setup
+### 1. Quick Install (One-Liner)
 
-The setup process is designed to be as simple as possible. Just run the `setup.sh` script.
+For a fast and easy setup, you can run the following command in your terminal. This will download the `setup.sh` script and execute it automatically.
 
 ```bash
-bash setup.sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/your-username/your-repo/main/setup.sh)"
+```
+**Note:** Make sure to replace `your-username/your-repo` with the actual path to your GitHub repository.
+
+### 2. Manual Setup
+
+If you prefer, you can download the `setup.sh` script first and then run it manually.
+```bash
+wget https://raw.githubusercontent.com/your-username/your-repo/main/setup.sh
+chmod +x setup.sh
+./setup.sh
 ```
 
-This script will perform the following actions:
+The script will perform the following actions:
 1.  Create three directories in your home folder:
     - `~/lm-studio-server`: Contains the `docker-compose.yml` and the manager script.
     - `~/LLM`: Stores your GGUF model files.

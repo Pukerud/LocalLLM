@@ -118,6 +118,26 @@ function manage_whitelist() { echo ""; echo "\${BLUE}--- Current Whitelist --- \
 function view_llm_log() { clear; echo "\${BLUE}--- Live Logs: LLM API Server --- \${RESET}"; echo "\${YELLOW}Press [Ctrl+C] to return to the menu.\${RESET}"; docker logs -f llm-api-server; read -p "Press [Enter] to continue..."; }
 function view_sillytavern_log() { clear; echo "\${BLUE}--- Live Logs: SillyTavern UI --- \${RESET}"; echo "\${YELLOW}Press [Ctrl+C] to return to the menu.\${RESET}"; docker logs -f sillytavern; read -p "Press [Enter] to continue..."; }
 function check_status() { echo ""; echo "\${BLUE}--- Docker Container Status --- \${RESET}"; docker ps; echo ""; echo "\${BLUE}--- Active Configuration --- \${RESET}"; CUR_M=\$(grep '\\--model /models/' "\$CONFIG_FILE" | sed -E 's|.*--model /models/([^ ]+).*|\\1|'); if [[ -n "\$CUR_M" ]]; then echo "Model: \${GREEN}\${CUR_M}\${RESET}"; else echo "\${YELLOW}No model configured.\${RESET}"; fi; CUR_C=\$(grep -o '\\--n_ctx [0-9]*' "\$CONFIG_FILE" | awk '{print \$2}'); if [[ -z "\$CUR_C" ]]; then echo "Context: \${YELLOW}Default\${RESET}"; else echo "Context: \${GREEN}\${CUR_C}\${RESET}"; fi; echo ""; read -p "Press [Enter] to continue..."; }
+function update_script() {
+    echo ""
+    echo "\${BLUE}Checking for updates... \${RESET}"
+    # --- IMPORTANT ---
+    # Replace this URL with the actual raw URL of your setup.sh script on GitHub
+    local update_url="https://raw.githubusercontent.com/your-username/your-repo/main/setup.sh"
+
+    echo "Downloading latest version from \${YELLOW}\$update_url\${RESET}..."
+    # Use /tmp to store the new script temporarily
+    local temp_script="/tmp/setup_latest.sh"
+    if curl -sSL -o "\$temp_script" "\$update_url"; then
+        echo "\${GREEN}Download complete. Applying update...\${RESET}"
+        chmod +x "\$temp_script"
+        # Execute the new setup script and exit the manager
+        exec bash "\$temp_script"
+    else
+        echo "\${YELLOW}Failed to download the update. Please check the URL or your connection.\${RESET}"
+        read -p "Press [Enter] to continue..."
+    fi
+}
 
 # --- Main Menu Loop ---
 while true; do
@@ -132,9 +152,10 @@ while true; do
     echo "\${YELLOW}6) \${RESET} View LLM API Log"
     echo "\${YELLOW}7) \${RESET} View SillyTavern UI Log"
     echo "\${YELLOW}8) \${RESET} Check Service Status"
-    echo "\${YELLOW}9) \${RESET} Exit"
+    echo "\${YELLOW}9) \${RESET} Update from GitHub"
+    echo "\${YELLOW}10) \${RESET} Exit"
     echo ""
-    read -p "Enter your choice [1-9]: " C
+    read -p "Enter your choice [1-10]: " C
     case "\$C" in
         1) search_models;;
         2) download_model;;
@@ -144,7 +165,8 @@ while true; do
         6) view_llm_log;;
         7) view_sillytavern_log;;
         8) check_status;;
-        9) echo "Exiting."; break;;
+        9) update_script;;
+        10) echo "Exiting."; break;;
         *) echo "Invalid option. Please try again."; read -p "Press [Enter] to continue...";;
     esac
 done
