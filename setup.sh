@@ -26,11 +26,17 @@ fi
 # --- Part 3: Create the Initial SillyTavern Configuration ---
 echo ""
 echo "--- [Step 2/7] Creating the initial SillyTavern configuration... ---"
+# Create a more complete, valid config.yaml to prevent parser errors on startup.
 cat <<EOF > "${SILLY_TAVERN_DIR}/config.yaml"
-# This configuration file enables whitelist mode for security.
-# To allow access from other machines, add their IP addresses here.
+# This is a default configuration file for SillyTavern.
+# It is recommended to use the in-app UI for most settings.
+
+# Whitelist mode for security. Only allows connections from these IPs.
 whitelist:
   - "127.0.0.1"
+
+# Default data root. Do not change unless you know what you are doing.
+dataRoot: ./data
 EOF
 chmod 777 "${SILLY_TAVERN_DIR}/config.yaml"
 echo "Initial configuration created."
@@ -128,30 +134,35 @@ function search_models() { echo ""; echo "\${BLUE}Find models at: \${YELLOW}http
 function download_model() { echo ""; read -p "Paste GGUF URL: " u; if [[ -z "\$u" ]]; then echo "\${YELLOW}No URL provided. Aborting.\${RESET}"; return; fi; c="\${u%%\\?*}"; f=\$(basename "\$c"); echo "\${BLUE}Downloading to: '\${f}'...\${RESET}"; wget -O "\${MODEL_DIR}/\${f}" "\$u"; if [ \$? -eq 0 ]; then echo "\${GREEN}Download successful!\${RESET}"; else echo "\${YELLOW}Download failed.\${RESET}"; fi; read -p "Press [Enter] to continue..."; }
 function switch_model() { echo ""; echo "\${BLUE}Scanning for models... \${RESET}"; mapfile -t m < <(find "\$MODEL_DIR" -maxdepth 1 -type f -name "*.gguf" -printf "%f\n"); if [ \${#m[@]} -eq 0 ]; then echo "\${YELLOW}No models found in \${MODEL_DIR}.\${RESET}"; read -p "Press [Enter] to continue..."; return; fi; echo "\${YELLOW}Select a model to use:\${RESET}"; PS3="Your choice: "; select mc in "\${m[@]}"; do if [[ -n "\$mc" ]]; then echo "\${BLUE}Selected model: \${mc}\${RESET}"; echo "Updating configuration..."; sed -i "s|--model /models/.*\\.gguf|--model /models/\${mc}|" "\$CONFIG_FILE"; echo "Restarting services..."; restart_all_services; echo "\${GREEN}Services are restarting with the new model: \${mc}!\${RESET}"; break; else echo "Invalid selection."; fi; done; read -p "Press [Enter] to continue..."; }
 function set_context_window() { echo ""; CUR_C=\$(grep -o '\\--n_ctx [0-9]*' "\$CONFIG_FILE" | awk '{print \$2}'); if [[ -z "\$CUR_C" ]]; then echo "\${BLUE}Current context size (n_ctx): \${GREEN}Default\${RESET}"; else echo "\${BLUE}Current context size (n_ctx): \${GREEN}\${CUR_C}\${RESET}"; fi; echo ""; echo "\${YELLOW}Select a new context size:\${RESET}"; opts=("2048" "4096" "8192" "16384" "Custom" "Remove"); PS3="Your choice: "; select ch in "\${opts[@]}"; do case "\$ch" in "Custom") read -p "Enter custom size: " N_C; if ! [[ "\$N_C" =~ ^[0-9]+\$ ]]; then echo "Invalid number."; return; fi; break;; *) N_C=\${ch%% *}; break;; esac; done; if [[ "\$N_C" == "Remove" ]]; then echo "\${BLUE}Removing n_ctx setting...\${RESET}"; sed -i 's/ --n_ctx [0-9]*//' "\$CONFIG_FILE"; else echo "\${BLUE}Setting n_ctx to \${N_C}...\${RESET}"; if grep -q "\\--n_ctx" "\$CONFIG_FILE"; then sed -i "s|--n_ctx [0-9]*|--n_ctx \${N_C}|" "\$CONFIG_FILE"; else sed -i "s|exec python3.*|& --n_ctx \${N_C}|" "\$CONFIG_FILE"; fi; fi; echo "Restarting services..."; restart_all_services; echo "\${GREEN}Services are restarting with the new context size!\${RESET}"; read -p "Press [Enter] to continue..."; }
-function manage_whitelist() { echo ""; echo "\${BLUE}--- Current Whitelist --- \${RESET}"; grep -v '^#' "\$SILLY_TAVERN_CONFIG_FILE" | grep -v '^\s*\$'; echo ""; read -p "Enter the IP address to add: " N_IP; if ! [[ "\$N_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "\${YELLOW}Invalid IP address format.\${RESET}"; read -p "Press [Enter] to continue..."; return; fi; if grep -q "\${N_IP}" "\$SILLY_TAVERN_CONFIG_FILE"; then echo "\${YELLOW}IP address already in whitelist.\${RESET}"; else echo "\${BLUE}Adding \${N_IP} to whitelist...\${RESET}"; echo "  - \"\${N_IP}\"" >> "\$SILLY_TAVERN_CONFIG_FILE"; echo "\${GREEN}IP address added.\${RESET}"; fi; echo "Forcing recreation of SillyTavern container to apply changes..."; docker compose --project-directory "\$SCRIPT_DIR" up -d --force-recreate sillytavern; echo "\${GREEN}SillyTavern restarted successfully!\${RESET}"; read -p "Press [Enter] to continue..."; }
-function view_llm_log() { clear; echo "\${BLUE}--- Live Logs: LLM API Server --- \${RESET}"; echo "\${YELLOW}Press [Ctrl+C] to return to the menu.\${RESET}"; docker logs -f llm-api-server; read -p "Press [Enter] to continue..."; }
-function view_sillytavern_log() { clear; echo "\${BLUE}--- Live Logs: SillyTavern UI --- \${RESET}"; echo "\${YELLOW}Press [Ctrl+C] to return to the menu.\${RESET}"; docker logs -f sillytavern; read -p "Press [Enter] to continue..."; }
-function check_status() { echo ""; echo "\${BLUE}--- Docker Container Status --- \${RESET}"; docker ps; echo ""; echo "\${BLUE}--- Active Configuration --- \${RESET}"; CUR_M=\$(grep '\\--model /models/' "\$CONFIG_FILE" | sed -E 's|.*--model /models/([^ ]+).*|\\1|'); if [[ -n "\$CUR_M" ]]; then echo "Model: \${GREEN}\${CUR_M}\${RESET}"; else echo "\${YELLOW}No model configured.\${RESET}"; fi; CUR_C=\$(grep -o '\\--n_ctx [0-9]*' "\$CONFIG_FILE" | awk '{print \$2}'); if [[ -z "\$CUR_C" ]]; then echo "Context: \${YELLOW}Default\${RESET}"; else echo "Context: \${GREEN}\${CUR_C}\${RESET}"; fi; echo ""; read -p "Press [Enter] to continue..."; }
-function toggle_whitelist() {
+function manage_whitelist() {
     echo ""
-    if grep -q "^#whitelist:" "\$SILLY_TAVERN_CONFIG_FILE"; then
-        echo "\${BLUE}Whitelist is currently disabled. Enabling it...\${RESET}"
-        sed -i 's/^#whitelist:/whitelist:/' "\$SILLY_TAVERN_CONFIG_FILE"
-        echo "\${GREEN}Whitelist enabled.\${RESET}"
-    elif grep -q "^whitelist:" "\$SILLY_TAVERN_CONFIG_FILE"; then
-        echo "\${BLUE}Whitelist is currently enabled. Disabling it...\${RESET}"
-        sed -i 's/^whitelist:/#whitelist:/' "\$SILLY_TAVERN_CONFIG_FILE"
-        echo "\${GREEN}Whitelist disabled.\${RESET}"
-    else
-        echo "\${YELLOW}Could not determine whitelist status. No changes made.\${RESET}"
+    echo "\${BLUE}--- Current Whitelist --- \${RESET}"
+    # Use awk to print only the IPs under the 'whitelist:' key
+    awk '/^whitelist:/{flag=1;next}/^[^ ]/{flag=0}flag' "\$SILLY_TAVERN_CONFIG_FILE"
+    echo ""
+    read -p "Enter the IP address to add: " N_IP
+    if ! [[ "\$N_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "\${YELLOW}Invalid IP address format.\${RESET}"
         read -p "Press [Enter] to continue..."
         return
+    fi
+    # Check if the IP already exists in the whitelist section
+    if awk '/^whitelist:/{flag=1;next}/^[^ ]/{flag=0}flag' "\$SILLY_TAVERN_CONFIG_FILE" | grep -q "\$N_IP"; then
+        echo "\${YELLOW}IP address already in whitelist.\${RESET}"
+    else
+        echo "\${BLUE}Adding \${N_IP} to whitelist...\${RESET}"
+        # Use sed to insert the new IP address directly after the 'whitelist:' line
+        sed -i "/^whitelist:/a \ \ - \"\${N_IP}\"" "\$SILLY_TAVERN_CONFIG_FILE"
+        echo "\${GREEN}IP address added.\${RESET}"
     fi
     echo "Forcing recreation of SillyTavern container to apply changes..."
     docker compose --project-directory "\$SCRIPT_DIR" up -d --force-recreate sillytavern
     echo "\${GREEN}SillyTavern restarted successfully!\${RESET}"
     read -p "Press [Enter] to continue..."
 }
+function view_llm_log() { clear; echo "\${BLUE}--- Live Logs: LLM API Server --- \${RESET}"; echo "\${YELLOW}Press [Ctrl+C] to return to the menu.\${RESET}"; docker logs -f llm-api-server; read -p "Press [Enter] to continue..."; }
+function view_sillytavern_log() { clear; echo "\${BLUE}--- Live Logs: SillyTavern UI --- \${RESET}"; echo "\${YELLOW}Press [Ctrl+C] to return to the menu.\${RESET}"; docker logs -f sillytavern; read -p "Press [Enter] to continue..."; }
+function check_status() { echo ""; echo "\${BLUE}--- Docker Container Status --- \${RESET}"; docker ps; echo ""; echo "\${BLUE}--- Active Configuration --- \${RESET}"; CUR_M=\$(grep '\\--model /models/' "\$CONFIG_FILE" | sed -E 's|.*--model /models/([^ ]+).*|\\1|'); if [[ -n "\$CUR_M" ]]; then echo "Model: \${GREEN}\${CUR_M}\${RESET}"; else echo "\${YELLOW}No model configured.\${RESET}"; fi; CUR_C=\$(grep -o '\\--n_ctx [0-9]*' "\$CONFIG_FILE" | awk '{print \$2}'); if [[ -z "\$CUR_C" ]]; then echo "Context: \${YELLOW}Default\${RESET}"; else echo "Context: \${GREEN}\${CUR_C}\${RESET}"; fi; echo ""; read -p "Press [Enter] to continue..."; }
 function update_script() {
     echo ""
     echo "\${BLUE}Checking for updates... \${RESET}"
@@ -192,11 +203,10 @@ while true; do
     echo "\${YELLOW}6) \${RESET} View LLM API Log"
     echo "\${YELLOW}7) \${RESET} View SillyTavern UI Log"
     echo "\${YELLOW}8) \${RESET} Check Service Status"
-    echo "\${YELLOW}9) \${RESET} Toggle Whitelist (ON/OFF)"
-    echo "\${YELLOW}10) \${RESET} Update from GitHub"
-    echo "\${YELLOW}11) \${RESET} Exit"
+    echo "\${YELLOW}9) \${RESET} Update from GitHub"
+    echo "\${YELLOW}10) \${RESET} Exit"
     echo ""
-    read -p "Enter your choice [1-11]: " C
+    read -p "Enter your choice [1-10]: " C
     case "\$C" in
         1) search_models;;
         2) download_model;;
@@ -206,9 +216,8 @@ while true; do
         6) view_llm_log;;
         7) view_sillytavern_log;;
         8) check_status;;
-        9) toggle_whitelist;;
-        10) update_script;;
-        11) echo "Exiting."; break;;
+        9) update_script;;
+        10) echo "Exiting."; break;;
         *) echo "Invalid option. Please try again."; read -p "Press [Enter] to continue...";;
     esac
 done
