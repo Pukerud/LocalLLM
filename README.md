@@ -46,7 +46,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/Pukerud/LocalLLM/main/se
 
 If you prefer, you can download the `setup.sh` script first and then run it manually.
 ```bash
-wget https://raw.githubusercontent.com/your-username/your-repo/main/setup.sh
+wget https://raw.githubusercontent.com/Pukerud/LocalLLM/main/setup.sh
 chmod +x setup.sh
 ./setup.sh
 ```
