@@ -39,9 +39,8 @@ Before you begin, ensure you have the following installed on your system:
 For a fast and easy setup, you can run the following command in your terminal. This will download the `setup.sh` script and execute it automatically.
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/your-username/your-repo/main/setup.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Pukerud/LocalLLM/main/setup.sh)"
 ```
-**Note:** Make sure to replace `your-username/your-repo` with the actual path to your GitHub repository.
 
 ### 2. Manual Setup
 
