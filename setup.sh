@@ -131,20 +131,26 @@ function check_status() { echo ""; echo "\${BLUE}--- Docker Container Status ---
 function update_script() {
     echo ""
     echo "\${BLUE}Checking for updates... \${RESET}"
-    # --- IMPORTANT ---
-    # Replace this URL with the actual raw URL of your setup.sh script on GitHub
-    local update_url="https://raw.githubusercontent.com/your-username/your-repo/main/setup.sh"
+    local update_url="https://raw.githubusercontent.com/Pukerud/LocalLLM/main/setup.sh"
 
     echo "Downloading latest version from \${YELLOW}\$update_url\${RESET}..."
-    # Use /tmp to store the new script temporarily
     local temp_script="/tmp/setup_latest.sh"
-    if curl -sSL -o "\$temp_script" "\$update_url"; then
-        echo "\${GREEN}Download complete. Applying update...\${RESET}"
-        chmod +x "\$temp_script"
-        # Execute the new setup script and exit the manager
-        exec bash "\$temp_script"
+
+    # Use curl with -f to fail silently on server errors (like 404)
+    if curl -fsSL -o "\$temp_script" "\$update_url"; then
+        # Check if the downloaded file is a valid shell script and not a GitHub 404 page
+        if head -n 1 "\$temp_script" | grep -q "^#\!/bin/bash"; then
+            echo "\${GREEN}Download complete. Applying update...\${RESET}"
+            chmod +x "\$temp_script"
+            # Execute the new setup script and exit the manager
+            exec bash "\$temp_script"
+        else
+            echo "\${YELLOW}Downloaded file is not a valid script. The URL may be incorrect.\${RESET}"
+            rm -f "\$temp_script"
+            read -p "Press [Enter] to continue..."
+        fi
     else
-        echo "\${YELLOW}Failed to download the update. Please check the URL or your connection.\${RESET}"
+        echo "\${YELLOW}Failed to download the update. Please check your internet connection or the repository URL.\${RESET}"
         read -p "Press [Enter] to continue..."
     fi
 }
