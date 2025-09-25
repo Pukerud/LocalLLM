@@ -31,9 +31,19 @@ EOF
 chmod 777 "${SILLY_TAVERN_DIR}/config.yaml"
 echo "Initial configuration created."
 
-# --- Part 4: Create the Unified Docker Compose File ---
+# --- Part 4: Create Docker Environment File ---
 echo ""
-echo "--- [Step 3/7] Creating the unified server and UI configuration... ---"
+echo "--- [Step 3/8] Creating Docker environment file... ---"
+cat <<EOF > "${INSTALL_DIR}/.env"
+# This file provides environment variables for Docker Compose.
+MODEL_DIR=${MODEL_DIR}
+SILLY_TAVERN_DIR=${SILLY_TAVERN_DIR}
+EOF
+echo "Docker environment file created."
+
+# --- Part 5: Create the Unified Docker Compose File ---
+echo ""
+echo "--- [Step 4/8] Creating the unified server and UI configuration... ---"
 cat <<EOF > "${INSTALL_DIR}/docker-compose.yml"
 version: '3.8'
 
@@ -44,7 +54,7 @@ services:
     restart: unless-stopped
     network_mode: "host"
     volumes:
-      - ${MODEL_DIR}:/models
+      - \${MODEL_DIR}:/models
       - llama_cpp_pip_cache:/pip_cache
     entrypoint: /models/build_and_run.sh
     deploy:
@@ -61,10 +71,10 @@ services:
     restart: unless-stopped
     network_mode: "host"
     volumes:
-      - ${SILLY_TAVERN_DIR}/config.yaml:/home/node/app/config.yaml:rw
-      - ${SILLY_TAVERN_DIR}/data:/home/node/app/data:rw
-      - ${SILLY_TAVERN_DIR}/extensions:/home/node/app/public/scripts/extensions/third-party:rw
-      - ${SILLY_TAVERN_DIR}/plugins:/home/node/app/plugins:rw
+      - \${SILLY_TAVERN_DIR}/config.yaml:/home/node/app/config.yaml:rw
+      - \${SILLY_TAVERN_DIR}/data:/home/node/app/data:rw
+      - \${SILLY_TAVERN_DIR}/extensions:/home/node/app/public/scripts/extensions/third-party:rw
+      - \${SILLY_TAVERN_DIR}/plugins:/home/node/app/plugins:rw
     command: ["node", "server.js", "--port", "8001"]
     depends_on:
       - llm-api
@@ -73,9 +83,9 @@ volumes:
   llama_cpp_pip_cache:
 EOF
 
-# --- Part 5: Create the Build-and-Run Script for the LLM Server ---
+# --- Part 6: Create the Build-and-Run Script for the LLM Server ---
 echo ""
-echo "--- [Step 4/7] Creating the build-from-source script... ---"
+echo "--- [Step 5/8] Creating the build-from-source script... ---"
 cat <<EOF > "${MODEL_DIR}/build_and_run.sh"
 #!/bin/bash
 set -e
