@@ -132,6 +132,26 @@ function manage_whitelist() { echo ""; echo "\${BLUE}--- Current Whitelist --- \
 function view_llm_log() { clear; echo "\${BLUE}--- Live Logs: LLM API Server --- \${RESET}"; echo "\${YELLOW}Press [Ctrl+C] to return to the menu.\${RESET}"; docker logs -f llm-api-server; read -p "Press [Enter] to continue..."; }
 function view_sillytavern_log() { clear; echo "\${BLUE}--- Live Logs: SillyTavern UI --- \${RESET}"; echo "\${YELLOW}Press [Ctrl+C] to return to the menu.\${RESET}"; docker logs -f sillytavern; read -p "Press [Enter] to continue..."; }
 function check_status() { echo ""; echo "\${BLUE}--- Docker Container Status --- \${RESET}"; docker ps; echo ""; echo "\${BLUE}--- Active Configuration --- \${RESET}"; CUR_M=\$(grep '\\--model /models/' "\$CONFIG_FILE" | sed -E 's|.*--model /models/([^ ]+).*|\\1|'); if [[ -n "\$CUR_M" ]]; then echo "Model: \${GREEN}\${CUR_M}\${RESET}"; else echo "\${YELLOW}No model configured.\${RESET}"; fi; CUR_C=\$(grep -o '\\--n_ctx [0-9]*' "\$CONFIG_FILE" | awk '{print \$2}'); if [[ -z "\$CUR_C" ]]; then echo "Context: \${YELLOW}Default\${RESET}"; else echo "Context: \${GREEN}\${CUR_C}\${RESET}"; fi; echo ""; read -p "Press [Enter] to continue..."; }
+function toggle_whitelist() {
+    echo ""
+    if grep -q "^#whitelist:" "\$SILLY_TAVERN_CONFIG_FILE"; then
+        echo "\${BLUE}Whitelist is currently disabled. Enabling it...\${RESET}"
+        sed -i 's/^#whitelist:/whitelist:/' "\$SILLY_TAVERN_CONFIG_FILE"
+        echo "\${GREEN}Whitelist enabled.\${RESET}"
+    elif grep -q "^whitelist:" "\$SILLY_TAVERN_CONFIG_FILE"; then
+        echo "\${BLUE}Whitelist is currently enabled. Disabling it...\${RESET}"
+        sed -i 's/^whitelist:/#whitelist:/' "\$SILLY_TAVERN_CONFIG_FILE"
+        echo "\${GREEN}Whitelist disabled.\${RESET}"
+    else
+        echo "\${YELLOW}Could not determine whitelist status. No changes made.\${RESET}"
+        read -p "Press [Enter] to continue..."
+        return
+    fi
+    echo "Forcing recreation of SillyTavern container to apply changes..."
+    docker compose --project-directory "\$SCRIPT_DIR" up -d --force-recreate sillytavern
+    echo "\${GREEN}SillyTavern restarted successfully!\${RESET}"
+    read -p "Press [Enter] to continue..."
+}
 function update_script() {
     echo ""
     echo "\${BLUE}Checking for updates... \${RESET}"
@@ -172,10 +192,11 @@ while true; do
     echo "\${YELLOW}6) \${RESET} View LLM API Log"
     echo "\${YELLOW}7) \${RESET} View SillyTavern UI Log"
     echo "\${YELLOW}8) \${RESET} Check Service Status"
-    echo "\${YELLOW}9) \${RESET} Update from GitHub"
-    echo "\${YELLOW}10) \${RESET} Exit"
+    echo "\${YELLOW}9) \${RESET} Toggle Whitelist (ON/OFF)"
+    echo "\${YELLOW}10) \${RESET} Update from GitHub"
+    echo "\${YELLOW}11) \${RESET} Exit"
     echo ""
-    read -p "Enter your choice [1-10]: " C
+    read -p "Enter your choice [1-11]: " C
     case "\$C" in
         1) search_models;;
         2) download_model;;
@@ -185,8 +206,9 @@ while true; do
         6) view_llm_log;;
         7) view_sillytavern_log;;
         8) check_status;;
-        9) update_script;;
-        10) echo "Exiting."; break;;
+        9) toggle_whitelist;;
+        10) update_script;;
+        11) echo "Exiting."; break;;
         *) echo "Invalid option. Please try again."; read -p "Press [Enter] to continue...";;
     esac
 done
