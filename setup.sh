@@ -9,14 +9,18 @@ SILLY_TAVERN_DIR="$HOME/sillytavern"
 MODEL_URL="https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf"
 MODEL_FILENAME="mistral-7b-instruct-v0.2.Q4_K_M.gguf"
 
-# --- Part 2: Directory and Model Preparation ---
-echo "--- [Step 1/7] Preparing directories and default model... ---"
-mkdir -p "$INSTALL_DIR"
-mkdir -p "$MODEL_DIR"
-mkdir -p "$SILLY_TAVERN_DIR"
-if [ ! -f "$MODEL_DIR/$MODEL_FILENAME" ]; then
-    echo "Default model not found. Downloading..."
-    wget -O "$MODEL_DIR/$MODEL_FILENAME" "$MODEL_URL"
+# --- Part 2: Directory and Model Preparation (skipped on update) ---
+if [ "$1" != "--update" ]; then
+    echo "--- [Step 1/7] Preparing directories and default model... ---"
+    mkdir -p "$INSTALL_DIR"
+    mkdir -p "$MODEL_DIR"
+    mkdir -p "$SILLY_TAVERN_DIR"
+    if [ ! -f "$MODEL_DIR/$MODEL_FILENAME" ]; then
+        echo "Default model not found. Downloading..."
+        wget -O "$MODEL_DIR/$MODEL_FILENAME" "$MODEL_URL"
+    fi
+else
+    echo "--- [Update Mode] Skipping directory and model preparation. ---"
 fi
 
 # --- Part 3: Create the Initial SillyTavern Configuration ---
@@ -31,20 +35,12 @@ EOF
 chmod 777 "${SILLY_TAVERN_DIR}/config.yaml"
 echo "Initial configuration created."
 
-# --- Part 4: Create Docker Environment File ---
+# --- Part 4: Create the Unified Docker Compose File from Template ---
 echo ""
-echo "--- [Step 3/8] Creating Docker environment file... ---"
-cat <<EOF > "${INSTALL_DIR}/.env"
-# This file provides environment variables for Docker Compose.
-MODEL_DIR=${MODEL_DIR}
-SILLY_TAVERN_DIR=${SILLY_TAVERN_DIR}
-EOF
-echo "Docker environment file created."
+echo "--- [Step 3/7] Creating the unified server and UI configuration... ---"
 
-# --- Part 5: Create the Unified Docker Compose File ---
-echo ""
-echo "--- [Step 4/8] Creating the unified server and UI configuration... ---"
-cat <<EOF > "${INSTALL_DIR}/docker-compose.yml"
+# Create a template for the docker-compose file with placeholders
+cat <<EOF > "${INSTALL_DIR}/docker-compose.template.yml"
 version: '3.8'
 
 services:
@@ -54,7 +50,7 @@ services:
     restart: unless-stopped
     network_mode: "host"
     volumes:
-      - \${MODEL_DIR}:/models
+      - ##MODEL_DIR##:/models
       - llama_cpp_pip_cache:/pip_cache
     entrypoint: /models/build_and_run.sh
     deploy:
@@ -71,10 +67,10 @@ services:
     restart: unless-stopped
     network_mode: "host"
     volumes:
-      - \${SILLY_TAVERN_DIR}/config.yaml:/home/node/app/config.yaml:rw
-      - \${SILLY_TAVERN_DIR}/data:/home/node/app/data:rw
-      - \${SILLY_TAVERN_DIR}/extensions:/home/node/app/public/scripts/extensions/third-party:rw
-      - \${SILLY_TAVERN_DIR}/plugins:/home/node/app/plugins:rw
+      - ##SILLY_TAVERN_DIR##/config.yaml:/home/node/app/config.yaml:rw
+      - ##SILLY_TAVERN_DIR##/data:/home/node/app/data:rw
+      - ##SILLY_TAVERN_DIR##/extensions:/home/node/app/public/scripts/extensions/third-party:rw
+      - ##SILLY_TAVERN_DIR##/plugins:/home/node/app/plugins:rw
     command: ["node", "server.js", "--port", "8001"]
     depends_on:
       - llm-api
@@ -83,9 +79,17 @@ volumes:
   llama_cpp_pip_cache:
 EOF
 
-# --- Part 6: Create the Build-and-Run Script for the LLM Server ---
+# Use sed to replace placeholders with actual paths, handling potential special characters
+# This creates the final, definitive docker-compose.yml
+sed -e "s|##MODEL_DIR##|${MODEL_DIR}|g" \
+    -e "s|##SILLY_TAVERN_DIR##|${SILLY_TAVERN_DIR}|g" \
+    "${INSTALL_DIR}/docker-compose.template.yml" > "${INSTALL_DIR}/docker-compose.yml"
+
+echo "Docker Compose file created successfully."
+
+# --- Part 5: Create the Build-and-Run Script for the LLM Server ---
 echo ""
-echo "--- [Step 5/8] Creating the build-from-source script... ---"
+echo "--- [Step 4/7] Creating the build-from-source script... ---"
 cat <<EOF > "${MODEL_DIR}/build_and_run.sh"
 #!/bin/bash
 set -e
@@ -142,8 +146,8 @@ function update_script() {
         if head -n 1 "\$temp_script" | grep -q "^#\!/bin/bash"; then
             echo "\${GREEN}Download complete. Applying update...\${RESET}"
             chmod +x "\$temp_script"
-            # Execute the new setup script and exit the manager
-            exec bash "\$temp_script"
+            # Execute the new setup script with the --update flag and exit the manager
+            exec bash "\$temp_script" --update
         else
             echo "\${YELLOW}Downloaded file is not a valid script. The URL may be incorrect.\${RESET}"
             rm -f "\$temp_script"
