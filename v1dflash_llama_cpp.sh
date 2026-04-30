@@ -395,7 +395,7 @@ start_dflash_server() {
         echo "   [5] 65536   (64K — likely OOM with this quant!)"
     fi
     if [[ "$max_safe_ctx" -ge 81920 ]]; then
-        echo "   [6] 81920   (80K — best for IQ4_XS on 24GB, ~77 t/s)"
+        echo "   [6] 81920   (80K — max for IQ4_XS on 24GB)"
     else
         echo "   [6] 81920   (80K — OOM with this quant!)"
     fi

@@ -60,20 +60,18 @@ Download from [spiritbuun/Qwen3.6-27B-DFlash-GGUF](https://huggingface.co/spirit
 
 ### DFlash Tested Performance (RTX 4090, 24 GB VRAM)
 
-Qwen3.6-27B models with `dflash-draft-3.6-q8_0.gguf`, `--reasoning off`, no KV cache flags:
+Qwen3.6-27B models with `dflash-draft-3.6-q8_0.gguf`, `--reasoning off`, no KV cache flags, temp=0, 512 generated tokens via `llama-server` chat completions API:
 
 | Model | Model Size | Context | Speed | DFlash Acceptance | Result |
 |-------|-----------|---------|-------|-------------------|--------|
-| IQ4_XS | ~15 GB | 6,048 | 111 t/s | 68% | ✅ |
-| IQ4_XS | ~15 GB | 32,768 | 63 t/s | 18% | ✅ |
-| IQ4_XS | ~15 GB | 65,536 | 73 t/s | 40% | ✅ |
-| IQ4_XS | ~15 GB | **81,920** | **77 t/s** | **46%** | ✅ **Best for IQ4_XS** |
-| IQ4_XS | ~15 GB | 98,304 | — | — | ❌ OOM (tree buffers) |
-| Q5_K_M | ~18 GB | 6,048 | — | — | ✅ |
-| Q5_K_M | ~18 GB | **16,384** | **70 t/s** | **38%** | ✅ **Best for Q5_K_M** |
-| Q5_K_M | ~18 GB | 32,768 | — | — | ❌ OOM (tree buffers) |
+| Base IQ4_XS | ~15 GB | 6,048 | 43 t/s | 18% | ⚠️ |
+| Base IQ4_XS | ~15 GB | 32,768 | 43 t/s | 18% | ⚠️ |
+| Base IQ4_XS | ~15 GB | 65,536 | 41 t/s | 18% | ⚠️ |
+| Base IQ4_XS | ~15 GB | 81,920 | 40 t/s | 18% | ⚠️ |
+| HauhauCS IQ4_XS | ~15 GB | 8,192 | 39 t/s | 16% | ⚠️ |
+| HauhauCS IQ4_XS | ~15 GB | 81,920 | 37 t/s | 16% | ⚠️ |
 
-> **Why the OOM?** DFlash allocates ~1.4 GB tree verify buffers (`48 layers × 20 tokens`) + ~300 MB recurrent state on top of normal model + KV memory. The script auto-detects model file size and warns if the selected context may exceed VRAM.
+> **⚠️ Not getting speedup with DFlash.** Acceptance rates are low (~16-18%) and speeds (~37-43 t/s) are comparable to or slower than running without speculative decoding. The HuggingFace model card reports higher numbers (87-97 t/s, 37-43% acceptance) but those were measured on an RTX 3090 with `llama-speculative-simple` using a raw text prompt — not `llama-server` with chat template. The chat template overhead and `llama-server` request handling appear to negate DFlash's benefit at these acceptance levels.
 
 > **Why no KV cache flags?** The HuggingFace example doesn't use `-ctk`/`-ctv`. Adding them changed the memory layout and left no headroom for DFlash's runtime allocations. Match the example exactly for stability.
 
