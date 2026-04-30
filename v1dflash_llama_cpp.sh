@@ -305,27 +305,32 @@ start_dflash_server() {
 
     # ── Context / KV ──
     echo ""
+    echo -e " \033[1;33mNote:\033[0m DFlash uses ~1.5 GB extra for tree verify buffers on top of"
+    echo " normal VRAM. Use smaller context / lower KV cache than ik_llama.cpp."
+    echo ""
     echo " Select Context Size / KV Cache:"
-    echo "   [1] 32768   (32K, q8_0 KV - normal chat)"
-    echo "   [2] 65536   (64K, q8_0 KV - long chat)"
-    echo "   [3] 131072  (128K, q4_0 KV - safe long context)"
-    echo "   [4] 262144  (256K, q4_0 KV - max context, may OOM)"
-    echo "   [5] Custom"
-    read -p " Choice (1-5, default 2): " ctx_choice
+    echo "   [1] 4096    (4K, q4_0 KV - smallest, safest)"
+    echo "   [2] 8192    (8K, q4_0 KV - short chat, safe on 24GB)"
+    echo "   [3] 32768   (32K, q4_0 KV - normal chat, safe on 24GB)"
+    echo "   [4] 65536   (64K, q4_0 KV - may OOM on 24GB with 27B models)"
+    echo "   [5] 131072  (128K, q4_0 KV - likely OOM on 24GB)"
+    echo "   [6] Custom"
+    read -p " Choice (1-6, default 3): " ctx_choice
     ctx_choice=$(echo "$ctx_choice" | tr -d '[:space:]')
 
     case "$ctx_choice" in
-        1) ctx="32768";  cache_type="q8_0" ;;
-        3) ctx="131072"; cache_type="q4_0" ;;
-        4) ctx="262144"; cache_type="q4_0" ;;
-        5)
+        1) ctx="4096";   cache_type="q4_0" ;;
+        2) ctx="8192";   cache_type="q4_0" ;;
+        4) ctx="65536";  cache_type="q4_0" ;;
+        5) ctx="131072"; cache_type="q4_0" ;;
+        6)
             read -p " Enter context size: " ctx
             ctx=$(echo "$ctx" | tr -d '[:space:]')
             read -p " Enter KV cache type (q8_0/q5_0/q4_0/f16) [q4_0]: " cache_type
             cache_type=$(echo "$cache_type" | tr -d '[:space:]')
             if [[ -z "$cache_type" ]]; then cache_type="q4_0"; fi
             ;;
-        *) ctx="65536"; cache_type="q8_0" ;;
+        *) ctx="32768"; cache_type="q4_0" ;;
     esac
 
     if [[ ! "$ctx" =~ ^[0-9]+$ ]]; then
@@ -464,11 +469,11 @@ start_dflash_server() {
         return
     fi
 
-    # Draft GPU offload
+    # Draft GPU offload (use 99, not 999 — buun fork convention)
     if [[ ${#dflash_flags[@]} -gt 0 ]]; then
-        if arg_probe_valid "$server_bin" "${dflash_flags[@]}" -ngld 999; then
-            dflash_flags+=(-ngld 999)
-            flag_summary+=("draft:-ngld 999")
+        if arg_probe_valid "$server_bin" "${dflash_flags[@]}" -ngld 99; then
+            dflash_flags+=(-ngld 99)
+            flag_summary+=("draft:-ngld 99")
         fi
     fi
 
@@ -515,19 +520,24 @@ start_dflash_server() {
     # ── Build command ──
     # DFlash requires thinking OFF for good acceptance rates.
     # Always use --jinja + thinking=false.
+    # Use -ngl 99 (not 999) — buun fork convention, avoids over-offloading.
+    # Use -np 1 (not --parallel) — buun fork uses -np.
     cmd=("$server_bin"
         -m "${MODELS_DIR}/${target}"
+        -md "${MODELS_DIR}/${draft_model}"
+        --spec-type dflash
+        -ngl 99
+        -ngld 99
+        -cd "$draft_ctx"
+        -np 1
         -c "$ctx"
-        -ngl 999
         "${fa_flags[@]}"
         "${cache_flags[@]}"
         "${batch_flags[@]}"
-        --parallel 1
         --jinja
         --chat-template-kwargs '{"enable_thinking":false}'
         --host 0.0.0.0
         --port 8080
-        "${dflash_flags[@]}"
         "${vision_flags[@]}"
     )
 
@@ -543,6 +553,7 @@ start_dflash_server() {
     echo "   KV cache:  $cache_type"
     echo "   Vision:    ${vis_text:-off}"
     echo "   Thinking:  OFF (required for DFlash acceptance)"
+    echo "   -ngl 99 -ngld 99 -np 1 (buun fork conventions)"
     echo ""
     echo " Accepted flags:"
     for x in "${flag_summary[@]}"; do echo "   + $x"; done
@@ -557,6 +568,10 @@ start_dflash_server() {
     echo " Command:"
     printf ' %q' "${cmd[@]}"
     echo ""
+    echo ""
+
+    echo -e " \033[1;33mNote:\033[0m If you get OOM/crash on first message, try a smaller context or q4_0 KV."
+    echo " DFlash tree verify buffers need ~1.5 GB extra VRAM beyond normal model usage."
     echo ""
 
     {
