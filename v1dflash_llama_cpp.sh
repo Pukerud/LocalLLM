@@ -319,8 +319,8 @@ start_dflash_server() {
     # ~15 GB or less = IQ4_XS / Q4 = more VRAM headroom
     # ~18 GB or more = Q5_K / Q6 = tighter VRAM
     if (( $(echo "$model_size_gb < 16" | bc -l) )); then
-        max_safe_ctx=65536
-        size_note="(~${model_size_gb} GB model — 65K safe)"
+        max_safe_ctx=81920
+        size_note="(~${model_size_gb} GB model — 80K safe)"
     elif (( $(echo "$model_size_gb < 17" | bc -l) )); then
         max_safe_ctx=32768
         size_note="(~${model_size_gb} GB model — 32K safe)"
@@ -538,7 +538,7 @@ start_dflash_server() {
         "${fa_flags[@]}"
         "${batch_flags[@]}"
         --jinja
-        --chat-template-kwargs '{"enable_thinking":false}'
+        --reasoning off
         --host 0.0.0.0
         --port 8080
         "${vision_flags[@]}"
