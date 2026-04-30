@@ -223,47 +223,7 @@ start_dflash_server() {
         return
     fi
 
-    # ── List models ──
-    raw_data=()
-    if [[ -d "$MODELS_DIR" ]]; then
-        for f in "$MODELS_DIR"/*.gguf; do
-            [[ -e "$f" ]] || continue
-            name=$(basename "$f")
-            [[ "$name" == *"mmproj"* ]] && continue
-            [[ "$name" == *"dflash"* || "$name" == *"draft"* ]] && continue
-            size=$(du -h "$f" | cut -f1)
-            raw_data+=("${name}|${size}")
-        done
-    fi
-
-    if [[ ${#raw_data[@]} -eq 0 ]]; then
-        echo " No target models found in $MODELS_DIR/"
-        echo " (Draft/mmproj models are filtered out)"
-        read -p " Press Enter to return..."
-        return
-    fi
-
-    echo " Select MAIN (target) Model:"
-    printf "   %-3s %-64s %s\n" "NR" "MODEL NAME" "SIZE"
-    echo "   ----------------------------------------------------------------------"
-    for i in "${!raw_data[@]}"; do
-        IFS="|" read -r m_name m_size <<< "${raw_data[$i]}"
-        printf "   %2d) %-64s [%s]\n" "$((i+1))" "$(echo "$m_name" | cut -c1-64)" "$m_size"
-    done
-    echo ""
-    read -p " Model NR: " n
-    n=$(echo "$n" | tr -d '[:space:]')
-
-    local idx=$(( n - 1 ))
-    local entry=${raw_data[$idx]}
-    if [[ -z "$entry" ]]; then
-        echo " Invalid model number."
-        sleep 2
-        return
-    fi
-    target="${entry%%|*}"
-
-    # ── Draft model selection ──
+    # ── Draft model selection FIRST (to filter targets) ──
     echo ""
     get_dflash_drafts
     if [[ ${#dflash_drafts[@]} -eq 0 ]]; then
@@ -293,8 +253,104 @@ start_dflash_server() {
         local didx=$((draft_choice - 1))
         draft_model="${dflash_drafts[$didx]:-${dflash_drafts[0]}}"
     fi
-
     echo " Draft: $draft_model"
+
+    # Extract compatibility tokens from selected draft
+    draft_tokens=()
+    d_low=$(echo "$draft_model" | tr '[:upper:]' '[:lower:]')
+    for tok in $(echo "$d_low" | sed 's/[-_.]/ /g'); do
+        if [[ "$tok" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            draft_tokens+=("$tok")
+        fi
+    done
+
+    # ── List compatible models ──
+    raw_data=()
+    compat_data=()
+    incompt_data=()
+
+    if [[ -d "$MODELS_DIR" ]]; then
+        for f in "$MODELS_DIR"/*.gguf; do
+            [[ -e "$f" ]] || continue
+            name=$(basename "$f")
+            [[ "$name" == *"mmproj"* ]] && continue
+            [[ "$name" == *"dflash"* || "$name" == *"draft"* ]] && continue
+            size=$(du -h "$f" | cut -f1)
+            raw_data+=("${name}|${size}")
+        done
+    fi
+
+    if [[ ${#raw_data[@]} -eq 0 ]]; then
+        echo " No target models found in $MODELS_DIR/"
+        read -p " Press Enter to return..."
+        return
+    fi
+
+    for entry in "${raw_data[@]}"; do
+        m_name="${entry%%|*}"
+        m_low=$(echo "$m_name" | tr '[:upper:]' '[:lower:]')
+        matched=false
+        for tok in "${draft_tokens[@]}"; do
+            if [[ "$m_low" == *"qwen${tok}"* ]] || [[ "$m_low" == *"qwen"*"${tok}"* ]]; then
+                matched=true
+                break
+            fi
+        done
+        if $matched; then
+            compat_data+=("$entry")
+        else
+            incompt_data+=("$entry")
+        fi
+    done
+
+    echo ""
+    if [[ ${#compat_data[@]} -gt 0 ]]; then
+        echo " Compatible target models (matched to $draft_model):"
+        printf "   %-3s %-64s %-6s %s\n" "NR" "MODEL NAME" "SIZE" "MATCH"
+        echo "   ----------------------------------------------------------------------"
+        for i in "${!compat_data[@]}"; do
+            IFS="|" read -r m_name m_size <<< "${compat_data[$i]}"
+            m_low=$(echo "$m_name" | tr '[:upper:]' '[:lower:]')
+            match_reason=""
+            for tok in "${draft_tokens[@]}"; do
+                if [[ "$m_low" == *"qwen${tok}"* ]] || [[ "$m_low" == *"qwen"*"${tok}"* ]]; then
+                    match_reason="qwen${tok}"
+                    break
+                fi
+            done
+            printf "   %2d) %-64s [%-5s] \033[1;32m%s\033[0m\n" "$((i+1))" "$(echo "$m_name" | cut -c1-64)" "$m_size" "$match_reason"
+        done
+    fi
+
+    if [[ ${#incompt_data[@]} -gt 0 ]]; then
+        echo ""
+        echo " Incompatible models (wrong family for this draft):"
+        echo "   ----------------------------------------------------------------------"
+        for i in "${!incompt_data[@]}"; do
+            IFS="|" read -r m_name m_size <<< "${incompt_data[$i]}"
+            printf "       \033[2m%-64s [%-5s]\033[0m\n" "$(echo "$m_name" | cut -c1-64)" "$m_size"
+        done
+    fi
+
+    echo ""
+    if [[ ${#compat_data[@]} -gt 0 ]]; then
+        read -p " Model NR: " n
+    else
+        echo -e " \033[1;33mNo compatible models found for $draft_model\033[0m"
+        echo " You can still select from incompatible models at your own risk."
+        read -p " Enter NR from full list (shown greyed), or Enter to cancel: " n
+        compat_data=("${raw_data[@]}")
+    fi
+    n=$(echo "$n" | tr -d '[:space:]')
+
+    local idx=$(( n - 1 ))
+    local entry=${compat_data[$idx]}
+    if [[ -z "$entry" ]]; then
+        echo " Invalid model number."
+        sleep 2
+        return
+    fi
+    target="${entry%%|*}"
 
     # ── Context / KV ──
     echo ""
@@ -558,9 +614,11 @@ MONITOR_PID=$!
 while true; do
     echo ""
 
-    # List models (target models = not mmproj, not draft/dflash)
+    # List models — auto-match draft models to compatible targets
     raw_data=()
     draft_data=()
+    compatible_data=()
+    incompatible_data=()
 
     if [[ -d "$MODELS_DIR" ]]; then
         for f in "$MODELS_DIR"/*.gguf; do
@@ -583,15 +641,103 @@ while true; do
         done
     fi
 
-    if [[ ${#raw_data[@]} -eq 0 ]]; then
-        echo "   (No target .gguf models found in ./$MODELS_DIR/)"
-    else
-        printf "   %-3s %-64s %s\n" "NR" "TARGET MODELS" "SIZE"
-        echo "   ----------------------------------------------------------------------"
-        for i in "${!raw_data[@]}"; do
-            IFS="|" read -r m_name m_size <<< "${raw_data[$i]}"
-            printf "   %2d) %-64s [%s]\n" "$((i+1))" "$(echo "$m_name" | cut -c1-64)" "$m_size"
+    # Build compatibility tokens from draft model filenames
+    # e.g. "dflash-draft-3.6-q8_0" -> tokens: "3.6", "qwen3.6"
+    draft_tokens=()
+    if [[ ${#draft_data[@]} -gt 0 ]]; then
+        for d_entry in "${draft_data[@]}"; do
+            d_name="${d_entry%%|*}"
+            d_low=$(echo "$d_name" | tr '[:upper:]' '[:lower:]')
+            # Extract version-like tokens (e.g. "3.6" from "draft-3.6")
+            for tok in $(echo "$d_low" | sed 's/[-_.]/ /g'); do
+                # Match things like "3.6", "3.5", "27b", "35b"
+                if [[ "$tok" =~ ^[0-9]+\.[0-9]+$ ]] || [[ "$tok" =~ ^[0-9]+b$ ]]; then
+                    draft_tokens+=("$tok")
+                fi
+            done
         done
+        # Deduplicate
+        mapfile -t draft_tokens < <(printf '%s\n' "${draft_tokens[@]}" | sort -u)
+    fi
+
+    # Classify target models as compatible or incompatible
+    if [[ ${#draft_data[@]} -gt 0 ]] && [[ ${#raw_data[@]} -gt 0 ]]; then
+        for entry in "${raw_data[@]}"; do
+            m_name="${entry%%|*}"
+            m_low=$(echo "$m_name" | tr '[:upper:]' '[:lower:]')
+            matched=false
+
+            for tok in "${draft_tokens[@]}"; do
+                if [[ "$m_low" == *"$tok"* ]]; then
+                    # Extra check: version token like "3.6" should be near "qwen" or model family
+                    # to avoid matching "3.6" in unrelated model names
+                    if [[ "$tok" =~ ^[0-9]+\.[0-9]+$ ]]; then
+                        # Check if the version is in a context like qwen3.6 or just 3.6 after qwen
+                        if [[ "$m_low" == *"qwen${tok}"* ]] || [[ "$m_low" == *"qwen"*"${tok}"* ]]; then
+                            matched=true
+                            break
+                        fi
+                    else
+                        matched=true
+                        break
+                    fi
+                fi
+            done
+
+            if $matched; then
+                compatible_data+=("$entry")
+            else
+                incompatible_data+=("$entry")
+            fi
+        done
+    else
+        # No drafts or no targets — show all as compatible
+        compatible_data=("${raw_data[@]}")
+    fi
+
+    # Display
+    if [[ ${#compatible_data[@]} -eq 0 && ${#incompatible_data[@]} -eq 0 ]]; then
+        echo "   (No .gguf models found in ./$MODELS_DIR/)"
+    else
+        if [[ ${#compatible_data[@]} -gt 0 ]]; then
+            echo ""
+            if [[ ${#draft_data[@]} -gt 0 ]]; then
+                printf "   %-3s %-64s %-6s %s\n" "NR" "COMPATIBLE TARGET MODELS" "SIZE" "MATCH"
+            else
+                printf "   %-3s %-64s %s\n" "NR" "TARGET MODELS" "SIZE"
+            fi
+            echo "   ----------------------------------------------------------------------"
+            for i in "${!compatible_data[@]}"; do
+                IFS="|" read -r m_name m_size <<< "${compatible_data[$i]}"
+                m_low=$(echo "$m_name" | tr '[:upper:]' '[:lower:]')
+                match_reason=""
+                if [[ ${#draft_data[@]} -gt 0 ]]; then
+                    for tok in "${draft_tokens[@]}"; do
+                        if [[ "$tok" =~ ^[0-9]+\.[0-9]+$ ]]; then
+                            if [[ "$m_low" == *"qwen${tok}"* ]] || [[ "$m_low" == *"qwen"*"${tok}"* ]]; then
+                                match_reason="qwen${tok}"
+                                break
+                            fi
+                        fi
+                    done
+                fi
+                if [[ -n "$match_reason" ]]; then
+                    printf "   %2d) %-64s [%-5s] \033[1;32m%s\033[0m\n" "$((i+1))" "$(echo "$m_name" | cut -c1-64)" "$m_size" "$match_reason"
+                else
+                    printf "   %2d) %-64s [%-5s]\n" "$((i+1))" "$(echo "$m_name" | cut -c1-64)" "$m_size"
+                fi
+            done
+        fi
+
+        if [[ ${#incompatible_data[@]} -gt 0 ]]; then
+            echo ""
+            printf "   %-64s %s\n" "OTHER MODELS (not matched to draft)" "SIZE"
+            echo "   ----------------------------------------------------------------------"
+            for i in "${!incompatible_data[@]}"; do
+                IFS="|" read -r m_name m_size <<< "${incompatible_data[$i]}"
+                printf "       \033[2m%-64s [%-5s]\033[0m\n" "$(echo "$m_name" | cut -c1-64)" "$m_size"
+            done
+        fi
     fi
 
     if [[ ${#draft_data[@]} -gt 0 ]]; then
