@@ -1,99 +1,86 @@
-# Local LLM Server & UI Automation
+# HostLLM — Local LLM Engine Manager
 
-This project provides a set of scripts to completely automate the setup and management of a local Large Language Model (LLM) environment using Docker. It includes a GPU-accelerated API server for the LLM and the SillyTavern web UI for chat.
+A multi-engine dashboard for running local LLMs on NVIDIA GPUs. Pick your engine, configure your model, and go.
 
-The main goal is to provide a simple, one-command setup and an easy-to-use menu for managing the environment afterward.
+## Engines
 
-## Features
+| # | Engine | Script | What it does |
+|---|--------|--------|-------------|
+| **1** | **llama.cpp** (ik_llama.cpp) | `v1llama_cpp.sh` | Max context (262K), all GGUF models, adaptive vision, speculative decoding, benchmarks |
+| **2** | **DFlash llama.cpp** (buun-llama-cpp) | `v1dflash_llama_cpp.sh` | DFlash block-diffusion speculative decoding for faster inference |
+| **3** | **vLLM** (Docker) | `v1_vllm.sh` | Max throughput (50-127 TPS), tool calls, Docker-based |
 
-- **Automated Setup**: A single `setup.sh` script prepares directories, downloads a default model, and configures all necessary files.
-- **Dockerized Services**: The entire stack (LLM API server and SillyTavern UI) runs in isolated Docker containers.
-- **GPU Acceleration**: The LLM server is configured to use NVIDIA GPUs via `llama-cpp-python` for high-performance inference.
-- **Interactive Manager**: A powerful `llm_manager.sh` script provides a menu for:
-    - Searching for new models on Hugging Face.
-    - Downloading new models (GGUF format).
-    - Switching the active LLM on the fly.
-    - Adjusting the LLM's context window size.
-    - Managing an IP whitelist for accessing the UI.
-    - Viewing live logs for both services.
-    - Checking the status of the services.
-    - Updating the entire script suite from GitHub.
-- **Portable**: Uses the user's home directory (`$HOME`) for all file paths, avoiding hardcoded paths.
+All three share the same model directory (`llama_models/`) and GPU port (8080). Only one can run at a time.
 
-## Prerequisites
-
-Before you begin, ensure you have the following installed on your system:
-
-1.  **Docker**: The containerization platform used to run the services.
-    - Install Docker: `https://docs.docker.com/engine/install/`
-2.  **NVIDIA GPU Drivers**: Required for GPU acceleration.
-3.  **NVIDIA Container Toolkit**: Allows Docker containers to access the GPU.
-    - Install Toolkit: `https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html`
-4.  **`curl` and `wget`**: Used by the scripts to download the installer and models. (e.g., `sudo apt-get install curl wget`)
-5.  **`tput`**: Used for colored output in the manager script (usually included in `ncurses`).
-
-## How to Use
-
-### 1. Quick Install (One-Liner)
-
-For a fast and easy setup, you can run the following command in your terminal. This will download the `setup.sh` script and execute it automatically.
+## Quick Start
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/Pukerud/LocalLLM/main/setup.sh)"
+git clone https://github.com/Pukerud/LocalLLM.git
+cd LocalLLM
+chmod +x HostLLM.sh v1llama_cpp.sh v1dflash_llama_cpp.sh v1_vllm.sh
+./HostLLM.sh
 ```
 
-### 2. Manual Setup
+### Prerequisites
 
-If you prefer, you can download the `setup.sh` script first and then run it manually.
-```bash
-wget https://raw.githubusercontent.com/Pukerud/LocalLLM/main/setup.sh
-chmod +x setup.sh
-./setup.sh
+- **NVIDIA GPU** with CUDA 12+
+- **CUDA toolkit**: `/usr/local/cuda/bin/nvcc`
+- **Docker** (for vLLM only)
+- **Build tools**: `gcc`, `g++`, `cmake`, `git`
+- **Utilities**: `curl`, `jq`, `wget`
+
+## llama.cpp Dashboard (ik_llama.cpp)
+
+Full-featured dashboard with:
+
+- **Adaptive server launch** — text-only or vision (GPU or CPU mmproj offload)
+- **OpenClaw mode** — long context (64K/128K/256K) with optional vision + draft models
+- **Cowork server** — Anthropic/Claude-compatible API with `--alias`
+- **Benchmarking** — practical q4_0 baseline, KV quality matrix, full model sweep
+- **Model management** — download from URL, delete, list with benchmark stats
+- **Install/update** — clones and builds [ik_llama.cpp](https://github.com/ikawrakow/ik_llama.cpp) for RTX 4090 (sm_89)
+
+## DFlash Dashboard (buun-llama-cpp)
+
+Specialized dashboard for [DFlash speculative decoding](https://huggingface.co/spiritbuun/Qwen3.6-27B-DFlash-GGUF):
+
+- **Block-diffusion draft model** — `--spec-type dflash` for faster token generation
+- **Thinking forced OFF** — required for good DFlash acceptance rates
+- **Vision support** — GPU or CPU mmproj offload
+- **Install/update** — clones and builds [spiritbuun/buun-llama-cpp](https://github.com/spiritbuun/buun-llama-cpp) with flash attention flags
+
+### DFlash Draft Models
+
+Download from [spiritbuun/Qwen3.6-27B-DFlash-GGUF](https://huggingface.co/spiritbuun/Qwen3.6-27B-DFlash-GGUF):
+
+| File | Size | Notes |
+|------|------|-------|
+| `dflash-draft-3.6-q8_0.gguf` | 1.75 GB | **Recommended** — matches F16 acceptance |
+| `dflash-draft-3.6-q4_k_m.gguf` | 1.03 GB | Only if VRAM-constrained |
+
+## vLLM Dashboard
+
+Docker-based vLLM with model selection, compose profiles, and container management.
+
+## Directory Layout
+
+```
+./
+├── HostLLM.sh                 ← Engine picker (start here)
+├── v1llama_cpp.sh             ← llama.cpp dashboard
+├── v1dflash_llama_cpp.sh      ← DFlash dashboard
+├── v1_vllm.sh                 ← vLLM dashboard
+├── llama_models/              ← Shared GGUF model pool
+│   ├── *.gguf                 ← Target models
+│   ├── dflash-draft-*.gguf    ← DFlash draft models
+│   └── mmproj-*.gguf          ← Vision projectors
+├── ik_llama.cpp/              ← llama.cpp build (gitignored)
+├── buun-llama-cpp/            ← DFlash build (gitignored)
+└── vllm_models/               ← vLLM models & compose (gitignored)
 ```
 
-The script will perform the following actions:
-1.  Create three directories in your home folder:
-    - `~/lm-studio-server`: Contains the `docker-compose.yml` and the manager script.
-    - `~/LLM`: Stores your GGUF model files.
-    - `~/sillytavern`: Stores SillyTavern data, configs, and extensions.
-2.  Download a default model (`Mistral-7B-Instruct-v0.2`) to get you started.
-3.  Generate the `docker-compose.yml` file.
-4.  Generate the `build_and_run.sh` script for the LLM container.
-5.  Generate the `llm_manager.sh` script for easy management.
-6.  Start the Docker containers.
+## Notes
 
-**Important**: The very first time you run this, the `llm-api-server` container will take **5-10 minutes** to build the `llama-cpp-python` engine from source with CUDA support. This is a one-time process. You can monitor the progress with:
-
-```bash
-docker logs -f llm-api-server
-```
-
-Once the build is complete, your services will be available:
-- **LLM API Server**: `http://<YOUR_SERVER_IP>:8000/docs`
-- **SillyTavern UI**: `http://<YOUR_SERVER_IP>:8001`
-
-### 2. Managing the Environment
-
-After the initial setup, you can manage your entire LLM environment using the `llm_manager.sh` script.
-
-First, navigate to the installation directory:
-```bash
-cd ~/lm-studio-server
-```
-
-Then, run the manager:
-```bash
-./llm_manager.sh
-```
-
-This will open an interactive menu with the following options:
-
-- **Search for Models**: Opens a link to TheBloke's Hugging Face page, a great source for GGUF models.
-- **Download a New Model**: Prompts you to paste a URL to a GGUF model file, which it will download into your `~/LLM` directory.
-- **Switch Active Model**: Lists all `.gguf` files in your `~/LLM` directory and allows you to select one. It will automatically update the configuration and restart the services.
-- **Set LLM Context Size**: Allows you to set or change the `n_ctx` (context window size) parameter for the LLM and restarts the services.
-- **Manage UI Whitelist**: By default, SillyTavern is only accessible from `127.0.0.1`. Use this option to add the IP address of other machines on your network so you can access the UI from them.
-- **View Logs**: Tails the live logs for either the LLM API or the SillyTavern UI, which is useful for debugging.
-- **Check Service Status**: Shows the status of your Docker containers and the currently configured model and context size.
-
-This setup provides a robust and flexible way to run and manage your own local LLM services. Enjoy!
+- All builds compile natively for RTX 4090 (CUDA arch 89). Change `-DCMAKE_CUDA_ARCHITECTURES` in the install functions if you have a different GPU.
+- The `llama_models/` directory is not tracked in git — add your `.gguf` files manually.
+- Server state files (`.server_info`, `.server_info_dflash`) are used to detect which engine is running.

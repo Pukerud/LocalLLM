@@ -1,0 +1,22 @@
+# Compiled builds
+ik_llama.cpp/
+buun-llama-cpp/
+
+# Model files (GGUF — large binary)
+llama_models/
+vllm_models/
+
+# Runtime / state
+.server_info
+.server_info_dflash
+.server_compose
+server.log
+server_dflash.log
+cowork_env.sh
+*.log
+
+# Build artifacts
+compile_debug.log
+dflash_compile_debug.log
+.llama_arg_probe_*
+.dflash_arg_probe*
