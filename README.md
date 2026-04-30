@@ -58,6 +58,24 @@ Download from [spiritbuun/Qwen3.6-27B-DFlash-GGUF](https://huggingface.co/spirit
 | `dflash-draft-3.6-q8_0.gguf` | 1.75 GB | **Recommended** — matches F16 acceptance |
 | `dflash-draft-3.6-q4_k_m.gguf` | 1.03 GB | Only if VRAM-constrained |
 
+### DFlash Tested Performance (RTX 4090, 24 GB VRAM)
+
+Qwen3.6-27B models with `dflash-draft-3.6-q8_0.gguf`, thinking OFF, no KV cache flags:
+
+| Model | Model Size | Context | Speed | DFlash Acceptance | Result |
+|-------|-----------|---------|-------|-------------------|--------|
+| Qwen3.6-27B IQ4_XS | ~15 GB | 6,048 | 111 t/s | 68% | ✅ |
+| Qwen3.6-27B IQ4_XS | ~15 GB | 32,768 | 63 t/s | 18% | ✅ |
+| Qwen3.6-27B IQ4_XS | ~15 GB | **65,536** | **73 t/s** | **40%** | ✅ **Best for IQ4_XS** |
+| Qwen3.6-27B IQ4_XS | ~15 GB | 131,072 | — | — | ❌ OOM |
+| Qwen3.6-27B Q5_K_M | ~18 GB | 6,048 | — | — | ✅ |
+| Qwen3.6-27B Q5_K_M | ~18 GB | **16,384** | **70 t/s** | **38%** | ✅ **Best for Q5_K_M** |
+| Qwen3.6-27B Q5_K_M | ~18 GB | 32,768 | — | — | ❌ OOM (tree buffers) |
+
+> **Why the OOM?** DFlash allocates ~1.4 GB tree verify buffers (`48 layers × 20 tokens`) + ~300 MB recurrent state on top of normal model + KV memory. The script auto-detects model file size and warns if the selected context may exceed VRAM.
+
+> **Why no KV cache flags?** The HuggingFace example doesn't use `-ctk`/`-ctv`. Adding them changed the memory layout and left no headroom for DFlash's runtime allocations. Match the example exactly for stability.
+
 ## vLLM Dashboard
 
 Docker-based vLLM with model selection, compose profiles, and container management.
