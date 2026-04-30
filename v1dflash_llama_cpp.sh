@@ -204,17 +204,10 @@ arg_probe_valid() {
 # ── Start DFlash server ─────────────────────────────────────────────────
 
 start_dflash_server() {
-    local vision_mode="$1"
-    local vision_title=""
-    if [[ "$vision_mode" == "vision" ]]; then
-        vision_title=" + Vision"
-    elif [[ "$vision_mode" == "vision-cpu" ]]; then
-        vision_title=" + Vision (CPU mmproj)"
-    fi
-
     echo ""
-    echo -e " \033[1;36m>>> START DFLASH SERVER${vision_title} <<<\033[0m"
+    echo -e " \033[1;36m>>> START DFLASH SERVER <<<\033[0m"
     echo ""
+    echo -e " \033[1;33mNote:\033[0m DFlash + Vision is NOT supported by buun-llama-cpp."
 
     if [[ -n $(pgrep -f "llama-server") ]]; then
         echo " Server is already running! Please stop it first [5]."
@@ -345,9 +338,14 @@ start_dflash_server() {
     else
         echo "   [5] 65536   (64K — likely OOM with this quant!)"
     fi
-    echo "   [6] 131072  (128K — OOM on 24GB, not recommended)"
-    echo "   [7] Custom"
-    read -p " Choice (1-7, default 3): " ctx_choice
+    if [[ "$max_safe_ctx" -ge 81920 ]]; then
+        echo "   [6] 81920   (80K — best for IQ4_XS on 24GB, ~77 t/s)"
+    else
+        echo "   [6] 81920   (80K — OOM with this quant!)"
+    fi
+    echo "   [7] 131072  (128K — OOM on 24GB, not recommended)"
+    echo "   [8] Custom"
+    read -p " Choice (1-8, default 6): " ctx_choice
     ctx_choice=$(echo "$ctx_choice" | tr -d '[:space:]')
 
     case "$ctx_choice" in
@@ -356,8 +354,9 @@ start_dflash_server() {
         3) ctx="16384" ;;
         4) ctx="32768" ;;
         5) ctx="65536" ;;
-        6) ctx="131072" ;;
-        7)
+        6) ctx="81920" ;;
+        7) ctx="131072" ;;
+        8)
             read -p " Enter context size: " ctx
             ctx=$(echo "$ctx" | tr -d '[:space:]')
             ;;
@@ -400,79 +399,13 @@ start_dflash_server() {
     esac
 
     # ── Vision ──
-    mmproj_file=""
-    vis_text=""
-    cpu_vision="0"
-
-    if [[ "$vision_mode" == "vision" || "$vision_mode" == "vision-cpu" ]]; then
-        if [[ "$vision_mode" == "vision-cpu" ]]; then
-            cpu_vision="1"
-        fi
-        get_mmproj_files
-        if [[ ${#mmproj_files[@]} -eq 0 ]]; then
-            echo ""
-            echo -e " \033[1;31mNo vision projector (*mmproj*.gguf) found in $MODELS_DIR/\033[0m"
-            read -p " Continue without vision? (Y/n): " cont_no_vis
-            cont_no_vis=$(echo "$cont_no_vis" | tr -d '[:space:]')
-            if [[ "$cont_no_vis" == "n" || "$cont_no_vis" == "N" ]]; then
-                return
-            fi
-        else
-            echo ""
-            echo " Select Vision Projector:"
-            for i in "${!mmproj_files[@]}"; do
-                echo "   [$((i+1))] $(basename "${mmproj_files[$i]}")"
-            done
-            read -p " Choice (default 1): " vis_choice
-            vis_choice=$(echo "$vis_choice" | tr -d '[:space:]')
-            if [[ -z "$vis_choice" ]]; then vis_choice="1"; fi
-            local vidx=$((vis_choice - 1))
-            mmproj_file="${mmproj_files[$vidx]:-${mmproj_files[0]}}"
-            echo " Vision projector: $(basename "$mmproj_file")"
-
-            if [[ "$cpu_vision" == "1" ]]; then
-                vis_text="+ VisCPU "
-            else
-                vis_text="+ Vis "
-            fi
-        fi
-    else
-        # Ask if user wants vision
-        get_mmproj_files
-        if [[ ${#mmproj_files[@]} -gt 0 ]]; then
-            echo ""
-            read -p " Enable vision? (y/N): " load_vis
-            load_vis=$(echo "$load_vis" | tr -d '[:space:]')
-            if [[ "$load_vis" == "y" || "$load_vis" == "Y" ]]; then
-                echo " Select Vision Projector:"
-                for i in "${!mmproj_files[@]}"; do
-                    echo "   [$((i+1))] $(basename "${mmproj_files[$i]}")"
-                done
-                read -p " Choice (default 1): " vis_choice
-                vis_choice=$(echo "$vis_choice" | tr -d '[:space:]')
-                if [[ -z "$vis_choice" ]]; then vis_choice="1"; fi
-                local vidx=$((vis_choice - 1))
-                mmproj_file="${mmproj_files[$vidx]:-${mmproj_files[0]}}"
-                echo " Vision projector: $(basename "$mmproj_file")"
-                vis_text="+ Vis "
-
-                echo ""
-                read -p " Offload vision to CPU? (--no-mmproj-offload) (y/N): " cpu_vis_choice
-                cpu_vis_choice=$(echo "$cpu_vis_choice" | tr -d '[:space:]')
-                if [[ "$cpu_vis_choice" == "y" || "$cpu_vis_choice" == "Y" ]]; then
-                    cpu_vision="1"
-                    vis_text="+ VisCPU "
-                fi
-            fi
-        fi
-    fi
+    # DFlash + Vision is NOT supported by buun-llama-cpp. Skipped entirely.
 
     # ── Build flags ──
     flag_summary=()
     skipped_summary=()
 
     fa_flags=()
-    vision_flags=()
     batch_flags=()
 
     # Flash attention
@@ -500,27 +433,6 @@ start_dflash_server() {
         skipped_summary+=("batch flags not accepted")
     fi
 
-    # Vision
-    if [[ -n "$mmproj_file" ]]; then
-        if arg_probe_valid "$server_bin" --mmproj "$mmproj_file"; then
-            vision_flags=(--mmproj "$mmproj_file")
-            flag_summary+=("vision:--mmproj $(basename "$mmproj_file")")
-
-            if [[ "$cpu_vision" == "1" ]]; then
-                if arg_probe_valid "$server_bin" --no-mmproj-offload; then
-                    vision_flags+=(--no-mmproj-offload)
-                    flag_summary+=("vision-cpu:--no-mmproj-offload")
-                else
-                    skipped_summary+=("--no-mmproj-offload not accepted by this binary")
-                fi
-            fi
-        else
-            mmproj_file=""
-            vis_text=""
-            skipped_summary+=("--mmproj not accepted")
-        fi
-    fi
-
     # ── Build command ──
     # DFlash requires thinking OFF for good acceptance rates.
     # Always use --jinja + thinking=false.
@@ -541,11 +453,10 @@ start_dflash_server() {
         --reasoning off
         --host 0.0.0.0
         --port 8080
-        "${vision_flags[@]}"
     )
 
     local target_short="$target"
-    echo "DFLASH: ${target_short} ${vis_text}+ Draft(${draft_model}) [${ctx}/default KV]" > .server_info_dflash
+    echo "DFLASH: ${target_short} + Draft(${draft_model}) [${ctx}/default KV]" > .server_info_dflash
 
     echo ""
     echo " Starting DFlash server:"
@@ -554,7 +465,7 @@ start_dflash_server() {
     echo "   Draft ctx: $draft_ctx"
     echo "   Context:   $ctx"
     echo "   KV cache:  (default — no -ctk/-ctv flags, matches HuggingFace example)"
-    echo "   Vision:    ${vis_text:-off}"
+    echo "   Vision:    not supported (buun-llama-cpp limitation)"
     echo "   Thinking:  OFF (required for DFlash acceptance)"
     echo "   -ngl 99 -ngld 99 -np 1 (buun fork conventions)"
     echo ""
@@ -705,14 +616,12 @@ while true; do
 
     echo ""
     echo -e " \033[1;36m--- DFLASH SERVER ---\033[0m"
-    echo " [1] START DFlash Server (main + draft, thinking OFF)"
-    echo " [2] START DFlash Server + Vision"
-    echo " [3] START DFlash Server + Vision (CPU mmproj / --no-mmproj-offload)"
-    echo " [4] STOP SERVER"
+    echo " [1] START DFlash Server (main + draft, --reasoning off)"
+    echo " [2] STOP SERVER"
     echo ""
     echo -e " \033[1;36m--- MANAGEMENT ---\033[0m"
-    echo " [5] Download Model (.gguf URL)"
-    echo " [6] Delete Model"
+    echo " [3] Download Model (.gguf URL)"
+    echo " [4] Delete Model"
     echo " [0] INSTALL / UPDATE buun-llama-cpp (DFlash fork)"
     echo " [99] Exit"
     echo ""
@@ -731,15 +640,9 @@ while true; do
             MONITOR_PID=$!
             ;;
         1)
-            start_dflash_server "text"
+            start_dflash_server
             ;;
         2)
-            start_dflash_server "vision"
-            ;;
-        3)
-            start_dflash_server "vision-cpu"
-            ;;
-        4)
             echo ""
             echo -e " \033[1;36m>>> STOPPING SERVER <<<\033[0m"
             pkill -f "llama-server"
@@ -747,7 +650,7 @@ while true; do
             echo " Server stopped."
             sleep 1
             ;;
-        5)
+        3)
             echo ""
             echo -e " \033[1;36m>>> DOWNLOAD MODEL <<<\033[0m"
             echo " Paste the direct download URL for a .gguf file."
@@ -765,7 +668,7 @@ while true; do
                 wget --show-progress -O "${MODELS_DIR}/${filename}" "$url"
             fi
             ;;
-        6)
+        4)
             echo ""
             echo -e " \033[1;36m>>> DELETE MODEL <<<\033[0m"
 
