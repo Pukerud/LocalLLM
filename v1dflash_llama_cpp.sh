@@ -306,23 +306,58 @@ start_dflash_server() {
     # ── Context / KV ──
     echo ""
     echo -e " \033[1;33mNote:\033[0m DFlash uses ~1.5 GB extra for tree verify buffers."
-    echo " On 24GB VRAM with 27B models, max safe context is ~16K."
     echo " No KV cache flags are passed (DFlash fork uses its own defaults)."
+    echo ""
+
+    # Auto-detect max safe context based on model file size
+    local model_size_bytes
+    model_size_bytes=$(stat -c%s "${MODELS_DIR}/${target}" 2>/dev/null || echo 0)
+    local model_size_gb=$(awk "BEGIN{printf \"%.1f\", ${model_size_bytes}/1024/1024/1024}")
+    local max_safe_ctx=16384
+    local size_note=""
+
+    # ~15 GB or less = IQ4_XS / Q4 = more VRAM headroom
+    # ~18 GB or more = Q5_K / Q6 = tighter VRAM
+    if (( $(echo "$model_size_gb < 16" | bc -l) )); then
+        max_safe_ctx=65536
+        size_note="(~${model_size_gb} GB model — 65K safe)"
+    elif (( $(echo "$model_size_gb < 17" | bc -l) )); then
+        max_safe_ctx=32768
+        size_note="(~${model_size_gb} GB model — 32K safe)"
+    else
+        max_safe_ctx=16384
+        size_note="(~${model_size_gb} GB model — 16K safe)"
+    fi
+
+    echo " Model size: ~${model_size_gb} GB | Max safe context on 24GB: ${max_safe_ctx}"
     echo ""
     echo " Select Context Size:"
     echo "   [1] 4096    (4K — smallest, most VRAM headroom)"
-    echo "   [2] 8192    (8K — short/medium chat, safe on 24GB)"
-    echo "   [3] 16384   (16K — max tested safe on 24GB RTX 4090)"
-    echo "   [4] 32768   (32K — will OOM on 24GB with 27B models!)"
-    echo "   [5] Custom"
-    read -p " Choice (1-5, default 3): " ctx_choice
+    echo "   [2] 8192    (8K — short/medium chat)"
+    echo "   [3] 16384   (16K — safe for all 27B quants on 24GB)"
+    if [[ "$max_safe_ctx" -ge 32768 ]]; then
+        echo "   [4] 32768   (32K — safe for smaller quants on 24GB)"
+    else
+        echo "   [4] 32768   (32K — may OOM with this quant!)"
+    fi
+    if [[ "$max_safe_ctx" -ge 65536 ]]; then
+        echo "   [5] 65536   (64K — safe for IQ4_XS / ~15GB models on 24GB)"
+    else
+        echo "   [5] 65536   (64K — likely OOM with this quant!)"
+    fi
+    echo "   [6] 131072  (128K — OOM on 24GB, not recommended)"
+    echo "   [7] Custom"
+    read -p " Choice (1-7, default 3): " ctx_choice
     ctx_choice=$(echo "$ctx_choice" | tr -d '[:space:]')
 
     case "$ctx_choice" in
         1) ctx="4096" ;;
         2) ctx="8192" ;;
+        3) ctx="16384" ;;
         4) ctx="32768" ;;
-        5)
+        5) ctx="65536" ;;
+        6) ctx="131072" ;;
+        7)
             read -p " Enter context size: " ctx
             ctx=$(echo "$ctx" | tr -d '[:space:]')
             ;;
@@ -335,8 +370,9 @@ start_dflash_server() {
         return
     fi
 
-    if [[ "$ctx" -gt 16384 ]]; then
-        echo -e " \033[1;33mWarning:\033[0m Context > 16K may OOM on 24GB VRAM with 27B models and DFlash tree buffers."
+    if [[ "$ctx" -gt "$max_safe_ctx" ]]; then
+        echo -e " \033[1;33mWarning:\033[0m Context ${ctx} exceeds safe limit (${max_safe_ctx}) for this ~${model_size_gb} GB model."
+        echo " DFlash tree verify buffers need ~1.7 GB extra beyond model + KV. May OOM on 24GB."
         read -p " Continue anyway? (y/N): " big_ctx_ok
         big_ctx_ok=$(echo "$big_ctx_ok" | tr -d '[:space:]')
         if [[ "$big_ctx_ok" != "y" && "$big_ctx_ok" != "Y" ]]; then
