@@ -305,38 +305,45 @@ start_dflash_server() {
 
     # ── Context / KV ──
     echo ""
-    echo -e " \033[1;33mNote:\033[0m DFlash uses ~1.5 GB extra for tree verify buffers on top of"
-    echo " normal VRAM. Use smaller context / lower KV cache than ik_llama.cpp."
+    echo -e " \033[1;33mNote:\033[0m DFlash uses ~1.5 GB extra for tree verify buffers."
+    echo " On 24GB VRAM with 27B models, max safe context is ~16K."
+    echo " No KV cache flags are passed (DFlash fork uses its own defaults)."
     echo ""
-    echo " Select Context Size / KV Cache:"
-    echo "   [1] 4096    (4K, q4_0 KV - smallest, safest)"
-    echo "   [2] 8192    (8K, q4_0 KV - short chat, safe on 24GB)"
-    echo "   [3] 32768   (32K, q4_0 KV - normal chat, safe on 24GB)"
-    echo "   [4] 65536   (64K, q4_0 KV - may OOM on 24GB with 27B models)"
-    echo "   [5] 131072  (128K, q4_0 KV - likely OOM on 24GB)"
-    echo "   [6] Custom"
-    read -p " Choice (1-6, default 3): " ctx_choice
+    echo " Select Context Size:"
+    echo "   [1] 4096    (4K — smallest, most VRAM headroom)"
+    echo "   [2] 8192    (8K — short/medium chat, safe on 24GB)"
+    echo "   [3] 16384   (16K — max tested safe on 24GB RTX 4090)"
+    echo "   [4] 32768   (32K — will OOM on 24GB with 27B models!)"
+    echo "   [5] Custom"
+    read -p " Choice (1-5, default 3): " ctx_choice
     ctx_choice=$(echo "$ctx_choice" | tr -d '[:space:]')
 
     case "$ctx_choice" in
-        1) ctx="4096";   cache_type="q4_0" ;;
-        2) ctx="8192";   cache_type="q4_0" ;;
-        4) ctx="65536";  cache_type="q4_0" ;;
-        5) ctx="131072"; cache_type="q4_0" ;;
-        6)
+        1) ctx="4096" ;;
+        2) ctx="8192" ;;
+        4) ctx="32768" ;;
+        5)
             read -p " Enter context size: " ctx
             ctx=$(echo "$ctx" | tr -d '[:space:]')
-            read -p " Enter KV cache type (q8_0/q5_0/q4_0/f16) [q4_0]: " cache_type
-            cache_type=$(echo "$cache_type" | tr -d '[:space:]')
-            if [[ -z "$cache_type" ]]; then cache_type="q4_0"; fi
             ;;
-        *) ctx="32768"; cache_type="q4_0" ;;
+        *) ctx="16384" ;;
     esac
 
     if [[ ! "$ctx" =~ ^[0-9]+$ ]]; then
         echo " Invalid context size."
         sleep 2
         return
+    fi
+
+    if [[ "$ctx" -gt 16384 ]]; then
+        echo -e " \033[1;33mWarning:\033[0m Context > 16K may OOM on 24GB VRAM with 27B models and DFlash tree buffers."
+        read -p " Continue anyway? (y/N): " big_ctx_ok
+        big_ctx_ok=$(echo "$big_ctx_ok" | tr -d '[:space:]')
+        if [[ "$big_ctx_ok" != "y" && "$big_ctx_ok" != "Y" ]]; then
+            echo " Canceled."
+            sleep 1
+            return
+        fi
     fi
 
     # ── Draft context ──
@@ -429,18 +436,8 @@ start_dflash_server() {
     skipped_summary=()
 
     fa_flags=()
-    cache_flags=()
     vision_flags=()
-    dflash_flags=()
     batch_flags=()
-
-    # KV cache
-    if arg_probe_valid "$server_bin" -ctk "$cache_type" -ctv "$cache_type"; then
-        cache_flags=(-ctk "$cache_type" -ctv "$cache_type")
-        flag_summary+=("kv:-ctk/-ctv ${cache_type}")
-    else
-        skipped_summary+=("KV cache flags not accepted")
-    fi
 
     # Flash attention
     if arg_probe_valid "$server_bin" -fa on; then
@@ -453,37 +450,8 @@ start_dflash_server() {
         skipped_summary+=("flash attention flag not accepted")
     fi
 
-    # DFlash spec-type + draft model
-    draft_path="${MODELS_DIR}/${draft_model}"
-    if arg_probe_valid "$server_bin" -md "$draft_path" --spec-type dflash; then
-        dflash_flags=(-md "$draft_path" --spec-type dflash)
-        flag_summary+=("dflash:--spec-type dflash")
-        flag_summary+=("draft:-md $(basename "$draft_path")")
-    elif arg_probe_valid "$server_bin" -md "$draft_path"; then
-        dflash_flags=(-md "$draft_path")
-        flag_summary+=("draft:-md $(basename "$draft_model")")
-        skipped_summary+=("--spec-type dflash not accepted (may need newer buun-llama-cpp)")
-    else
-        echo -e " \033[1;31mError: draft model flag -md not accepted.\033[0m"
-        read -p " Press Enter to return..."
-        return
-    fi
-
-    # Draft GPU offload (use 99, not 999 — buun fork convention)
-    if [[ ${#dflash_flags[@]} -gt 0 ]]; then
-        if arg_probe_valid "$server_bin" "${dflash_flags[@]}" -ngld 99; then
-            dflash_flags+=(-ngld 99)
-            flag_summary+=("draft:-ngld 99")
-        fi
-    fi
-
-    # Draft context
-    if [[ ${#dflash_flags[@]} -gt 0 ]]; then
-        if arg_probe_valid "$server_bin" "${dflash_flags[@]}" -cd "$draft_ctx"; then
-            dflash_flags+=(-cd "$draft_ctx")
-            flag_summary+=("draft:-cd ${draft_ctx}")
-        fi
-    fi
+    # Note: no KV cache flags (-ctk/-ctv) — DFlash fork uses its own defaults.
+    # Adding them was causing OOM on 24GB. Match HuggingFace example exactly.
 
     # Batch (DFlash works best with small batches)
     if arg_probe_valid "$server_bin" -b 256 -ub 64; then
@@ -532,7 +500,6 @@ start_dflash_server() {
         -np 1
         -c "$ctx"
         "${fa_flags[@]}"
-        "${cache_flags[@]}"
         "${batch_flags[@]}"
         --jinja
         --chat-template-kwargs '{"enable_thinking":false}'
@@ -542,7 +509,7 @@ start_dflash_server() {
     )
 
     local target_short="$target"
-    echo "DFLASH: ${target_short} ${vis_text}+ Draft(${draft_model}) [${ctx}/${cache_type}]" > .server_info_dflash
+    echo "DFLASH: ${target_short} ${vis_text}+ Draft(${draft_model}) [${ctx}/default KV]" > .server_info_dflash
 
     echo ""
     echo " Starting DFlash server:"
@@ -550,7 +517,7 @@ start_dflash_server() {
     echo "   Draft:     $draft_model"
     echo "   Draft ctx: $draft_ctx"
     echo "   Context:   $ctx"
-    echo "   KV cache:  $cache_type"
+    echo "   KV cache:  (default — no -ctk/-ctv flags, matches HuggingFace example)"
     echo "   Vision:    ${vis_text:-off}"
     echo "   Thinking:  OFF (required for DFlash acceptance)"
     echo "   -ngl 99 -ngld 99 -np 1 (buun fork conventions)"
