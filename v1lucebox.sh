@@ -96,9 +96,22 @@ get_cpu_usage() {
     if [[ "$td" -eq 0 ]]; then echo "0"; else echo $(( (ad * 100) / td )); fi
 }
 
+STATS_LINE=5
+
+monitor_loop() {
+    tput civis
+    while true; do
+        tput cup $STATS_LINE 0
+        update_dashboard
+        sleep 2
+    done
+}
+
 cleanup() {
     kill -9 "$MONITOR_PID" > /dev/null 2>&1
     wait "$MONITOR_PID" > /dev/null 2>&1
+    tput csr 0 "$(tput lines)"
+    tput cnorm
     echo ""
     exit
 }
@@ -110,6 +123,8 @@ update_dashboard() {
     local active_model=""
     local active_port="8080"
     local active_ctx=""
+    local active_ctk=""
+    local active_ctv=""
 
     if [[ -f "$info_file" ]]; then
         source "$info_file"
@@ -118,6 +133,8 @@ update_dashboard() {
             active_model="$MODEL"
             active_port="${PORT:-8080}"
             active_ctx="${MAX_CTX}"
+            active_ctk="${CTK}"
+            active_ctv="${CTV}"
         else
             server_status="  ${RED}CRASHED${RESET}"
         fi
@@ -148,12 +165,14 @@ update_dashboard() {
     echo "  ──────────────────────────────────────────────────────────"
     echo -e "  Server:  $server_status"
     if [[ -n "$active_ctx" ]]; then
-        echo -e "  Context: ${active_ctx} tokens | KV: ${CTK:-q4_0}/${CTV:-q4_0}"
+        echo -e "  Context: ${active_ctx} tokens | KV: ${active_ctk:-q4_0}/${active_ctv:-q4_0}"
     fi
     echo -e "  GPU: ${c_cpu}${gpu_load}%${RESET} load | ${c_vram}VRAM ${vram_used_gb}/${vram_total_gb} GB (${vram_pct}%)${RESET} | Temp: ${gpu_temp}°C"
     echo -e "  CPU: ${c_cpu}${cpu_pct}%${RESET} | RAM: ${ram_line}"
     if [[ -n "$active_model" ]]; then
         echo -e "  ${CYAN}Endpoint: http://localhost:${active_port}/v1/chat/completions${RESET}"
+    else
+        echo ""
     fi
     echo "  ──────────────────────────────────────────────────────────"
 }
@@ -391,14 +410,27 @@ check_build
 check_draft
 
 while true; do
+    # Kill old monitor if looping back
+    kill -9 "$MONITOR_PID" > /dev/null 2>&1
+    wait "$MONITOR_PID" > /dev/null 2>&1
+
     clear
     echo "=========================================================="
     echo "  Lucebox DFlash — DDTree Speculative Decoding"
     echo "  Luce-Org/lucebox-hub  |  ~104 tok/s on RTX 4090"
     echo "=========================================================="
 
+    # Initial draw of stats at fixed position
+    tput cup $STATS_LINE 0
     update_dashboard
 
+    # Start background stats refresh
+    monitor_loop &
+    MONITOR_PID=$!
+
+    # Draw menu below stats
+    MENU_LINE=$((STATS_LINE + 9))
+    tput cup $MENU_LINE 0
     echo ""
     echo "  Actions:"
     echo "  -------"
@@ -410,7 +442,7 @@ while true; do
     echo -e "  ${BOLD}[6]${RESET} Rebuild binary"
     echo -e "  ${BOLD}[0]${RESET} Back to engine picker"
     echo ""
-
+    tput cnorm
     read -p "  Select: " choice
     choice=$(echo "$choice" | tr -d '[:space:]')
 
