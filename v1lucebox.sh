@@ -456,7 +456,7 @@ while true; do
     echo "  Actions:"
     echo "  -------"
     echo -e "  ${BOLD}[1]${RESET} Select model + Start server (custom settings)"
-    echo -e "  ${BOLD}[2]${RESET} Quick start server (defaults — 16K ctx, auto KV)"
+    echo -e "  ${BOLD}[2]${RESET} Quick start server (defaults — 32K ctx, auto KV)"
     echo -e "  ${BOLD}[3]${RESET} Stop server"
     echo -e "  ${BOLD}[4]${RESET} Quick benchmark (HumanEval 10 prompts)"
     echo -e "  ${BOLD}[5]${RESET} Test with curl"
@@ -480,8 +480,8 @@ while true; do
             if [[ -z "$SELECTED_MODEL" ]]; then
                 if ! select_model; then continue; fi
             fi
-            echo "  Starting with server defaults (16K ctx, auto KV)..."
-            start_server "$SELECTED_MODEL" 8080 16384
+            echo "  Starting with server defaults (32K ctx, auto KV)..."
+            start_server "$SELECTED_MODEL" 8080 32768
             ;;
         3)
             stop_server

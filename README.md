@@ -107,7 +107,7 @@ Uses [Luce-Org/lucebox-hub](https://github.com/Luce-Org/lucebox-hub) with **DDTr
 - **Model picker** — auto-finds Qwen3.6-27B GGUFs in `llama_models/`
 - **Context picker** — 512 to 256K tokens
 - **KV cache picker** — q4_0, q8_0, tq3_0, f16, or custom
-- **Quick start** — defaults (16K ctx, auto KV) for one-command launch
+- **Quick start** — defaults (32K ctx, auto KV) for one-command launch
 - **Live GPU stats** — refreshes every 2 seconds
 - **In-server benchmark** — tests the running server via OpenAI API
 
