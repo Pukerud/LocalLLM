@@ -87,11 +87,12 @@ while true; do
     echo -e "  ${BOLD}[1]${RESET} llama.cpp       ik_llama.cpp — max context (262K), all GGUF models"
     echo -e "  ${BOLD}[2]${RESET} DFlash llama.cpp buun-llama-cpp — DFlash speculative decoding"
     echo -e "  ${BOLD}[3]${RESET} vLLM            Docker — max throughput (50-127 TPS), tool calls"
+    echo -e "  ${BOLD}[4]${RESET} Lucebox DFlash  lucebox-hub — DDTree (~104 t/s on 4090)"
     echo ""
     echo "  Controls:"
     echo "  ---------"
-    echo -e "  ${BOLD}[4]${RESET} Kill All    Stop whatever is running"
-    echo -e "  ${BOLD}[5]${RESET} Exit"
+    echo -e "  ${BOLD}[5]${RESET} Kill All    Stop whatever is running"
+    echo -e "  ${BOLD}[6]${RESET} Exit"
     echo ""
 
     read -p "  Select: " choice
@@ -101,7 +102,7 @@ while true; do
         1)
             if [[ "$active" != "none" && "$active" != "llamacpp" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [4].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [5].${RESET}"
                 sleep 2
                 continue
             fi
@@ -117,7 +118,7 @@ while true; do
         2)
             if [[ "$active" != "none" && "$active" != "dflash" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [4].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [5].${RESET}"
                 sleep 2
                 continue
             fi
@@ -133,7 +134,7 @@ while true; do
         3)
             if [[ "$active" != "none" && "$active" != "vllm" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [4].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [5].${RESET}"
                 sleep 2
                 continue
             fi
@@ -147,9 +148,25 @@ while true; do
             exec ./v1_vllm.sh
             ;;
         4)
-            stop_all
+            if [[ "$active" != "none" && "$active" != "lucebox" ]]; then
+                echo ""
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [5].${RESET}"
+                sleep 2
+                continue
+            fi
+            if [[ ! -x "${SCRIPT_DIR}/v1lucebox.sh" ]]; then
+                echo ""
+                echo -e "  ${RED}v1lucebox.sh not found or not executable.${RESET}"
+                sleep 2
+                continue
+            fi
+            cd "${SCRIPT_DIR}"
+            exec ./v1lucebox.sh
             ;;
         5)
+            stop_all
+            ;;
+        6)
             exit 0
             ;;
         *)
