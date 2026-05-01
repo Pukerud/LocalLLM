@@ -289,24 +289,30 @@ select_ctx() {
     echo ""
     echo "  Select max context size:"
     echo "  ────────────────────────────────────────"
-    echo -e "  ${BOLD}[1]${RESET}  4096    Short chat / code completion"
-    echo -e "  ${BOLD}[2]${RESET}  8192    Standard chat"
-    echo -e "  ${BOLD}[3]${RESET}  16384   Long documents  ${GREEN}(default)${RESET}"
-    echo -e "  ${BOLD}[4]${RESET}  32768   Very long context  ${YELLOW}(Q4_0 KV needed)${RESET}"
-    echo -e "  ${BOLD}[5]${RESET}  65536   Extended context  ${YELLOW}(TQ3_0 KV needed)${RESET}"
-    echo -e "  ${BOLD}[6]${RESET}  131072  128K context  ${YELLOW}(TQ3_0 KV + --kv-tq3)${RESET}"
-    echo -e "  ${BOLD}[7]${RESET}  Custom"
+    echo -e "  ${BOLD}[1]${RESET}    512    Token-gen only (fastest decode)"
+    echo -e "  ${BOLD}[2]${RESET}   2048    Short prompt + completion"
+    echo -e "  ${BOLD}[3]${RESET}   4096    Short chat / code completion"
+    echo -e "  ${BOLD}[4]${RESET}   8192    Standard chat"
+    echo -e "  ${BOLD}[5]${RESET}  16384   Long documents  ${GREEN}(default)${RESET}"
+    echo -e "  ${BOLD}[6]${RESET}  32768   Very long context  ${YELLOW}(Q4_0 KV)${RESET}"
+    echo -e "  ${BOLD}[7]${RESET}  65536   64K context  ${YELLOW}(TQ3_0 KV)${RESET}"
+    echo -e "  ${BOLD}[8]${RESET} 131072   128K context  ${YELLOW}(TQ3_0 KV)${RESET}"
+    echo -e "  ${BOLD}[9]${RESET} 262144   256K context  ${YELLOW}(TQ3_0 KV, max for 24GB)${RESET}"
+    echo -e "  ${BOLD}[0]${RESET}  Custom"
     echo ""
-    read -p "  Select [1-7, default=3]: " ctx_choice
-    ctx_choice=${ctx_choice:-3}
+    read -p "  Select [1-0, default=5]: " ctx_choice
+    ctx_choice=${ctx_choice:-5}
     case $ctx_choice in
-        1) SELECTED_CTX=4096 ;;
-        2) SELECTED_CTX=8192 ;;
-        3) SELECTED_CTX=16384 ;;
-        4) SELECTED_CTX=32768 ;;
-        5) SELECTED_CTX=65536 ;;
-        6) SELECTED_CTX=131072 ;;
-        7)
+        1) SELECTED_CTX=512 ;;
+        2) SELECTED_CTX=2048 ;;
+        3) SELECTED_CTX=4096 ;;
+        4) SELECTED_CTX=8192 ;;
+        5) SELECTED_CTX=16384 ;;
+        6) SELECTED_CTX=32768 ;;
+        7) SELECTED_CTX=65536 ;;
+        8) SELECTED_CTX=131072 ;;
+        9) SELECTED_CTX=262144 ;;
+        0)
             read -p "  Enter context size: " SELECTED_CTX
             SELECTED_CTX=${SELECTED_CTX:-16384}
             ;;
