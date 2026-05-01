@@ -148,7 +148,7 @@ update_dashboard() {
     echo "  ──────────────────────────────────────────────────────────"
     echo -e "  Server:  $server_status"
     if [[ -n "$active_ctx" ]]; then
-        echo -e "  Context: ${active_ctx} tokens"
+        echo -e "  Context: ${active_ctx} tokens | KV: ${CTK:-q4_0}/${CTV:-q4_0}"
     fi
     echo -e "  GPU: ${c_cpu}${gpu_load}%${RESET} load | ${c_vram}VRAM ${vram_used_gb}/${vram_total_gb} GB (${vram_pct}%)${RESET} | Temp: ${gpu_temp}°C"
     echo -e "  CPU: ${c_cpu}${cpu_pct}%${RESET} | RAM: ${ram_line}"
@@ -164,6 +164,8 @@ start_server() {
     local model_path="$1"
     local port="${2:-8080}"
     local max_ctx="$3"
+    local ctk="${4:-q4_0}"
+    local ctv="${5:-q4_0}"
 
     if pgrep -f "scripts/server.py.*--port ${port}" > /dev/null 2>&1; then
         echo "  Server already running on port ${port}. Stop it first."
@@ -191,13 +193,15 @@ start_server() {
 MODEL=${model_path##*/}
 PORT=${port}
 MAX_CTX=${max_ctx}
+CTK=${ctk}
+CTV=${ctv}
 EOF
 
     echo "  Starting Lucebox DFlash server..."
     echo "  Model: ${model_path##*/}"
     echo "  Draft: ${draft_path}/model.safetensors"
     echo "  Port:  ${port}"
-    echo "  Max context: ${max_ctx}"
+    echo "  Context: ${max_ctx} | KV: ${ctk}/${ctv}"
     echo ""
 
     # Start server in background
@@ -211,6 +215,8 @@ EOF
             --bin "${bin_path}" \
             --port "${port}" \
             --max-ctx "${max_ctx}" \
+            --ctk "${ctk}" \
+            --ctv "${ctv}" \
             --daemon \
             > "${SCRIPT_DIR}/server_lucebox.log" 2>&1
     ) &
@@ -294,10 +300,10 @@ select_ctx() {
     echo -e "  ${BOLD}[3]${RESET}   4096    Short chat / code completion"
     echo -e "  ${BOLD}[4]${RESET}   8192    Standard chat"
     echo -e "  ${BOLD}[5]${RESET}  16384   Long documents  ${GREEN}(default)${RESET}"
-    echo -e "  ${BOLD}[6]${RESET}  32768   Very long context  ${YELLOW}(Q4_0 KV)${RESET}"
-    echo -e "  ${BOLD}[7]${RESET}  65536   64K context  ${YELLOW}(TQ3_0 KV)${RESET}"
-    echo -e "  ${BOLD}[8]${RESET} 131072   128K context  ${YELLOW}(TQ3_0 KV)${RESET}"
-    echo -e "  ${BOLD}[9]${RESET} 262144   256K context  ${YELLOW}(TQ3_0 KV, max for 24GB)${RESET}"
+    echo -e "  ${BOLD}[6]${RESET}  32768   Very long context"
+    echo -e "  ${BOLD}[7]${RESET}  65536   64K context"
+    echo -e "  ${BOLD}[8]${RESET} 131072   128K context"
+    echo -e "  ${BOLD}[9]${RESET} 262144   256K context (max for 24GB)"
     echo -e "  ${BOLD}[0]${RESET}  Custom"
     echo ""
     read -p "  Select [1-0, default=5]: " ctx_choice
@@ -317,6 +323,36 @@ select_ctx() {
             SELECTED_CTX=${SELECTED_CTX:-16384}
             ;;
         *) SELECTED_CTX=16384 ;;
+    esac
+}
+
+select_kv() {
+    echo ""
+    echo "  Select KV cache type:"
+    echo "  ────────────────────────────────────────────────────────────────"
+    echo -e "  ${BOLD}[1]${RESET}  q4_0 / q4_0   ${GREEN}Fastest decode (~54 t/s)${RESET}  — fits 128K in 24GB"
+    echo -e "  ${BOLD}[2]${RESET}  q8_0 / q8_0   Better quality            — fits 64K in 24GB"
+    echo -e "  ${BOLD}[3]${RESET}  tq3_0/ tq3_0   Smallest (~3.5bpv)         — fits 256K in 24GB"
+    echo -e "  ${BOLD}[4]${RESET}  f16  / f16     Full precision             — fits ~16K only"
+    echo -e "  ${BOLD}[5]${RESET}  Custom (enter K and V types)"
+    echo ""
+    echo "  Benchmark results on RTX 4090, ctx=32768:"
+    echo "    q4_0/q4_0: 52 t/s  |  q8_0/q8_0: 51 t/s  |  tq3_0/tq3_0: 49 t/s"
+    echo ""
+    read -p "  Select [1-5, default=1]: " kv_choice
+    kv_choice=${kv_choice:-1}
+    case $kv_choice in
+        1) SELECTED_CTK="q4_0";  SELECTED_CTV="q4_0"  ;;
+        2) SELECTED_CTK="q8_0";  SELECTED_CTV="q8_0"  ;;
+        3) SELECTED_CTK="tq3_0"; SELECTED_CTV="tq3_0" ;;
+        4) SELECTED_CTK="f16";   SELECTED_CTV="f16"   ;;
+        5)
+            read -p "  K cache type [q4_0]: " SELECTED_CTK
+            SELECTED_CTK=${SELECTED_CTK:-q4_0}
+            read -p "  V cache type [q4_0]: " SELECTED_CTV
+            SELECTED_CTV=${SELECTED_CTV:-q4_0}
+            ;;
+        *) SELECTED_CTK="q4_0"; SELECTED_CTV="q4_0" ;;
     esac
 }
 
@@ -382,7 +418,8 @@ while true; do
         1)
             if select_model; then
                 select_ctx
-                start_server "$SELECTED_MODEL" 8080 "$SELECTED_CTX"
+                select_kv
+                start_server "$SELECTED_MODEL" 8080 "$SELECTED_CTX" "$SELECTED_CTK" "$SELECTED_CTV"
             fi
             ;;
         2)
