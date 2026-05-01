@@ -228,11 +228,14 @@ EOF
     fi
     echo ""
 
-    # Patch server.py default max_tokens from 512 to 4096 if needed
+    # Patch server.py default max_tokens to unlimited (-1) to match llama.cpp behavior
     local server_py="${SCRIPT_DIR}/${LUCE_DIR}/scripts/server.py"
     if grep -q 'max_tokens: int = 512' "$server_py" 2>/dev/null; then
-        sed -i 's/max_tokens: int = 512/max_tokens: int = 4096/' "$server_py"
-        echo "  Patched server.py: max_tokens 512 -> 4096 (fixes mid-sentence cutoff)"
+        sed -i 's/max_tokens: int = 512/max_tokens: int = -1/' "$server_py"
+        echo "  Patched server.py: max_tokens 512 -> -1 (unlimited, matches llama.cpp)"
+    elif grep -q 'max_tokens: int = 4096' "$server_py" 2>/dev/null; then
+        sed -i 's/max_tokens: int = 4096/max_tokens: int = -1/' "$server_py"
+        echo "  Patched server.py: max_tokens 4096 -> -1 (unlimited, matches llama.cpp)"
     fi
 
     # Build server command
