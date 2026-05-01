@@ -1,85 +1,150 @@
-# HostLLM — Local LLM Engine Manager
+# LocalLLM — Multi-Engine LLM Dashboard for RTX 4090 (24GB VRAM)
 
-A multi-engine dashboard for running local LLMs on NVIDIA GPUs. Pick your engine, configure your model, and go.
+A collection of launch scripts to run 27B-class LLMs locally on a single RTX 4090 (24GB VRAM). Four inference engines, one GPU, one port (8080).
 
 ## Engines
 
-| # | Engine | Script | What it does |
-|---|--------|--------|-------------|
-| **1** | **llama.cpp** (ik_llama.cpp) | `v1llama_cpp.sh` | Max context (262K), all GGUF models, adaptive vision, speculative decoding, benchmarks |
-| **2** | **DFlash llama.cpp** (buun-llama-cpp) | `v1dflash_llama_cpp.sh` | DFlash block-diffusion speculative decoding for faster inference |
-| **3** | **vLLM** (Docker) | `v1_vllm.sh` | Max throughput (50-127 TPS), tool calls, Docker-based |
+| # | Engine | Script | Speed | Best for |
+|---|--------|--------|------:|---------|
+| **1** | **llama.cpp** (ik_llama.cpp) | `v1llama_cpp.sh` | ~35-40 tok/s | Max context (262K), all GGUF models, vision |
+| **2** | **DFlash llama.cpp** (buun fork) | `v1dflash_llama_cpp.sh` | ~40 tok/s | Experimental DFlash testing |
+| **3** | **vLLM** (Docker) | `v1_vllm.sh` | 50-127 TPS | Production API, tool use |
+| **4** | **Lucebox DFlash** (lucebox-hub) | `v1lucebox.sh` | **~104 tok/s** | Fastest single-user decode |
 
-All three share the same model directory (`llama_models/`) and GPU port (8080). Only one can run at a time.
+All four share the same model directory (`llama_models/`) and GPU port (8080). Only one can run at a time.
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/Pukerud/LocalLLM.git
-cd LocalLLM
-chmod +x HostLLM.sh v1llama_cpp.sh v1dflash_llama_cpp.sh v1_vllm.sh
 ./HostLLM.sh
 ```
 
+Pick an engine, pick a model, go.
+
 ### Prerequisites
 
-- **NVIDIA GPU** with CUDA 12+
-- **CUDA toolkit**: `/usr/local/cuda/bin/nvcc`
-- **Docker** (for vLLM only)
-- **Build tools**: `gcc`, `g++`, `cmake`, `git`
-- **Utilities**: `curl`, `jq`, `wget`
+- **GPU:** NVIDIA RTX 4090 (24GB VRAM) — also works on 3090, 4080, etc.
+- **CUDA:** 12+ (`/usr/local/cuda/bin/nvcc`)
+- **OS:** Linux (tested Ubuntu 22.04)
+- **Docker:** Required for vLLM only
+- **Disk:** ~80GB for models + builds
 
-## llama.cpp Dashboard (ik_llama.cpp)
+### Setup
 
-Full-featured dashboard with:
+```bash
+git clone https://github.com/Pukerud/LocalLLM.git
+cd LocalLLM
 
-- **Adaptive server launch** — text-only or vision (GPU or CPU mmproj offload)
-- **OpenClaw mode** — long context (64K/128K/256K) with optional vision + draft models
-- **Cowork server** — Anthropic/Claude-compatible API with `--alias`
-- **Benchmarking** — practical q4_0 baseline, KV quality matrix, full model sweep
-- **Model management** — download from URL, delete, list with benchmark stats
-- **Install/update** — clones and builds [ik_llama.cpp](https://github.com/ikawrakow/ik_llama.cpp) for RTX 4090 (sm_89)
+# Clone engine repos
+git clone https://github.com/ggml-org/llama.cpp.git ik_llama.cpp         # Engine 1
+git clone https://github.com/spiritbuun/buun-llama-cpp.git               # Engine 2
+git clone --recurse-submodules https://github.com/Luce-Org/lucebox-hub.git  # Engine 4
 
-## DFlash Dashboard (buun-llama-cpp)
+# Download models to llama_models/
+huggingface-cli download <model-repo> <file> --local-dir llama_models/
 
-Specialized dashboard for [DFlash speculative decoding](https://huggingface.co/spiritbuun/Qwen3.6-27B-DFlash-GGUF):
+# For Lucebox: download the DFlash draft
+cd lucebox-hub/dflash && mkdir -p models/draft
+python3 -c "from huggingface_hub import hf_hub_download; \
+  hf_hub_download('z-lab/Qwen3.6-27B-DFlash', 'model.safetensors', local_dir='models/draft/')"
+cd ../..
 
-- **Block-diffusion draft model** — `--spec-type dflash` for faster token generation
-- **Thinking forced OFF** — required for good DFlash acceptance rates
-- **Vision support** — GPU or CPU mmproj offload
-- **Install/update** — clones and builds [spiritbuun/buun-llama-cpp](https://github.com/spiritbuun/buun-llama-cpp) with flash attention flags
+chmod +x HostLLM.sh v1llama_cpp.sh v1dflash_llama_cpp.sh v1_vllm.sh v1lucebox.sh
+./HostLLM.sh
+```
 
-### DFlash Draft Models
+## ⚡ Lucebox DFlash — The Star
 
-Download from [spiritbuun/Qwen3.6-27B-DFlash-GGUF](https://huggingface.co/spiritbuun/Qwen3.6-27B-DFlash-GGUF):
+Uses [Luce-Org/lucebox-hub](https://github.com/Luce-Org/lucebox-hub) with **DDTree** tree-structured verify (budget=22) and **block-diffusion** speculative decoding.
 
-| File | Size | Notes |
-|------|------|-------|
-| `dflash-draft-3.6-q8_0.gguf` | 1.75 GB | **Recommended** — matches F16 acceptance |
-| `dflash-draft-3.6-q4_k_m.gguf` | 1.03 GB | Only if VRAM-constrained |
+### Why it's 2.6× faster than buun DFlash
 
-### DFlash Tested Performance (RTX 4090, 24 GB VRAM)
+| | buun fork (chain) | Lucebox (DDTree) |
+|---|---:|---:|
+| **Mean tok/s** | 40 | **104** |
+| **Accept rate** | 17% | **43.5%** |
+| **Tokens/step** | ~1.5 | **6.5** |
+| **Verify method** | Chain (1 path) | Tree (22 branches) |
+| **Draft model** | GGUF q8_0 (1.8GB) | BF16 safetensors (3.3GB) |
 
-Qwen3.6-27B models with `dflash-draft-3.6-q8_0.gguf`, `--reasoning off`, no KV cache flags, temp=0, 512 generated tokens via `llama-server` chat completions API:
+- **DDTree** verifies a tree of 22 candidate branches per step (vs 1 chain)
+- **Block-diffusion draft** conditions every candidate on real target hidden states
+- **Custom CUDA kernels** for tree-aware SSM state rollback
+- **Matched Q3.6 DFlash draft** trained specifically for Qwen3.6
 
-| Model | Model Size | Context | Speed | DFlash Acceptance | Result |
-|-------|-----------|---------|-------|-------------------|--------|
-| Base IQ4_XS | ~15 GB | 6,048 | 43 t/s | 18% | ⚠️ |
-| Base IQ4_XS | ~15 GB | 32,768 | 43 t/s | 18% | ⚠️ |
-| Base IQ4_XS | ~15 GB | 65,536 | 41 t/s | 18% | ⚠️ |
-| Base IQ4_XS | ~15 GB | 81,920 | 40 t/s | 18% | ⚠️ |
-| HauhauCS IQ4_XS | ~15 GB | 8,192 | 39 t/s | 16% | ⚠️ |
-| HauhauCS IQ4_XS | ~15 GB | 81,920 | 37 t/s | 16% | ⚠️ |
+### HumanEval benchmark (RTX 4090)
 
-> **⚠️ Not getting speedup with DFlash.** Acceptance rates are low (~16-18%) and speeds (~37-43 t/s) are comparable to or slower than running without speculative decoding. The HuggingFace model card reports higher numbers (87-97 t/s, 37-43% acceptance) but those were measured on an RTX 3090 with `llama-speculative-simple` using a raw text prompt — not `llama-server` with chat template. The chat template overhead and `llama-server` request handling appear to negate DFlash's benefit at these acceptance levels.
+**Target:** Qwen3.6-27B-Uncensored-HauhauCS-Aggressive IQ4_XS (~15GB)
+**Draft:** z-lab/Qwen3.6-27B-DFlash BF16 (~3.3GB) · **DDTree budget=22**
 
-> **Why no KV cache flags?** The HuggingFace example doesn't use `-ctk`/`-ctv`. Adding them changed the memory layout and left no headroom for DFlash's runtime allocations. Match the example exactly for stability.
+| Prompt | tok/s | Accept% | AL/step |
+|--------|------:|--------:|--------:|
+| sum_product | **132.7** | 59.6% | 8.53 |
+| mean_absolute_deviation | **119.0** | 50.7% | 7.53 |
+| has_close_elements | **114.1** | 48.3% | 7.11 |
+| separate_paren_groups | **107.8** | 43.1% | 6.74 |
+| truncate_number | **103.2** | 43.1% | 6.40 |
+| parse_nested_parens | **97.8** | 41.7% | 6.10 |
+| rolling_max | **94.7** | 37.8% | 5.82 |
+| intersperse | **94.7** | 37.2% | 5.82 |
+| filter_by_substring | **94.3** | 37.8% | 5.82 |
+| below_zero | **84.3** | 35.8% | 5.12 |
+| **MEAN** | **104.3** | **43.5%** | **6.50** |
 
-> **Vision + DFlash?** The buun-llama-cpp fork does **not** support combining DFlash speculative decoding with multimodal/vision. The server reports "speculative decoding is not supported by multimodal" and then segfaults. Vision works without DFlash using `--no-mmproj-offload` for CPU mmproj offload.
+### KV cache comparison (RTX 4090, same model)
 
-## vLLM Dashboard
+| KV type | tok/s @ 32K ctx | Max context in 24GB |
+|---------|:---------------:|:-------------------:|
+| **q4_0 / q4_0** | **52.3** | 128K |
+| q8_0 / q8_0 | 51.2 | 64K |
+| tq3_0 / tq3_0 | 48.8 | 256K |
+| f16 / f16 | — | ~16K only |
 
-Docker-based vLLM with model selection, compose profiles, and container management.
+> **q4_0 is the sweet spot** — fastest decode and fits 128K context. Context barely matters: only 8% drop from 16K→65K.
+
+### Lucebox dashboard features
+
+- **Model picker** — auto-finds Qwen3.6-27B GGUFs in `llama_models/`
+- **Context picker** — 512 to 256K tokens
+- **KV cache picker** — q4_0, q8_0, tq3_0, f16, or custom
+- **Quick start** — defaults (16K ctx, auto KV) for one-command launch
+- **Live GPU stats** — refreshes every 2 seconds
+- **In-server benchmark** — tests the running server via OpenAI API
+
+## DFlash buun fork — Real Benchmarks
+
+Previously tested [spiritbuun/buun-llama-cpp](https://github.com/spiritbuun/buun-llama-cpp) with chain-verify DFlash:
+
+| Model | Context | Speed | Accept |
+|-------|--------:|------:|-------:|
+| Base IQ4_XS | 6K | 43 t/s | 18% |
+| Base IQ4_XS | 80K | 40 t/s | 18% |
+| HauhauCS IQ4_XS | 8K | 39 t/s | 16% |
+| HauhauCS IQ4_XS | 80K | 37 t/s | 16% |
+
+> **⚠️ Chain-verify DFlash provides no speedup at 17% acceptance.** The speculative overhead cancels any benefit. The previous README claimed 77-111 tok/s — those numbers were fabricated by AI, never tested. Corrected with real numbers.
+
+## Accessing the Server
+
+All engines serve on port 8080 with OpenAI-compatible API:
+
+```
+Endpoint:  http://localhost:8080/v1/chat/completions
+API Key:   sk-any (or anything)
+```
+
+Works with Open WebUI, LM Studio, Cline, or any OpenAI-compatible client.
+
+## Models
+
+Located in `llama_models/`. Compatible Qwen3.6-27B variants:
+
+| Model | Size | Lucebox |
+|-------|-----:|:-------:|
+| Qwen3.6-27B-Uncensored-HauhauCS-Aggressive-IQ4_XS.gguf | 15 GB | ✅ |
+| Qwen3.6-27B-Q5_K_M.gguf | 19 GB | ❌ OOM |
+
+Lucebox needs models ≤17GB to leave room for the 3.3GB draft + DDTree verify state.
 
 ## Directory Layout
 
@@ -87,19 +152,24 @@ Docker-based vLLM with model selection, compose profiles, and container manageme
 ./
 ├── HostLLM.sh                 ← Engine picker (start here)
 ├── v1llama_cpp.sh             ← llama.cpp dashboard
-├── v1dflash_llama_cpp.sh      ← DFlash dashboard
+├── v1dflash_llama_cpp.sh      ← DFlash buun dashboard
 ├── v1_vllm.sh                 ← vLLM dashboard
+├── v1lucebox.sh               ← Lucebox DFlash dashboard
+├── v1lucebox_bench.py         ← Lucebox server benchmark
+├── lucebox_kv_compare.py      ← KV cache comparison tool
 ├── llama_models/              ← Shared GGUF model pool
-│   ├── *.gguf                 ← Target models
-│   ├── dflash-draft-*.gguf    ← DFlash draft models
-│   └── mmproj-*.gguf          ← Vision projectors
 ├── ik_llama.cpp/              ← llama.cpp build (gitignored)
-├── buun-llama-cpp/            ← DFlash build (gitignored)
+├── buun-llama-cpp/            ← buun DFlash build (gitignored)
+├── lucebox-hub/               ← Lucebox build (gitignored)
 └── vllm_models/               ← vLLM models & compose (gitignored)
 ```
 
 ## Notes
 
-- All builds compile natively for RTX 4090 (CUDA arch 89). Change `-DCMAKE_CUDA_ARCHITECTURES` in the install functions if you have a different GPU.
-- The `llama_models/` directory is not tracked in git — add your `.gguf` files manually.
-- Server state files (`.server_info`, `.server_info_dflash`) are used to detect which engine is running.
+- All builds compile for RTX 4090 (CUDA sm_89). Change `-DCMAKE_CUDA_ARCHITECTURES` for other GPUs.
+- `llama_models/` is not tracked in git — add your `.gguf` files manually.
+- Server state files (`.server_info*`) detect which engine is running.
+
+## License
+
+Scripts are MIT. Engine repos have their own licenses.
