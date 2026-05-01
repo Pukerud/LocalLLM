@@ -183,8 +183,8 @@ start_server() {
     local model_path="$1"
     local port="${2:-8080}"
     local max_ctx="$3"
-    local ctk="${4:-q4_0}"
-    local ctv="${5:-q4_0}"
+    local ctk="${4:-}"
+    local ctv="${5:-}"
 
     if pgrep -f "scripts/server.py.*--port ${port}" > /dev/null 2>&1; then
         echo "  Server already running on port ${port}. Stop it first."
@@ -220,24 +220,35 @@ EOF
     echo "  Model: ${model_path##*/}"
     echo "  Draft: ${draft_path}/model.safetensors"
     echo "  Port:  ${port}"
-    echo "  Context: ${max_ctx} | KV: ${ctk}/${ctv}"
+    echo "  Context: ${max_ctx}"
+    if [[ -n "$ctk" ]]; then
+        echo "  KV: ${ctk}/${ctv}"
+    else
+        echo "  KV: auto (server decides)"
+    fi
     echo ""
+
+    # Build server command
+    local server_cmd="python3 scripts/server.py \
+            --target \"${model_path}\" \
+            --draft \"${draft_path}\" \
+            --bin \"${bin_path}\" \
+            --port ${port} \
+            --max-ctx ${max_ctx}"
+    if [[ -n "$ctk" ]]; then
+        server_cmd="${server_cmd} \
+            --ctk ${ctk} \
+            --ctv ${ctv}"
+    fi
+    server_cmd="${server_cmd} \
+            --daemon"
 
     # Start server in background
     (
         cd "${SCRIPT_DIR}/${LUCE_DIR}"
         export PATH="/usr/local/cuda/bin:$PATH"
         export LD_LIBRARY_PATH="build/deps/llama.cpp/ggml/src:build/deps/llama.cpp/ggml/src/ggml-cuda"
-        python3 scripts/server.py \
-            --target "${model_path}" \
-            --draft "${draft_path}" \
-            --bin "${bin_path}" \
-            --port "${port}" \
-            --max-ctx "${max_ctx}" \
-            --ctk "${ctk}" \
-            --ctv "${ctv}" \
-            --daemon \
-            > "${SCRIPT_DIR}/server_lucebox.log" 2>&1
+        eval $server_cmd > "${SCRIPT_DIR}/server_lucebox.log" 2>&1
     ) &
 
     echo "  Waiting for server..."
@@ -434,12 +445,13 @@ while true; do
     echo ""
     echo "  Actions:"
     echo "  -------"
-    echo -e "  ${BOLD}[1]${RESET} Select model + Start server"
-    echo -e "  ${BOLD}[2]${RESET} Stop server"
-    echo -e "  ${BOLD}[3]${RESET} Quick benchmark (HumanEval 10 prompts)"
-    echo -e "  ${BOLD}[4]${RESET} Test with curl"
-    echo -e "  ${BOLD}[5]${RESET} Tail server log"
-    echo -e "  ${BOLD}[6]${RESET} Rebuild binary"
+    echo -e "  ${BOLD}[1]${RESET} Select model + Start server (custom settings)"
+    echo -e "  ${BOLD}[2]${RESET} Quick start server (defaults — 16K ctx, auto KV)"
+    echo -e "  ${BOLD}[3]${RESET} Stop server"
+    echo -e "  ${BOLD}[4]${RESET} Quick benchmark (HumanEval 10 prompts)"
+    echo -e "  ${BOLD}[5]${RESET} Test with curl"
+    echo -e "  ${BOLD}[6]${RESET} Tail server log"
+    echo -e "  ${BOLD}[7]${RESET} Rebuild binary"
     echo -e "  ${BOLD}[0]${RESET} Back to engine picker"
     echo ""
     tput cnorm
@@ -455,9 +467,16 @@ while true; do
             fi
             ;;
         2)
-            stop_server
+            if [[ -z "$SELECTED_MODEL" ]]; then
+                if ! select_model; then continue; fi
+            fi
+            echo "  Starting with server defaults (16K ctx, auto KV)..."
+            start_server "$SELECTED_MODEL" 8080 16384
             ;;
         3)
+            stop_server
+            ;;
+        4)
             if [[ -z "$SELECTED_MODEL" ]]; then
                 if ! select_model; then continue; fi
             fi
@@ -465,7 +484,7 @@ while true; do
             n_gen=${n_gen:-128}
             run_bench "$n_gen"
             ;;
-        4)
+        5)
             echo ""
             echo "  Testing with curl..."
             curl -s http://localhost:8080/v1/chat/completions \
@@ -474,11 +493,11 @@ while true; do
             echo ""
             read -p "  Press Enter to continue..."
             ;;
-        5)
+        6)
             tail -50 "${SCRIPT_DIR}/server_lucebox.log" 2>/dev/null || echo "  No log file found."
             read -p "  Press Enter to continue..."
             ;;
-        6)
+        7)
             export PATH="/usr/local/cuda/bin:$PATH"
             cd "${SCRIPT_DIR}/${LUCE_DIR}"
             cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=89 -DCMAKE_CXX_FLAGS="-I/usr/local/cuda/include" 2>&1 | tail -3
