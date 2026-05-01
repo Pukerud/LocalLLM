@@ -99,8 +99,6 @@ get_cpu_usage() {
 cleanup() {
     kill -9 "$MONITOR_PID" > /dev/null 2>&1
     wait "$MONITOR_PID" > /dev/null 2>&1
-    tput csr 0 "$(tput lines)"
-    tput cnorm
     echo ""
     exit
 }
@@ -147,9 +145,6 @@ update_dashboard() {
     # RAM stats
     ram_line=$(free -g | awk '/^Mem:/{printf "%d/%d GB", $3, $2}')
 
-    tput csr 5 "$(tput lines)"
-    tput cup 5 0
-
     echo "  ──────────────────────────────────────────────────────────"
     echo -e "  Server:  $server_status"
     if [[ -n "$active_ctx" ]]; then
@@ -161,7 +156,6 @@ update_dashboard() {
         echo -e "  ${CYAN}Endpoint: http://localhost:${active_port}/v1/chat/completions${RESET}"
     fi
     echo "  ──────────────────────────────────────────────────────────"
-    tput cup "$(tput lines)" 0
 }
 
 # ── Server control ───────────────────────────────────────────────────────
