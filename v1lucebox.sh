@@ -228,6 +228,13 @@ EOF
     fi
     echo ""
 
+    # Patch server.py default max_tokens from 512 to 4096 if needed
+    local server_py="${SCRIPT_DIR}/${LUCE_DIR}/scripts/server.py"
+    if grep -q 'max_tokens: int = 512' "$server_py" 2>/dev/null; then
+        sed -i 's/max_tokens: int = 512/max_tokens: int = 4096/' "$server_py"
+        echo "  Patched server.py: max_tokens 512 -> 4096 (fixes mid-sentence cutoff)"
+    fi
+
     # Build server command
     local server_cmd="python3 scripts/server.py \
             --target \"${model_path}\" \
