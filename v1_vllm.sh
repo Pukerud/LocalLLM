@@ -633,20 +633,21 @@ while true; do
     list_models
 
     echo ""
-    echo -e " ${CYAN}--- SERVER PRESETS ---${RESET}"
-    echo " [1] General Chat     (48K ctx, vision, TQ3 KV, ~50/68 TPS) — safe default"
-    echo " [2] IDE/Tools Agent  (75K ctx, no vision, fp8 KV, ~51/65 TPS) — Cline/Cursor"
-    echo " [3] Long Vision      (192K ctx, vision, TQ3 KV, ~50/68 TPS) — long docs + images"
-    echo " [4] Long Text Only   (205K ctx, no vision, TQ3 KV, ~50/66 TPS) — max context"
-    echo " [5] STOP SERVER"
+    echo -e " ${CYAN}─── SERVER PRESETS ─── fp8 KV ────────────────────────────────────${RESET}"
+    echo -e " ${GREEN}[1] Fast Chat       │ fp8 MTP=5 │  20K ctx │ short chat, max speed${RESET}"
+    echo -e " ${GREEN}[2] General Chat    │ fp8 MTP=3 │  48K ctx │ best all-rounder, stable${RESET}"
+    echo -e " ${GREEN}[3] IDE/Tools       │ fp8 MTP=3 │  63K ctx │ Cline/Cursor, fp8 ceiling${RESET}"
     echo ""
-    echo -e " ${CYAN}--- BENCHMARKING ---${RESET}"
-    echo " [6] Quick Benchmark (localhost:8080)"
+    echo -e " ${CYAN}─── SERVER PRESETS ─── TQ3 KV ────────────────────────────────────${RESET}"
+    echo " [4] Long Vision      │ TQ3 MTP=3 │ 128K ctx │ long docs, tools"
+    echo " [5] Long Text        │ TQ3 MTP=3 │ 150K ctx │ max context on 24GB"
     echo ""
-    echo -e " ${CYAN}--- MANAGEMENT ---${RESET}"
-    echo " [7] Download Model (Qwen3.6-27B AutoRound INT4)"
-    echo " [8] View Server Logs"
-    echo " [9] Setup Status"
+    echo -e " ${CYAN}─── CONTROLS ─────────────────────────────────────────────────────${RESET}"
+    echo " [6] STOP SERVER"
+    echo " [7] Quick Benchmark (localhost:8080)"
+    echo " [8] Download Model (Qwen3.6-27B AutoRound INT4)"
+    echo " [9] View Server Logs"
+    echo " [s] Setup Status"
     echo " [0] INSTALL / UPDATE (Docker image + Genesis patches)"
     echo " [99] Exit"
     echo ""
@@ -657,39 +658,44 @@ while true; do
 
     case $action in
         1)
-            start_vllm_server "docker-compose.default.yml" \
-                "General Chat" \
-                "VLLM: qwen3.6-27b [default/48K/TQ3+Vis]"
+            start_vllm_server "docker-compose.fast-chat.yml" \
+                "Fast Chat" \
+                "VLLM: qwen3.6-27b [fast-chat/20K/fp8/MTP5] ~110 tok/s"
             ;;
         2)
-            start_vllm_server "docker-compose.tools-text.yml" \
-                "IDE/Tools Agent" \
-                "VLLM: qwen3.6-27b [tools-text/75K/fp8]"
+            start_vllm_server "docker-compose.general-chat.yml" \
+                "General Chat" \
+                "VLLM: qwen3.6-27b [general-chat/48K/fp8/MTP3]"
             ;;
         3)
-            start_vllm_server "docker-compose.long-vision.yml" \
-                "Long Vision" \
-                "VLLM: qwen3.6-27b [long-vision/192K/TQ3+Vis]"
+            start_vllm_server "docker-compose.ide-tools.yml" \
+                "IDE/Tools" \
+                "VLLM: qwen3.6-27b [ide-tools/63K/fp8/MTP3]"
             ;;
         4)
-            start_vllm_server "docker-compose.long-text.yml" \
-                "Long Text Only" \
-                "VLLM: qwen3.6-27b [long-text/205K/TQ3]"
+            start_vllm_server "docker-compose.long-vision-v2.yml" \
+                "Long Vision" \
+                "VLLM: qwen3.6-27b [long-vision/128K/TQ3/MTP3]"
             ;;
         5)
-            stop_vllm_server
+            start_vllm_server "docker-compose.long-text-v2.yml" \
+                "Long Text" \
+                "VLLM: qwen3.6-27b [long-text/150K/TQ3/MTP3]"
             ;;
         6)
+            stop_vllm_server
+            ;;
+        7)
             run_benchmark
             read -p " Press Enter to return to menu..."
             ;;
-        7)
+        8)
             download_model
             ;;
-        8)
+        9)
             view_logs
             ;;
-        9)
+        s|S)
             show_setup_status
             ;;
         0)

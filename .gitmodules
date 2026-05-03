@@ -1,0 +1,3 @@
+[submodule "vllm_models/genesis"]
+	path = vllm_models/genesis
+	url = https://github.com/Sandermage/genesis-vllm-patches.git

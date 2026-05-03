@@ -4,7 +4,8 @@ buun-llama-cpp/
 
 # Model files (GGUF — large binary)
 llama_models/
-vllm_models/
+# vllm_models/  — un-ignored: compose files and genesis patches tracked
+# large model weights (.safetensors) still excluded below
 
 # Runtime / state
 .server_info
@@ -20,3 +21,9 @@ compile_debug.log
 dflash_compile_debug.log
 .llama_arg_probe_*
 .dflash_arg_probe*
+
+# Large model weight files
+*.safetensors
+*.safetensors.index.json
+*.gguf
+*.bin
