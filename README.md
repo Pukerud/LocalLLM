@@ -8,10 +8,12 @@ A collection of launch scripts to run 27B-class LLMs locally on a single RTX 409
 |---|--------|--------|------:|---------|
 | **1** | **llama.cpp** (ik_llama.cpp) | `v1llama_cpp.sh` | ~35-40 tok/s | Max context (262K), all GGUF models, vision |
 | **2** | **DFlash llama.cpp** (buun fork) | `v1dflash_llama_cpp.sh` | ~40 tok/s | Experimental DFlash testing |
-| **3** | **vLLM** (Docker) | `v1_vllm.sh` | 50-127 TPS | Production API, tool use |
+| **3** | **vLLM** (Docker) | `v1_vllm.sh` | ~70 tok/s* | Production API, tool use, MTP spec-decode |
 | **4** | **Lucebox DFlash** (lucebox-hub) | `v1lucebox.sh` | **~104 tok/s** | Fastest single-user decode |
 
 All four share the same model directory (`llama_models/`) and GPU port (8080). Only one can run at a time.
+
+\* *vLLM speed varies by preset: 20K ctx ~110 tok/s, 48K ctx ~70 tok/s, 128K ctx ~55 tok/s (benchmarked on RTX 4090).*
 
 ## Quick Start
 
@@ -52,6 +54,49 @@ cd ../..
 chmod +x HostLLM.sh v1llama_cpp.sh v1dflash_llama_cpp.sh v1_vllm.sh v1lucebox.sh
 ./HostLLM.sh
 ```
+
+## ⚡ vLLM — The Speed King
+
+Uses [vLLM](https://github.com/vllm-project/vllm) in Docker with [Genesis patches](https://github.com/Sandermage/genesis-vllm-patches) for MTP speculative decoding.
+
+### 5 Presets (pick based on your needs)
+
+| # | Preset | KV | MTP | Context | Best for |
+|---|--------|----|:---:|--------:|----------|
+| **1** | Fast Chat | fp8 | 5 | 20K | Short conversations, max speed |
+| **2** | General Chat | fp8 | 3 | 48K | Best all-rounder, stable |
+| **3** | IDE/Tools | fp8 | 3 | 63K | Cline/Cursor (fp8 ceiling) |
+| **4** | Long Vision | TQ3 | 3 | 128K | Long docs, tool calls |
+| **5** | Long Text | TQ3 | 3 | 150K | Max context on 24GB |
+
+All presets include tool call support (`qwen3_coder` parser).
+
+### Key learnings from benchmarking
+
+- **fp8 KV + MTP spec-decode** is the biggest win — 2× faster than the old TQ3/MTP=3 config
+- **MTP=5 crashes on long output** (CUDA illegal memory access bug in vLLM) — only safe for short chat
+- **MTP=3 is rock-solid** — use for anything that generates 4K+ tokens
+- **fp8 KV ceiling is ~63K context** on 24GB — above that, TQ3 (3-bit) KV is needed
+- **Genesis patches P67/P82** accelerate spec-decode on fp8 KV; **P65/P66** needed for TQ3 compatibility
+
+### vLLM setup
+
+```bash
+# Clone with submodules (includes Genesis patches)
+git clone --recurse-submodules https://github.com/Pukerud/LocalLLM.git
+
+# Download the AutoRound INT4 model
+huggingface-cli download	huahuacs/Qwen3.6-27B-AutoRound-INT4 --local-dir vllm_models/qwen3.6-27b-autoround-int4
+
+# Pull the vLLM Docker image
+docker pull vllm/vllm-openai:nightly-07351e0883470724dd5a7e9730ed10e01fc99d08
+
+# Launch
+./v1_vllm.sh
+# Pick [0] to install/update first, then choose a preset
+```
+
+---
 
 ## ⚡ Lucebox DFlash — The Star
 
@@ -161,14 +206,20 @@ Lucebox needs models ≤17GB to leave room for the 3.3GB draft + DDTree verify s
 ├── ik_llama.cpp/              ← llama.cpp build (gitignored)
 ├── buun-llama-cpp/            ← buun DFlash build (gitignored)
 ├── lucebox-hub/               ← Lucebox build (gitignored)
-└── vllm_models/               ← vLLM models & compose (gitignored)
+├── vllm_models/
+│   ├── compose/               ← vLLM Docker Compose presets
+│   ├── genesis/               ← Genesis vLLM patches (submodule)
+│   ├── patch_tolist_cudagraph.py
+│   └── qwen3.6-27b-autoround-int4/  ← AutoRound INT4 model weights
 ```
 
 ## Notes
 
 - All builds compile for RTX 4090 (CUDA sm_89). Change `-DCMAKE_CUDA_ARCHITECTURES` for other GPUs.
 - `llama_models/` is not tracked in git — add your `.gguf` files manually.
+- `vllm_models/` compose files and Genesis patches are tracked. Model weights (`.safetensors`) are gitignored.
 - Server state files (`.server_info*`) detect which engine is running.
+- vLLM presets use `--language-model-only` (no vision). For vision, use llama.cpp or Lucebox.
 
 ## License
 
