@@ -27,44 +27,21 @@ All five share the same model directory (`llama_models/`) and GPU port (8080). O
 ## Quick Start
 
 ```bash
+git clone https://github.com/Pukerud/LocalLLM.git
+cd LocalLLM
+chmod +x HostLLM.sh v1*.sh
 ./HostLLM.sh
 ```
 
-Pick an engine, pick a model, go.
+That's it. Pick an engine from the menu — each engine's dashboard handles building, model downloading, and server startup. No manual cloning of engine repos or downloading models outside the menus.
 
 ### Prerequisites
 
 - **GPU:** NVIDIA RTX 4090 (24GB VRAM) -- also works on 3090, 4080, etc.
 - **CUDA:** 12+ (`/usr/local/cuda/bin/nvcc`)
 - **OS:** Linux (tested Ubuntu 22.04)
-- **Docker:** Required for vLLM only
+- **Docker:** Required for vLLM (engine 3) only
 - **Disk:** ~80GB for models + builds
-
-### Setup
-
-```bash
-git clone https://github.com/Pukerud/LocalLLM.git
-cd LocalLLM
-
-# Clone engine repos
-git clone https://github.com/ggml-org/llama.cpp.git ik_llama.cpp         # Engine 1
-git clone https://github.com/spiritbuun/buun-llama-cpp.git               # Engine 2
-git clone --recurse-submodules https://github.com/Luce-Org/lucebox-hub.git  # Engine 4
-
-# Engine 5 (MTP) is set up through its dashboard: run v1llama_mtp.sh -> [0] -> [1]
-
-# Download models to llama_models/
-huggingface-cli download <model-repo> <file> --local-dir llama_models/
-
-# For Lucebox: download the DFlash draft
-cd lucebox-hub/dflash && mkdir -p models/draft
-python3 -c "from huggingface_hub import hf_hub_download; \
-  hf_hub_download('z-lab/Qwen3.6-27B-DFlash', 'model.safetensors', local_dir='models/draft/')"
-cd ../..
-
-chmod +x HostLLM.sh v1llama_cpp.sh v1dflash_llama_cpp.sh v1_vllm.sh v1lucebox.sh v1llama_mtp.sh
-./HostLLM.sh
-```
 
 ## ⚡ vLLM -- The Speed King
 
@@ -92,19 +69,7 @@ All presets include tool call support (`qwen3_coder` parser).
 
 ### vLLM setup
 
-```bash
-# Clone with submodules (includes Genesis patches)
-git clone --recurse-submodules https://github.com/Pukerud/LocalLLM.git
-
-# Download the AutoRound INT4 model
-huggingface-cli download	huahuacs/Qwen3.6-27B-AutoRound-INT4 --local-dir vllm_models/qwen3.6-27b-autoround-int4
-
-# Pull the vLLM Docker image
-docker pull vllm/vllm-openai:nightly-07351e0883470724dd5a7e9730ed10e01fc99d08
-
-# Launch
-./v1_vllm.sh
-# Pick [0] to install/update first, then choose a preset
+Launch `./v1_vllm.sh` from the main menu, pick **[0] Install/Update** — it pulls the Docker image and downloads the model automatically. Then choose a preset and go.
 ```
 
 ---
