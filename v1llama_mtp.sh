@@ -557,39 +557,39 @@ start_mtp_server() {
         return
     fi
 
-    # -- Model selection --
+    # -- Model selection (MTP models only) --
     raw_data=()
     if [[ -d "$MODELS_DIR" ]]; then
         for f in "$MODELS_DIR"/*.gguf; do
             [[ -e "$f" ]] || continue
             name=$(basename "$f")
             [[ "$name" == *"mmproj"* ]] && continue
+            name_low=$(echo "$name" | tr '[:upper:]' '[:lower:]')
+            [[ "$name_low" == *"-mtp"* ]] || continue
             size=$(du -h "$f" | cut -f1)
             raw_data+=("${name}|${size}")
         done
     fi
 
     if [[ ${#raw_data[@]} -eq 0 ]]; then
-        echo " No GGUF models found in $MODELS_DIR/"
-        echo " Run [1] to convert a model, or [5] to download one."
+        echo ""
+        echo -e " \033[1;31mNo MTP-enabled GGUF models found!\033[0m"
+        echo " MTP models must be converted with the PR #22673 converter."
+        echo " Regular GGUF files do not have MTP layers."
+        echo ""
+        echo " Run [1] to convert Qwen3.6-27B from HuggingFace (preserves MTP layers)"
+        echo " Or [5] to download a pre-converted MTP GGUF."
         read -p " Press Enter to return..."
         return
     fi
 
     echo ""
-    echo " Available models (look for -mtp in filename for MTP support):"
-    printf "   %-3s %-64s %-7s %s\n" "NR" "MODEL NAME" "SIZE" "MTP?"
+    echo " MTP-enabled models:"
+    printf "   %-3s %-64s %-7s\n" "NR" "MODEL NAME" "SIZE"
     echo "   ----------------------------------------------------------------------"
     for i in "${!raw_data[@]}"; do
         IFS="|" read -r m_name m_size <<< "${raw_data[$i]}"
-        m_low=$(echo "$m_name" | tr '[:upper:]' '[:lower:]')
-        if [[ "$m_low" == *"-mtp"* ]]; then
-            printf "   %2d) %-64s [%-5s] " "$((i+1))" "$(echo "$m_name" | cut -c1-64)" "$m_size"
-            echo -e "\033[1;32mYES\033[0m"
-        else
-            printf "   %2d) %-64s [%-5s] " "$((i+1))" "$(echo "$m_name" | cut -c1-64)" "$m_size"
-            echo -e "\033[1;33mNO?\033[0m"
-        fi
+        printf "   %2d) %-64s [%-5s]\n" "$((i+1))" "$(echo "$m_name" | cut -c1-64)" "$m_size"
     done
 
     echo ""
@@ -993,35 +993,34 @@ quick_start_mtp() {
         return
     fi
 
-    # List models
+    # List MTP models only
     raw_data=()
     if [[ -d "$MODELS_DIR" ]]; then
         for f in "$MODELS_DIR"/*.gguf; do
             [[ -e "$f" ]] || continue
             name=$(basename "$f")
             [[ "$name" == *"mmproj"* ]] && continue
+            name_low=$(echo "$name" | tr '[:upper:]' '[:lower:]')
+            [[ "$name_low" == *"-mtp"* ]] || continue
             size=$(du -h "$f" | cut -f1)
             raw_data+=("${name}|${size}")
         done
     fi
 
     if [[ ${#raw_data[@]} -eq 0 ]]; then
-        echo " No GGUF models found in $MODELS_DIR/"
+        echo ""
+        echo -e " \033[1;31mNo MTP-enabled GGUF models found!\033[0m"
+        echo " Run [1] to convert one from HuggingFace, or [5] to download."
         read -p " Press Enter to return..."
         return
     fi
 
     echo ""
-    printf "   %-3s %-64s %-7s %s\n" "NR" "MODEL NAME" "SIZE" "MTP?"
+    printf "   %-3s %-64s %-7s\n" "NR" "MODEL NAME" "SIZE"
     echo "   ----------------------------------------------------------------------"
     for i in "${!raw_data[@]}"; do
         IFS="|" read -r m_name m_size <<< "${raw_data[$i]}"
-        m_low=$(echo "$m_name" | tr '[:upper:]' '[:lower:]')
-        if [[ "$m_low" == *"-mtp"* ]]; then
-            printf "   %2d) %-64s [%-5s] \033[1;32mMTP\033[0m\n" "$((i+1))" "$(echo "$m_name" | cut -c1-64)" "$m_size"
-        else
-            printf "   %2d) %-64s [%-5s]\n" "$((i+1))" "$(echo "$m_name" | cut -c1-64)" "$m_size"
-        fi
+        printf "   %2d) %-64s [%-5s]\n" "$((i+1))" "$(echo "$m_name" | cut -c1-64)" "$m_size"
     done
 
     echo ""
