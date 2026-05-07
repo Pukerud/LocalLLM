@@ -156,7 +156,25 @@ install_mtp() {
     echo " PR: https://github.com/ggml-org/llama.cpp/pull/22673"
     echo ""
 
+    local EXPECTED_REMOTE="https://github.com/ggml-org/llama.cpp"
+    local NEED_CLONE=false
+
     if [[ ! -d "$MTP_DIR" ]]; then
+        NEED_CLONE=true
+    else
+        # Verify the remote points to ggml-org/llama.cpp, not some other repo
+        local current_remote
+        current_remote=$(cd "$MTP_DIR" && git remote get-url origin 2>/dev/null || echo "")
+        if [[ "$current_remote" != *"ggml-org/llama.cpp"* ]] && [[ "$current_remote" != *"llama.cpp"* ]]; then
+            echo -e " \033[1;33mWarning: ${MTP_DIR}/ exists but origin points to ${current_remote}\033[0m"
+            echo " Expected: ${EXPECTED_REMOTE}"
+            echo " Removing stale directory and re-cloning..."
+            rm -rf "$MTP_DIR"
+            NEED_CLONE=true
+        fi
+    fi
+
+    if $NEED_CLONE; then
         echo " Cloning ggml-org/llama.cpp..."
         git clone https://github.com/ggml-org/llama.cpp.git "$MTP_DIR"
     else
@@ -167,14 +185,27 @@ install_mtp() {
     echo ""
     echo " Fetching MTP PR #22673..."
     cd "$MTP_DIR"
+
+    # Remove any stale mtp-pr branch first
+    git branch -D mtp-pr 2>/dev/null || true
+
     if ! git fetch origin pull/22673/head:mtp-pr 2>&1; then
         echo ""
-        echo -e " \033[1;33mShallow clone detected -- unshallowing to fetch PR...${RESET}"
-        git fetch --unshallow 2>&1
-        git fetch origin pull/22673/head:mtp-pr 2>&1
+        echo -e " \033[1;33mDirect PR fetch failed. Trying unshallow...\033[0m"
+        git fetch --unshallow 2>/dev/null
+        if ! git fetch origin pull/22673/head:mtp-pr 2>&1; then
+            echo -e " \033[1;31mFailed to fetch PR #22673. The PR may have been merged or closed.\033[0m"
+            echo " Trying main branch as fallback..."
+            git checkout main 2>/dev/null || git checkout master 2>/dev/null
+            cd ..
+        else
+            git checkout mtp-pr 2>&1
+            cd ..
+        fi
+    else
+        git checkout mtp-pr 2>&1
+        cd ..
     fi
-    git checkout mtp-pr 2>&1
-    cd ..
 
     echo ""
     echo " Compiling for RTX 4090 (sm_89) with CUDA..."
