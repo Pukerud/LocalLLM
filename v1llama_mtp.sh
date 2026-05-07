@@ -965,6 +965,190 @@ start_mtp_server() {
     fi
 }
 
+# -- Quick Start MTP (Reddit PR author's exact command) ---------------
+
+quick_start_mtp() {
+    echo ""
+    echo -e " \033[1;36m>>> QUICK START MTP (Reddit PR #22673 author's params) <<<\033[0m"
+    echo ""
+    echo " Uses the exact command from the PR author:"
+    echo "   llama-server -m <model> --spec-type mtp --spec-draft-n-max 5"
+    echo "     --cache-type-k q4_0 --cache-type-v q4_0"
+    echo "     -np 1 -c 262144 --temp 0.7 --top-k 20 -ngl 99"
+    echo ""
+    echo " You only pick the model. Everything else is fixed."
+
+    if [[ -n $(pgrep -f "llama-server") ]]; then
+        echo ""
+        echo -e " \033[1;31mServer is already running! Stop it first [4].\033[0m"
+        sleep 2
+        return
+    fi
+
+    local server_bin="./${MTP_DIR}/build/bin/llama-server"
+    if [[ ! -x "$server_bin" ]]; then
+        echo " Error: llama-server not found at $server_bin"
+        echo " Run Install/Update [0] first."
+        read -p " Press Enter to return..."
+        return
+    fi
+
+    # List models
+    raw_data=()
+    if [[ -d "$MODELS_DIR" ]]; then
+        for f in "$MODELS_DIR"/*.gguf; do
+            [[ -e "$f" ]] || continue
+            name=$(basename "$f")
+            [[ "$name" == *"mmproj"* ]] && continue
+            size=$(du -h "$f" | cut -f1)
+            raw_data+=("${name}|${size}")
+        done
+    fi
+
+    if [[ ${#raw_data[@]} -eq 0 ]]; then
+        echo " No GGUF models found in $MODELS_DIR/"
+        read -p " Press Enter to return..."
+        return
+    fi
+
+    echo ""
+    printf "   %-3s %-64s %-7s %s\n" "NR" "MODEL NAME" "SIZE" "MTP?"
+    echo "   ----------------------------------------------------------------------"
+    for i in "${!raw_data[@]}"; do
+        IFS="|" read -r m_name m_size <<< "${raw_data[$i]}"
+        m_low=$(echo "$m_name" | tr '[:upper:]' '[:lower:]')
+        if [[ "$m_low" == *"-mtp"* ]]; then
+            printf "   %2d) %-64s [%-5s] \033[1;32mMTP\033[0m\n" "$((i+1))" "$(echo "$m_name" | cut -c1-64)" "$m_size"
+        else
+            printf "   %2d) %-64s [%-5s]\n" "$((i+1))" "$(echo "$m_name" | cut -c1-64)" "$m_size"
+        fi
+    done
+
+    echo ""
+    read -p " Select Model NR: " n
+    n=$(echo "$n" | tr -d '[:space:]')
+    local idx=$(( n - 1 ))
+    local entry=${raw_data[$idx]}
+    if [[ -z "$entry" ]]; then
+        echo " Invalid model number."
+        sleep 2
+        return
+    fi
+
+    local target="${entry%%|*}"
+
+    echo ""
+    echo " Context size:"
+    echo "   [1] 262144 (256K -- Reddit poster's default)"
+    echo "   [2] 131072 (128K)"
+    echo "   [3]  65536 (64K)"
+    read -p " Choice (1-3, default 1): " ctx_choice
+    ctx_choice=$(echo "$ctx_choice" | tr -d '[:space:]')
+    case "$ctx_choice" in
+        2) local ctx=131072 ;;
+        3) local ctx=65536 ;;
+        *) local ctx=262144 ;;
+    esac
+
+    # The exact command from the Reddit PR author
+    local cmd=("$server_bin"
+        -m "${MODELS_DIR}/${target}"
+        --spec-type mtp
+        --spec-draft-n-max 5
+        --cache-type-k q4_0
+        --cache-type-v q4_0
+        -np 1
+        -c "$ctx"
+        --temp 0.7
+        --top-k 20
+        -ngl 99
+        --host 0.0.0.0
+        --port 8080
+    )
+
+    echo "MTP: ${target} [${ctx}/q4_0/mtp=5/quickstart]" > .server_info_mtp
+
+    echo ""
+    echo " Launching with Reddit PR author's exact parameters:"
+    echo "   Model:    $target"
+    echo "   Command:  llama-server -m <model> --spec-type mtp --spec-draft-n-max 5"
+    echo "             --cache-type-k q4_0 --cache-type-v q4_0"
+    echo "             -np 1 -c ${ctx} --temp 0.7 --top-k 20 -ngl 99"
+    echo ""
+    echo " Full command:"
+    printf ' %q' "${cmd[@]}"
+    echo ""
+    echo ""
+
+    {
+        echo "COMMAND PROFILE: quick-start-mtp-reddit"
+        printf '%q ' "${cmd[@]}"
+        echo ""
+        echo "----- llama-server output -----"
+    } > "$SERVER_LOG"
+
+    nohup "${cmd[@]}" >> "$SERVER_LOG" 2>&1 &
+    local server_pid=$!
+
+    local failed=0
+    local loaded=0
+
+    for i in $(seq 1 180); do
+        if ! kill -0 "$server_pid" >/dev/null 2>&1; then
+            failed=1
+            break
+        fi
+
+        if grep -Eqi 'unknown argument|unrecognized option|invalid option|invalid argument|error:.*argument|usage:' "$SERVER_LOG"; then
+            kill "$server_pid" >/dev/null 2>&1 || true
+            wait "$server_pid" >/dev/null 2>&1 || true
+            failed=1
+            break
+        fi
+
+        # Check for OOM or allocation failure
+        if grep -Eqi 'out of memory|failed to allocate|CUDA error' "$SERVER_LOG"; then
+            kill "$server_pid" >/dev/null 2>&1 || true
+            wait "$server_pid" >/dev/null 2>&1 || true
+            failed=1
+            break
+        fi
+
+        code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8080/health" 2>/dev/null || true)
+        if [[ "$code" == "200" ]]; then
+            loaded=1
+            break
+        fi
+
+        sleep 1
+    done
+
+    if [[ "$failed" == "0" ]] && kill -0 "$server_pid" >/dev/null 2>&1; then
+        echo ""
+        if [[ "$loaded" == "1" ]]; then
+            echo " Server loaded and health check returned OK."
+        else
+            echo " Server process is running. It may still be loading."
+        fi
+
+        echo ""
+        echo " Last 50 lines of ${SERVER_LOG}:"
+        echo "------------------------------------------------------------"
+        tail -n 50 "$SERVER_LOG"
+        echo "------------------------------------------------------------"
+        sleep 3
+    else
+        rm -f .server_info_mtp
+        echo ""
+        echo -e " \033[1;31mServer failed during startup.\033[0m"
+        echo " Last 250 lines of ${SERVER_LOG}:"
+        echo "------------------------------------------------------------"
+        tail -n 250 "$SERVER_LOG"
+        echo "------------------------------------------------------------"
+        read -p " Press Enter to return to menu..."
+    fi
+}
+
 # -- Main Menu -------------------------------------------------------------
 
 setup_scroll_region
@@ -1025,7 +1209,8 @@ while true; do
 
     echo ""
     echo -e " \033[1;36m--- MTP SERVER ---\033[0m"
-    echo " [3] Start MTP Server (native MTP speculative decoding)"
+    echo " [3] Start MTP Server (configure context, KV, MTP tokens)"
+    echo " [7] Quick Start MTP   (Reddit PR params -- just pick model)"
     echo " [4] Stop Server"
     echo ""
     echo -e " \033[1;36m--- SETUP ---\033[0m"
@@ -1060,6 +1245,9 @@ while true; do
             ;;
         3)
             start_mtp_server
+            ;;
+        7)
+            quick_start_mtp
             ;;
         4)
             echo ""
