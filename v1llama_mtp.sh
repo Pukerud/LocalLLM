@@ -452,10 +452,13 @@ download_template() {
         if [[ "$tmpl_choice" == "0" ]]; then
             # Download all jinja files
             local count=0
+            mkdir -p "$TEMPLATES_DIR"
             for f in "${template_files[@]}"; do
                 if [[ "$f" == *.jinja ]]; then
                     local url="https://huggingface.co/froggeric/Qwen-Fixed-Chat-Templates/resolve/main/${f}"
-                    local dest="${TEMPLATES_DIR}/$(basename "$f")"
+                    # Flatten subdirs into unique filename: qwen3.6/chat_template.jinja -> qwen3.6-chat_template.jinja
+                    local flat_name=$(echo "$f" | tr '/' '-')
+                    local dest="${TEMPLATES_DIR}/${flat_name}"
                     echo " Downloading ${f}..."
                     if wget -q -O "$dest" "$url" 2>/dev/null; then
                         echo -e "   \033[1;32mOK: ${dest}\033[0m"
@@ -472,8 +475,10 @@ download_template() {
             local idx=$((tmpl_choice - 1))
             local selected="${template_files[$idx]}"
             if [[ -n "$selected" ]]; then
+                mkdir -p "$TEMPLATES_DIR"
                 local url="https://huggingface.co/froggeric/Qwen-Fixed-Chat-Templates/resolve/main/${selected}"
-                local dest="${TEMPLATES_DIR}/$(basename "$selected")"
+                local flat_name=$(echo "$selected" | tr '/' '-')
+                local dest="${TEMPLATES_DIR}/${flat_name}"
                 echo " Downloading ${selected}..."
                 if wget -O "$dest" "$url"; then
                     echo -e " \033[1;32mSaved to: ${dest}\033[0m"
@@ -486,17 +491,19 @@ download_template() {
     else
         echo " Could not list repo files via API. Trying direct download..."
         echo ""
+        mkdir -p "$TEMPLATES_DIR"
         local tried_files=(
+            "qwen3.6/chat_template.jinja"
+            "qwen3.5/chat_template.jinja"
             "qwen3-chat.jinja"
             "qwen3.jinja"
             "chat_template.jinja"
-            "qwen3.6-chat.jinja"
-            "qwen3.6.jinja"
         )
         local found=0
         for f in "${tried_files[@]}"; do
             local url="https://huggingface.co/froggeric/Qwen-Fixed-Chat-Templates/resolve/main/${f}"
-            local dest="${TEMPLATES_DIR}/${f}"
+            local flat_name=$(echo "$f" | tr '/' '-')
+            local dest="${TEMPLATES_DIR}/${flat_name}"
             echo " Trying: ${f}..."
             if wget -q -O "$dest" "$url" 2>/dev/null; then
                 echo -e "   \033[1;32mOK: ${dest}\033[0m"
