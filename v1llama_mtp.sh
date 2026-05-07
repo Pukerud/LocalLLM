@@ -824,23 +824,31 @@ start_mtp_server() {
     fi
 
     # MTP / speculative decoding flags
-    # Try various patterns -- the PR may use any of these
+    # The PR #22673 uses --spec-type mtp with --spec-draft-n-max N
     mtp_flag_found=false
-    if arg_probe_valid "$server_bin" --mtp "$mtp_tokens"; then
+    if arg_probe_valid "$server_bin" --spec-type mtp; then
+        mtp_flags=(--spec-type mtp)
+        flag_summary+=("mtp:--spec-type mtp")
+        mtp_flag_found=true
+
+        # Draft token count
+        if arg_probe_valid "$server_bin" --spec-type mtp --spec-draft-n-max "$mtp_tokens"; then
+            mtp_flags+=(--spec-draft-n-max "$mtp_tokens")
+            flag_summary+=("mtp:--spec-draft-n-max ${mtp_tokens}")
+        fi
+
+        # Min draft tokens (use 1 for aggressive speculation)
+        if arg_probe_valid "$server_bin" --spec-type mtp --spec-draft-n-min 1; then
+            mtp_flags+=(--spec-draft-n-min 1)
+            flag_summary+=("mtp:--spec-draft-n-min 1")
+        fi
+    elif arg_probe_valid "$server_bin" --mtp "$mtp_tokens"; then
         mtp_flags=(--mtp "$mtp_tokens")
         flag_summary+=("mtp:--mtp ${mtp_tokens}")
-        mtp_flag_found=true
-    elif arg_probe_valid "$server_bin" --speculative "mtp,${mtp_tokens}"; then
-        mtp_flags=(--speculative "mtp,${mtp_tokens}")
-        flag_summary+=("mtp:--speculative mtp,${mtp_tokens}")
         mtp_flag_found=true
     elif arg_probe_valid "$server_bin" --draft "$mtp_tokens"; then
         mtp_flags=(--draft "$mtp_tokens")
         flag_summary+=("mtp:--draft ${mtp_tokens}")
-        mtp_flag_found=true
-    elif arg_probe_valid "$server_bin" --draft-max "$mtp_tokens"; then
-        mtp_flags=(--draft-max "$mtp_tokens")
-        flag_summary+=("mtp:--draft-max ${mtp_tokens}")
         mtp_flag_found=true
     fi
 
