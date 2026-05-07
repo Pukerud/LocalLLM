@@ -1,5 +1,11 @@
 # LocalLLM -- Multi-Engine LLM Dashboard for RTX 4090 (24GB VRAM)
 
+https://github.com/Pukerud/LocalLLM/raw/main/speed%20demo%201x4090.mp4
+
+> **Speed demo** -- 5 inference engines, one RTX 4090, one command (`./HostLLM.sh`)
+
+---
+
 A collection of launch scripts to run 27B-class LLMs locally on a single RTX 4090 (24GB VRAM). Five inference engines, one GPU, one port (8080).
 
 ## Engines
