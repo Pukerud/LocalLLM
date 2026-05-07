@@ -1049,13 +1049,29 @@ quick_start_mtp() {
         *) local ctx=262144 ;;
     esac
 
+    local cache_type="q4_0"
+    echo ""
+    echo " KV cache type:"
+    echo "   [1] q4_0  (best context, Reddit poster's default)"
+    echo "   [2] q5_0  (better quality, less context)"
+    echo "   [3] q8_0  (highest quality, shortest context)"
+    echo "   [4] q5_1  (alternative quality)"
+    read -p " Choice (1-4, default 1): " kv_choice
+    kv_choice=$(echo "$kv_choice" | tr -d '[:space:]')
+    case "$kv_choice" in
+        2) cache_type="q5_0" ;;
+        3) cache_type="q8_0" ;;
+        4) cache_type="q5_1" ;;
+        *) cache_type="q4_0" ;;
+    esac
+
     # The exact command from the Reddit PR author
     local cmd=("$server_bin"
         -m "${MODELS_DIR}/${target}"
         --spec-type mtp
         --spec-draft-n-max 5
-        --cache-type-k q4_0
-        --cache-type-v q4_0
+        --cache-type-k "$cache_type"
+        --cache-type-v "$cache_type"
         -np 1
         -c "$ctx"
         --temp 0.7
@@ -1065,13 +1081,13 @@ quick_start_mtp() {
         --port 8080
     )
 
-    echo "MTP: ${target} [${ctx}/q4_0/mtp=5/quickstart]" > .server_info_mtp
+    echo "MTP: ${target} [${ctx}/${cache_type}/mtp=5/quickstart]" > .server_info_mtp
 
     echo ""
     echo " Launching with Reddit PR author's exact parameters:"
     echo "   Model:    $target"
     echo "   Command:  llama-server -m <model> --spec-type mtp --spec-draft-n-max 5"
-    echo "             --cache-type-k q4_0 --cache-type-v q4_0"
+    echo "             --cache-type-k ${cache_type} --cache-type-v ${cache_type}"
     echo "             -np 1 -c ${ctx} --temp 0.7 --top-k 20 -ngl 99"
     echo ""
     echo " Full command:"
