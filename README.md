@@ -10,15 +10,17 @@ A collection of launch scripts to run 27B-class LLMs locally on a single RTX 409
 
 ## Engines
 
-| # | Engine | Script | Speed | Best for |
-|---|--------|--------|------:|---------|
-| **1** | **llama.cpp** (ik_llama.cpp) | `v1llama_cpp.sh` | ~35-40 tok/s | Max context (262K), all GGUF models, vision |
-| **2** | **DFlash llama.cpp** (buun fork) | `v1dflash_llama_cpp.sh` | ~40 tok/s | Experimental DFlash testing |
-| **3** | **vLLM** (Docker) | `v1_vllm.sh` | ~70 tok/s* | Production API, tool use, MTP spec-decode |
-| **4** | **Lucebox DFlash** (lucebox-hub) | `v1lucebox.sh` | **~104 tok/s** | Fastest single-user decode |
-| **5** | **llama.cpp MTP** (ggml-org/llama.cpp PR #22673) | `v1llama_mtp.sh` | TBD | Native MTP speculative decoding, up to 180K context |
+| # | Engine | Script | Speed | Status | Best for |
+|---|--------|--------|------:|--------|----------|
+| **1** | **llama.cpp** (ik_llama.cpp) | `v1llama_cpp.sh` | ~35-40 tok/s | ✅ Stable | Max context (262K), vision, most reliable |
+| **2** | **DFlash llama.cpp** (buun fork) | `v1dflash_llama_cpp.sh` | — | ❌ Not working | Under development |
+| **3** | **vLLM** (Docker) | `v1_vllm.sh` | ~70 tok/s* | ✅ Working | Production API, tool use, MTP spec-decode |
+| **4** | **Lucebox DFlash** (lucebox-hub) | `v1lucebox.sh` | **~104 tok/s** | ⚠️ Unstable | Fastest single-user decode, needs tuning |
+| **5** | **llama.cpp MTP** (ggml-org/llama.cpp PR #22673) | `v1llama_mtp.sh` | **~100 tok/s** | ✅ Working | Native MTP speculative decoding, fast text-only |
 
 All five share the same model directory (`llama_models/`) and GPU port (8080). Only one can run at a time.
+
+**Recommended today:** Engine **1** (stable, vision, max context) or Engine **5** (fastest text-only with MTP).
 
 \* *vLLM speed varies by preset: 20K ctx ~110 tok/s, 48K ctx ~70 tok/s, 128K ctx ~55 tok/s (benchmarked on RTX 4090).*
 
