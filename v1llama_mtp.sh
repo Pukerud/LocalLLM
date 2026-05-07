@@ -824,103 +824,60 @@ start_mtp_server() {
     fi
 
     # MTP / speculative decoding flags
-    # The PR #22673 uses --spec-type mtp with --spec-draft-n-max N
+    # PR #22673 uses --spec-type mtp with --spec-draft-n-max N
     mtp_flag_found=false
     if arg_probe_valid "$server_bin" --spec-type mtp; then
-        mtp_flags=(--spec-type mtp)
-        flag_summary+=("mtp:--spec-type mtp")
+        mtp_flags=(--spec-type mtp --spec-draft-n-max "$mtp_tokens")
+        flag_summary+=("mtp:--spec-type mtp --spec-draft-n-max ${mtp_tokens}")
         mtp_flag_found=true
-
-        # Draft token count
-        if arg_probe_valid "$server_bin" --spec-type mtp --spec-draft-n-max "$mtp_tokens"; then
-            mtp_flags+=(--spec-draft-n-max "$mtp_tokens")
-            flag_summary+=("mtp:--spec-draft-n-max ${mtp_tokens}")
-        fi
-
-        # Min draft tokens (use 1 for aggressive speculation)
-        if arg_probe_valid "$server_bin" --spec-type mtp --spec-draft-n-min 1; then
-            mtp_flags+=(--spec-draft-n-min 1)
-            flag_summary+=("mtp:--spec-draft-n-min 1")
-        fi
-
-        # Offload MTP draft model fully to GPU (avoids CPU churn)
-        if arg_probe_valid "$server_bin" --spec-type mtp --spec-draft-ngl 999; then
-            mtp_flags+=(--spec-draft-ngl 999)
-            flag_summary+=("mtp-gpu:--spec-draft-ngl 999")
-        fi
-
-        # Limit MTP draft threads to 4 (don't burn all CPU cores)
-        if arg_probe_valid "$server_bin" --spec-type mtp --spec-draft-threads 4; then
-            mtp_flags+=(--spec-draft-threads 4)
-            flag_summary+=("mtp-cpu:--spec-draft-threads 4")
-        fi
     elif arg_probe_valid "$server_bin" --mtp "$mtp_tokens"; then
         mtp_flags=(--mtp "$mtp_tokens")
         flag_summary+=("mtp:--mtp ${mtp_tokens}")
         mtp_flag_found=true
-    elif arg_probe_valid "$server_bin" --draft "$mtp_tokens"; then
-        mtp_flags=(--draft "$mtp_tokens")
-        flag_summary+=("mtp:--draft ${mtp_tokens}")
-        mtp_flag_found=true
     fi
 
     if ! $mtp_flag_found; then
-        skipped_summary+=("MTP flag not found via probe -- MTP may auto-detect from GGUF metadata")
+        skipped_summary+=("MTP flag not found via probe")
         echo ""
-        echo -e " \033[1;33mNote:\033[0m Could not probe an explicit MTP flag."
-        echo " If the GGUF includes MTP layers, the server may auto-detect them."
-        echo " If not, speculative decoding won't be active."
-    fi
-
-    # Threads -- reduce CPU usage when model is fully GPU-offloaded
-    # Default is 14 threads which wastes CPU on GPU-only inference
-    thread_flags=()
-    if arg_probe_valid "$server_bin" -t 4; then
-        thread_flags=(-t 4)
-        flag_summary+=("threads:-t 4 (low CPU)")
-    fi
-
-    # Batch
-    if arg_probe_valid "$server_bin" -b 2048 -ub 512; then
-        batch_flags=(-b 2048 -ub 512)
-        flag_summary+=("batch:-b 2048 -ub 512")
-    else
-        skipped_summary+=("batch flags not accepted")
-    fi
-
-    # Parallel
-    if arg_probe_valid "$server_bin" --parallel 1; then
-        parallel_flags=(--parallel 1)
-        flag_summary+=("parallel:--parallel 1")
-    elif arg_probe_valid "$server_bin" -np 1; then
-        parallel_flags=(-np 1)
-        flag_summary+=("parallel:-np 1")
-    else
-        skipped_summary+=("parallel flag not accepted")
+        echo -e " \033[1;33mNote:\033[0m Could not probe an MTP flag."
     fi
 
     # -- Build command --
+    # Matches the Reddit PR author's recommended launch:
+    #   llama-server -m <model> --spec-type mtp --spec-draft-n-max 5
+    #     --cache-type-k q4_0 --cache-type-v q4_0
+    #     -np 1 -c 262144 --temp 0.7 --top-k 20 -ngl 99 --port 8081
+    #
+    # KEY: -ngl 99 (NOT 999) -- with 999, the MTP head loads as a second
+    # model with 66 layers AGAIN, overflowing VRAM and spilling to CPU.
+    # With 99, auto-fitting works correctly for both main + MTP head.
+    # No -fa, no -b/-ub, no --parallel, no -t -- keep it simple like the PR.
     cmd=("$server_bin"
         -m "${MODELS_DIR}/${target}"
+        --spec-type mtp
+        --spec-draft-n-max "$mtp_tokens"
+        --cache-type-k "$cache_type"
+        --cache-type-v "$cache_type"
+        -np 1
         -c "$ctx"
-        -ngl 999
-        "${fa_flags[@]}"
-        "${cache_flags[@]}"
-        "${thread_flags[@]}"
-        "${batch_flags[@]}"
-        "${parallel_flags[@]}"
-        "${jinja_flags[@]}"
+        --temp 0.7
+        --top-k 20
+        -ngl 99
         "${template_flags[@]}"
-        "${mtp_flags[@]}"
         --host 0.0.0.0
         --port 8080
     )
+
+    # Add chat template kwargs if present
+    if [[ ${#jinja_flags[@]} -gt 0 ]]; then
+        cmd+=("${jinja_flags[@]}")
+    fi
 
     local target_short="$target"
     echo "MTP: ${target_short} [${ctx}/${cache_type}/mtp=${mtp_tokens}/${thinking_text}]" > .server_info_mtp
 
     echo ""
-    echo " Starting MTP server:"
+    echo " Starting MTP server (matching Reddit PR author's recommended flags):"
     echo "   Model:      $target"
     echo "   Context:    $ctx"
     echo "   KV cache:   $cache_type"
@@ -928,6 +885,9 @@ start_mtp_server() {
     echo "   Template:   $template_text"
     echo "   Thinking:   $thinking_text"
     echo "   Vision:     NO (text-only for max context)"
+    echo "   -ngl 99 (NOT 999 -- prevents MTP head double-loading)"
+    echo "   --temp 0.7 --top-k 20"
+    echo "   -np 1 (single sequence)"
     echo ""
     echo " Accepted flags:"
     for x in "${flag_summary[@]}"; do echo "   + $x"; done
