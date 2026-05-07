@@ -842,6 +842,18 @@ start_mtp_server() {
             mtp_flags+=(--spec-draft-n-min 1)
             flag_summary+=("mtp:--spec-draft-n-min 1")
         fi
+
+        # Offload MTP draft model fully to GPU (avoids CPU churn)
+        if arg_probe_valid "$server_bin" --spec-type mtp --spec-draft-ngl 999; then
+            mtp_flags+=(--spec-draft-ngl 999)
+            flag_summary+=("mtp-gpu:--spec-draft-ngl 999")
+        fi
+
+        # Limit MTP draft threads to 4 (don't burn all CPU cores)
+        if arg_probe_valid "$server_bin" --spec-type mtp --spec-draft-threads 4; then
+            mtp_flags+=(--spec-draft-threads 4)
+            flag_summary+=("mtp-cpu:--spec-draft-threads 4")
+        fi
     elif arg_probe_valid "$server_bin" --mtp "$mtp_tokens"; then
         mtp_flags=(--mtp "$mtp_tokens")
         flag_summary+=("mtp:--mtp ${mtp_tokens}")
@@ -858,6 +870,14 @@ start_mtp_server() {
         echo -e " \033[1;33mNote:\033[0m Could not probe an explicit MTP flag."
         echo " If the GGUF includes MTP layers, the server may auto-detect them."
         echo " If not, speculative decoding won't be active."
+    fi
+
+    # Threads -- reduce CPU usage when model is fully GPU-offloaded
+    # Default is 14 threads which wastes CPU on GPU-only inference
+    thread_flags=()
+    if arg_probe_valid "$server_bin" -t 4; then
+        thread_flags=(-t 4)
+        flag_summary+=("threads:-t 4 (low CPU)")
     fi
 
     # Batch
@@ -886,6 +906,7 @@ start_mtp_server() {
         -ngl 999
         "${fa_flags[@]}"
         "${cache_flags[@]}"
+        "${thread_flags[@]}"
         "${batch_flags[@]}"
         "${parallel_flags[@]}"
         "${jinja_flags[@]}"
