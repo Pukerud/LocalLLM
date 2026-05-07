@@ -1,6 +1,6 @@
 # LocalLLM -- Multi-Engine LLM Dashboard for RTX 4090 (24GB VRAM)
 
-https://github.com/user-attachments/assets/414332512
+<video src="https://github.com/Pukerud/LocalLLM/releases/download/speed-demo-v1/speed.demo.1x4090.mp4" controls autoplay muted loop></video>
 
 > **Qwen3.6-27B at ~100 tok/s on a single RTX 4090** using llama.cpp MTP ([ggml-org/llama.cpp PR #22673](https://github.com/ggml-org/llama.cpp/pull/22673))
 
