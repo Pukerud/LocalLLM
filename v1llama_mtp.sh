@@ -93,9 +93,17 @@ if [[ "${1:-}" == "--quickstart" ]]; then
             read -p " Press Enter to exit..."
             exit 1
         fi
-    else
-        echo -e " ${GREEN}[1/3]${RESET} Binary ready."
     fi
+
+    # Verify MTP support before proceeding
+    if ! $server_bin -h 2>&1 | grep -q 'spec-type.*mtp'; then
+        echo -e " ${RED}Binary does not support MTP speculative decoding.${RESET}"
+        echo -e " The PR may not have been checked out. Re-run install from the menu."
+        read -p " Press Enter to exit..."
+        exit 1
+    fi
+
+    echo -e " ${GREEN}[1/3]${RESET} Binary ready (MTP verified)."
 
     # -- Step 2: Download model if missing ------------------------------
     model_path="${MODELS_DIR}/${QUICKSTART_MODEL}"
@@ -456,10 +464,12 @@ install_mtp() {
         echo -e " \033[1;33mDirect PR fetch failed. Trying unshallow...\033[0m"
         git fetch --unshallow 2>/dev/null
         if ! git fetch origin pull/22673/head:mtp-pr 2>&1; then
-            echo -e " \033[1;31mFailed to fetch PR #22673. The PR may have been merged or closed.\033[0m"
-            echo " Trying main branch as fallback..."
-            git checkout main 2>/dev/null || git checkout master 2>/dev/null
+            echo -e " \033[1;31mFailed to fetch PR #22673. Cannot build MTP binary.\033[0m"
+            echo " The PR may have been merged, closed, or network issues."
+            echo " Check: https://github.com/ggml-org/llama.cpp/pull/22673"
             cd ..
+            read -p " Press Enter to return to menu..."
+            return
         else
             git checkout mtp-pr 2>&1
             cd ..
@@ -513,7 +523,19 @@ install_mtp() {
         echo " Raw error logs: $DEBUG_LOG"
         read -p " Press Enter to return to menu..."
     else
-        echo -e "\n \033[1;32mBuild Complete!\033[0m"
+        # Verify MTP support in the built binary
+        local built_bin="./${MTP_DIR}/build/bin/llama-server"
+        if [[ -x "$built_bin" ]]; then
+            if $built_bin -h 2>&1 | grep -q 'spec-type.*mtp'; then
+                echo -e "\n \033[1;32mBuild Complete! MTP support verified.\033[0m"
+            else
+                echo -e "\n \033[1;31m[!] Build succeeded but MTP support NOT found in binary!\033[0m"
+                echo " The PR may not have been checked out correctly."
+                echo " Try running Install/Update again."
+            fi
+        else
+            echo -e "\n \033[1;32mBuild Complete!\033[0m"
+        fi
         sleep 2
     fi
 }
@@ -815,6 +837,12 @@ start_mtp_server() {
     if [[ ! -x "$server_bin" ]]; then
         echo " Error: llama-server not found at $server_bin"
         echo " Run Install/Update [0] first."
+        read -p " Press Enter to return..."
+        return
+    fi
+
+    if ! $server_bin -h 2>&1 | grep -q 'spec-type.*mtp'; then
+        echo -e " \033[1;31mError: Binary does not support MTP. Re-run Install/Update [0].\033[0m"
         read -p " Press Enter to return..."
         return
     fi
@@ -1251,6 +1279,12 @@ quick_start_mtp() {
     if [[ ! -x "$server_bin" ]]; then
         echo " Error: llama-server not found at $server_bin"
         echo " Run Install/Update [0] first."
+        read -p " Press Enter to return..."
+        return
+    fi
+
+    if ! $server_bin -h 2>&1 | grep -q 'spec-type.*mtp'; then
+        echo -e " \033[1;31mError: Binary does not support MTP. Re-run Install/Update [0].\033[0m"
         read -p " Press Enter to return..."
         return
     fi
