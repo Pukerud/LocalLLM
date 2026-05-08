@@ -1,12 +1,14 @@
-# LocalLLM -- Multi-Engine LLM Dashboard for RTX 4090 (24GB VRAM)
+# LocalLLM — Multi-Engine LLM Dashboard
 
-https://github.com/user-attachments/assets/daa56313-deff-4664-a614-f2472aac92f6
-
-> **Qwen3.6-27B at ~100 tok/s on a single RTX 4090** using llama.cpp MTP ([ggml-org/llama.cpp PR #22673](https://github.com/ggml-org/llama.cpp/pull/22673))
+> **Qwen3.6-27B at ~100 tok/s with MTP speculative decoding** using [ggml-org/llama.cpp PR #22673](https://github.com/ggml-org/llama.cpp/pull/22673)
 
 ---
 
-A collection of launch scripts to run 27B-class LLMs locally on a single RTX 4090 (24GB VRAM). Five inference engines, one GPU, one port (8080).
+A collection of launch scripts to run 27B-class LLMs locally on NVIDIA GPUs. Five inference engines, one port (8080).
+
+**🟢 NVIDIA GPUs only** — all engines require CUDA.
+
+---
 
 ## Quick Start
 
@@ -17,142 +19,216 @@ chmod +x HostLLM.sh v1*.sh
 ./HostLLM.sh
 ```
 
-Pick an engine from the menu — each dashboard handles building, model downloading, and server startup automatically.
+Press **[0]** from the main menu for the **one-click Quick Start** — it auto-installs everything, downloads a model, and starts the server. No technical knowledge needed.
 
-### Prerequisites
+### What Quick Start does automatically
 
-- **GPU:** NVIDIA RTX 4090 (24GB VRAM) — also works on 3090, 4080, etc.
-- **CUDA:** 12+ (`/usr/local/cuda/bin/nvcc`)
+1. **Installs CUDA Toolkit** if missing (12.4 or 12.8 for Blackwell GPUs)
+2. **Builds llama.cpp** with MTP PR #22673
+3. **Downloads the default model** (~16 GB, Q4_K_S)
+4. **Detects your GPU(s)** and auto-calculates the optimal context size
+5. **Applies fixed jinja chat template** (bundled)
+6. **Starts the server** and shows connection info
+
+### Quick Start final display
+
+```
+==================================================================
+  MTP SERVER RUNNING
+==================================================================
+
+  Model:   Qwen3.6-27B-uncensored-heretic-v2-Native-MTP-Preserved-Q4_K_S.gguf
+  Context: 131072  |  KV: q4_0  |  MTP: 5
+  GPUs:    2x (24 GB total)
+
+  Connect from any device on your network:
+
+  Chat UI:       http://192.168.1.45:8080
+  API Base:      http://192.168.1.45:8080/v1
+  Anthropic:     http://192.168.1.45:8080/v1/messages
+
+  API Key: any string (e.g. sk-1234) or leave blank
+
+  OpenWebUI:    OpenAI base URL → http://192.168.1.45:8080/v1
+  Pi / Codex:   OPENAI_API_BASE=http://192.168.1.45:8080/v1
+  Cline / Continue: OpenAI compatible → http://192.168.1.45:8080/v1
+  Anthropic SDK:  base_url → http://192.168.1.45:8080/v1
+==================================================================
+
+  CPU: 1%
+  GPU 0:  45%   |   VRAM: 8.8 GB / 12 GB (72%)   |   Temp: 52 degC
+  GPU 1:  38%   |   VRAM: 9.1 GB / 12 GB (75%)   |   Temp: 49 degC
+  TOTAL: VRAM: 17.9 GB / 24 GB (74%)   |   GPUs: 2
+
+  [1] Stop server and return to menu
+  [2] Return to menu (keep server running)
+
+  Select [1/2]:
+```
+
+Stats update live. The server stays running when you press **[2]** — access it from any device on your network.
+
+---
+
+## Main Menu
+
+```
+==========================================================
+  HostLLM — Engine Picker
+==========================================================
+
+  Status:  No engine running
+
+  Quick Start:
+  ------------
+  [0] Quick Start   One-click MTP — auto-install, download model, start server
+
+  Engines:
+  -------
+  [1] llama.cpp       ik_llama.cpp — max context (262K), all GGUF models
+  [2] DFlash llama.cpp buun-llama-cpp — DFlash speculative decoding
+  [3] vLLM            Docker — max throughput (50-127 TPS), tool calls
+  [4] Lucebox DFlash  lucebox-hub — DDTree (~104 t/s on 4090)
+  [5] llama.cpp MTP   ggml-org/llama.cpp — native MTP speculative decoding
+
+  Controls:
+  ---------
+  [6] Kill All    Stop whatever is running
+  [7] Update      Check git repo for newer version
+  [8] Exit
+
+  Select:
+```
+
+All engine sub-menus have:
+- **[99] Back to Main Menu** — returns to this screen
+- **[98] Exit** — quits the whole app
+
+---
+
+## Prerequisites
+
+- **GPU:** NVIDIA only (RTX 3060+, 3090, 4070, 4090, 5080, etc.)
+  - Minimum 16 GB total VRAM (single or multi-GPU)
+  - Multi-GPU supported — model and KV cache are split automatically
 - **OS:** Linux (tested Ubuntu 22.04)
+- **Disk:** ~80 GB for models + builds
 - **Docker:** Required for vLLM (engine 3) only
-- **Disk:** ~80GB for models + builds
+- **CUDA:** Auto-installed by Quick Start if missing
+
+---
+
+## Supported GPUs
+
+Quick Start auto-detects your GPU(s) and adjusts:
+
+| Setup | Total VRAM | Context | Notes |
+|-------|-----------|---------|-------|
+| 1× RTX 4090 | 24 GB | ~131K | Recommended |
+| 1× RTX 3090 | 24 GB | ~131K | Same VRAM, works great |
+| 2× RTX 3090 | 48 GB | ~262K | Max context |
+| 2× RTX 3060 | 24 GB | ~50K | Tight but works |
+| 2× RTX 4090 | 48 GB | ~262K | Max context |
+| RTX 5080/5090 | 16/32 GB | varies | Auto-installs CUDA 12.8 |
+
+---
 
 ## Engines
 
 | # | Engine | Script | Speed | Status | Best for |
 |---|--------|--------|------:|--------|----------|
-| **1** | **llama.cpp** (ik_llama.cpp) | `v1llama_cpp.sh` | ~35-40 tok/s | ✅ Stable | Vision, max context (262K), most reliable |
-| **2** | **DFlash** (buun fork) | `v1dflash_llama_cpp.sh` | — | ❌ Not working | Under development |
-| **3** | **vLLM** (Docker) | `v1_vllm.sh` | ~70 tok/s* | ✅ Working | Production API, tool use, MTP spec-decode |
-| **4** | **Lucebox DFlash** (lucebox-hub) | `v1lucebox.sh` | **~104 tok/s** | ⚠️ Unstable | Fastest when stable, needs tuning |
-| **5** | **llama.cpp MTP** (PR #22673) | `v1llama_mtp.sh` | **~100 tok/s** | ✅ Working | Fast text-only, native MTP, ~256K context |
+| **0** | **Quick Start** | `v1llama_mtp.sh --quickstart` | auto | ✅ | One-click, noobs |
+| **1** | **llama.cpp** (ik_llama.cpp) | `v1llama_cpp.sh` | ~35-40 tok/s | ✅ Stable | Vision, max context (262K) |
+| **2** | **DFlash** (buun fork) | `v1dflash_llama_cpp.sh` | — | ❌ | Under development |
+| **3** | **vLLM** (Docker) | `v1_vllm.sh` | ~70 tok/s* | ✅ Working | Production API, tool use |
+| **4** | **Lucebox DFlash** | `v1lucebox.sh` | **~104 tok/s** | ⚠️ Unstable | Fastest when stable |
+| **5** | **llama.cpp MTP** (PR #22673) | `v1llama_mtp.sh` | **~100 tok/s** | ✅ Working | Fast text, native MTP |
 
-All five share `llama_models/` and port 8080. Only one runs at a time.
+All share `llama_models/` and port 8080. Only one runs at a time.
 
-**Recommended today:** Engine **1** (stable, vision, max context) or Engine **5** (fastest text-only with MTP).
+**Recommended:** Engine **0** (Quick Start) or **5** (full MTP dashboard).
 
 \* *vLLM speed varies by preset: 20K ctx ~110 tok/s, 48K ctx ~70 tok/s, 128K ctx ~55 tok/s.*
 
 ---
 
-## Engine 1 — llama.cpp (ik_llama.cpp)
+## API Endpoints
 
-The reliable daily driver. Vision support, up to 262K context, works with all GGUF models. ~35-40 tok/s without speculative decoding.
+The server exposes OpenAI and Anthropic-compatible endpoints:
 
-**Dashboard:** `./v1llama_cpp.sh` → Install → Pick model → Go.
+| Endpoint | Purpose |
+|----------|---------|
+| `http://IP:8080/v1/chat/completions` | OpenAI Chat (main) |
+| `http://IP:8080/v1/completions` | Text completions |
+| `http://IP:8080/v1/models` | List models |
+| `http://IP:8080/v1/responses` | OpenAI Responses API |
+| `http://IP:8080/v1/messages` | Anthropic Messages API |
+| `http://IP:8080/v1/embeddings` | Embeddings |
+| `http://IP:8080/health` | Health check |
 
----
+### Connecting from clients
 
-## Engine 3 — vLLM (Docker)
+| Client | How to connect |
+|--------|---------------|
+| **OpenWebUI** | OpenAI base URL → `http://IP:8080/v1` |
+| **Pi (coding agent)** | `OPENAI_API_BASE=http://IP:8080/v1` |
+| **Codex CLI** | `OPENAI_API_BASE=http://IP:8080/v1` |
+| **Cline / Continue** | OpenAI compatible → `http://IP:8080/v1` |
+| **Cursor** | Set OpenAI base URL → `http://IP:8080/v1` |
+| **Anthropic SDK** | `base_url="http://IP:8080/v1"` |
 
-Production-grade API with tool call support. Uses [vLLM](https://github.com/vllm-project/vllm) with [Genesis patches](https://github.com/Sandermage/genesis-vllm-patches) for MTP speculative decoding.
-
-**5 Presets:**
-
-| # | Preset | KV | MTP | Context | Best for |
-|---|--------|----|:---:|--------:|----------|
-| **1** | Fast Chat | fp8 | 5 | 20K | Short conversations, max speed |
-| **2** | General Chat | fp8 | 3 | 48K | Best all-rounder, stable |
-| **3** | IDE/Tools | fp8 | 3 | 63K | Cline/Cursor (fp8 ceiling) |
-| **4** | Long Vision | TQ3 | 3 | 128K | Long docs, tool calls |
-| **5** | Long Text | TQ3 | 3 | 150K | Max context on 24GB |
-
-**Key learnings:**
-- **MTP=5 crashes on long output** — only safe for short chat
-- **MTP=3 is rock-solid** — use for anything generating 4K+ tokens
-- **fp8 KV ceiling ~63K** on 24GB — above that, TQ3 needed
-
-**Dashboard:** `./v1_vllm.sh` → **[0] Install/Update** → choose preset → go.
+**API Key:** Any string (e.g. `sk-1234`) or leave blank. The server doesn't require authentication.
 
 ---
 
-## Engine 4 — Lucebox DFlash (⚠️ Unstable)
+## Engine 5 — llama.cpp MTP (Full Dashboard)
 
-Uses [Luce-Org/lucebox-hub](https://github.com/Luce-Org/lucebox-hub) with **DDTree** tree-structured verify and block-diffusion speculative decoding. Fastest engine when stable (~104 tok/s), but currently unstable on current settings — needs more tuning.
-
-**Why it's fast:** DDTree verifies 22 candidate branches per step (vs 1 chain in buun's DFlash), achieving 43.5% acceptance rate and ~6.5 tokens per step.
-
-**Dashboard:** `./v1lucebox.sh` → Install → Pick model → Configure → Go.
-
----
-
-## Engine 5 — llama.cpp MTP (✅ Working)
-
-Uses [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) with [PR #22673](https://github.com/ggml-org/llama.cpp/pull/22673) — **native Multi-Token Prediction** for Qwen3.6 models. No separate draft model needed — the MTP heads are built into the weights.
-
-### How it works
-
-Qwen3.6-27B includes MTP tensor layers. This PR:
-- Preserves MTP layers during GGUF conversion (standard converters strip them)
-- Uses MTP heads for **self-speculative decoding**
-- Achieves ~2.5x speedup over standard autoregressive decoding
+For users who want full control over settings. Uses [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) with [PR #22673](https://github.com/ggml-org/llama.cpp/pull/22673) — native Multi-Token Prediction.
 
 ### Dashboard menu
 
 ```
-./v1llama_mtp.sh
+ --- SETUP ---
+ [0] Install / Update llama.cpp (MTP PR #22673)
+ [1] Convert HF Model -> GGUF (preserve MTP layers + quantize)
+ [2] Download Fixed Chat Template (froggeric)
 
-[0] Install/Update  -- clones llama.cpp, fetches PR #22673, compiles
-[1] Convert Model   -- downloads from HuggingFace, converts to MTP GGUF
-[2] Download Template -- froggeric's fixed jinja templates (fixes 7 bugs)
-[3] Start Server    -- select model, context, KV cache, MTP tokens
-[4] Stop Server
-[5] Download MTP GGUF -- download pre-converted models
-[6] Status / Logs
-[7] Quick Start     -- Reddit PR author's exact command, just pick model
+ --- MTP SERVER ---
+ [3] Start MTP Server (configure context, KV, MTP tokens)
+ [7] Quick Start MTP   (Reddit PR params -- just pick model)
+ [4] Stop Server
+
+ --- MANAGEMENT ---
+ [5] Download Model (.gguf URL)
+ [6] Delete Model
+
+ [99] Back to Main Menu
+ [98] Exit
 ```
 
 ### Recommended defaults (RTX 4090)
 
 | Setting | Value | Why |
 |---------|-------|-----|
-| Quantization | **Q5_K_M** (~19 GB) | Best quality/size ratio for 24GB |
-| Context | **262144 (256K)** | Maximum with q4_0 KV |
-| KV cache | **q4_0** | Fits 256K in 24GB with MTP |
+| Quantization | **Q5_K_M** (~19 GB) | Best quality/size for 24GB |
+| Context | **262144 (256K)** | Max with q4_0 KV |
+| KV cache | **q4_0** | Fits 256K in 24GB |
 | MTP tokens | **5** | Speculative lookahead |
-| Thinking | **OFF** | Best speed |
-
-### Chat template
-
-The original Qwen3.6 jinja has [7 vLLM-specific bugs](https://huggingface.co/froggeric/Qwen-Fixed-Chat-Templates). The dashboard auto-downloads froggeric's fixed templates.
+| Template | **Fixed jinja v9** | Bundled, fixes 7 bugs |
 
 ---
-
-## Accessing the Server
-
-All engines serve on port 8080 with OpenAI-compatible API:
-
-```
-Endpoint:  http://localhost:8080/v1/chat/completions
-API Key:   sk-any (or anything)
-```
-
-Works with Open WebUI, LM Studio, Cline, or any OpenAI-compatible client.
-
-## Models
-
-Located in `llama_models/`. Any Qwen3.6-27B GGUF variant works with engine 1. Engine 5 requires GGUFs converted with the PR #22673 converter (filenames ending in `-mtp.gguf`).
 
 ## Directory Layout
 
 ```
 ./
 ├── HostLLM.sh              ← Engine picker (start here)
+├── chat_templates/          ← Bundled fixed jinja templates
+├── v1llama_mtp.sh          ← Engine 5 / Quick Start dashboard
 ├── v1llama_cpp.sh          ← Engine 1 dashboard
 ├── v1dflash_llama_cpp.sh   ← Engine 2 dashboard
 ├── v1_vllm.sh              ← Engine 3 dashboard
 ├── v1lucebox.sh            ← Engine 4 dashboard
-├── v1llama_mtp.sh          ← Engine 5 dashboard
 ├── llama_models/           ← Shared GGUF model pool
 ├── llama_cpp_mtp/          ← MTP build (gitignored)
 ├── ik_llama.cpp/           ← llama.cpp build (gitignored)
@@ -163,10 +239,12 @@ Located in `llama_models/`. Any Qwen3.6-27B GGUF variant works with engine 1. En
 
 ## Notes
 
-- All builds compile for RTX 4090 (CUDA sm_89). Change `-DCMAKE_CUDA_ARCHITECTURES` for other GPUs.
-- `llama_models/` is gitignored — add your `.gguf` files via dashboard menus or manually.
+- All builds auto-detect GPU architecture (sm_86, sm_89, sm_120, etc.) — no manual config needed.
+- Multi-GPU tensor splitting is automatic — just plug in multiple NVIDIA GPUs.
+- `llama_models/` is gitignored — add `.gguf` files via dashboard menus or manually.
 - MTP GGUF files must be converted with the PR #22673 converter — standard GGUFs don't have MTP layers.
-- Each engine tracks its own state via `.server_info*` files — the main menu auto-detects which engine is running.
+- Each engine tracks its own state via `.server_info*` files — the main menu auto-detects which is running.
+- Use **[7] Update** from the main menu to pull the latest version from GitHub.
 
 ## License
 
