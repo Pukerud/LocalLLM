@@ -1429,14 +1429,12 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     echo "  Model:   ${QUICKSTART_MODEL}"
     echo "  Context: ${CTX}  |  KV: q4_0  |  MTP: 5"
     echo "  GPUs:    ${GPU_COUNT}x (${TOTAL_VRAM_GB} GB total)"
-    echo ""
-    echo "  Press Ctrl+C to stop server"
     echo "=================================================================="
     echo ""
 
-    # Live stats loop
-    tput civis
+    # Interactive dashboard with stats + menu
     while kill -0 "$SERVER_PID" >/dev/null 2>&1; do
+        # -- Read GPU stats --
         if command -v nvidia-smi > /dev/null 2>&1; then
             stats=$(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits 2>/dev/null)
             IFS=',' read -r gpu_load vram_used vram_total gpu_temp <<< "$stats"
@@ -1454,7 +1452,7 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         read cpu user nice system idle iowait irq softirq steal guest < /proc/stat
         cpu_ap=$((user+nice+system+irq+softirq+steal))
         cpu_tp=$((user+nice+system+idle+iowait+irq+softirq+steal))
-        sleep 1
+        sleep 0.5
         read cpu user nice system idle iowait irq softirq steal guest < /proc/stat
         cpu_ac=$((user+nice+system+irq+softirq+steal))
         cpu_tc=$((user+nice+system+idle+iowait+irq+softirq+steal))
@@ -1462,21 +1460,49 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         cpu_adiff=$((cpu_ac - cpu_ap))
         if [[ "$cpu_diff" -gt 0 ]]; then cpu_pct=$(( (cpu_adiff * 100) / cpu_diff )); else cpu_pct=0; fi
 
+        # -- Redraw header --
         tput sc
-        tput cup 11 0
+        tput cup 8 0
         echo -e "  CPU: ${cpu_pct}%   |   GPU: ${gpu_load}%   |   Temp: ${gpu_temp} degC"
         echo -e "  VRAM: ${vram_used_gb} GB / ${vram_total_gb} GB (${vram_pct}%)"
         echo ""
         echo -e "  ${BOLD}Chat URL:${RESET}  http://${LOCAL_IP}:8080"
+        echo ""
+        echo "  [1] Stop server and return to menu"
+        echo "  [2] Return to menu (keep server running)"
+        echo ""
+        echo -n "  Select [1/2]: "
         tput rc
-        tput cup 17 0
+
+        # -- Wait for input with timeout --
+        read -t 3 -n 1 qs_choice 2>/dev/null || continue
+        echo ""
+        case "$qs_choice" in
+            1)
+                echo ""
+                echo -e "  ${YELLOW}Stopping server...${RESET}"
+                kill "$SERVER_PID" >/dev/null 2>&1 || true
+                wait "$SERVER_PID" >/dev/null 2>&1 || true
+                rm -f .server_info_mtp 2>/dev/null
+                echo -e "  ${GREEN}Server stopped.${RESET}"
+                sleep 1
+                exit 0
+                ;;
+            2)
+                echo ""
+                echo -e "  ${GREEN}Server still running at http://${LOCAL_IP}:8080${RESET}"
+                echo -e "  Use [6] Kill All from main menu to stop it later."
+                sleep 2
+                exit 0
+                ;;
+        esac
     done
 
     tput cnorm
     echo ""
-    echo -e " ${RED}Server stopped.${RESET}"
+    echo -e " ${RED}Server stopped unexpectedly.${RESET}"
     rm -f .server_info_mtp 2>/dev/null
-    read -p " Press Enter to exit..."
+    read -p " Press Enter to return to menu..."
     exit 0
 fi
 
