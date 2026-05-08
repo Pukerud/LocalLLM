@@ -1296,6 +1296,22 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         echo -e " ${GREEN}[2/3]${RESET} Model ready."
     fi
 
+    # -- Template setup -----------------------------------------------
+    BUNDLED_TEMPLATE="chat_templates/qwen3.6-chat_template-v9.jinja"
+    TEMPLATE_FLAGS=()
+    if [[ -f "$BUNDLED_TEMPLATE" ]]; then
+        mkdir -p "$TEMPLATES_DIR"
+        cp "$BUNDLED_TEMPLATE" "$TEMPLATES_DIR/"
+        if arg_probe_valid "$server_bin" --chat-template-file "$BUNDLED_TEMPLATE"; then
+            TEMPLATE_FLAGS=(--chat-template-file "$BUNDLED_TEMPLATE" --jinja)
+            echo -e " ${GREEN}Template:${RESET} Using bundled Qwen 3.6 v9 (fixed jinja)"
+        else
+            echo -e " ${YELLOW}Template:${RESET} --chat-template-file not supported, using built-in"
+        fi
+    else
+        echo -e " ${YELLOW}Template:${RESET} Bundled template not found, using built-in"
+    fi
+
     # -- Step 3: Detect GPUs, calculate context -------------------------
     echo ""
     echo -e " ${YELLOW}[3/3]${RESET} Detecting hardware..."
@@ -1365,6 +1381,7 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         -np 1 -c "$CTX" \
         --temp 0.7 --top-k 20 \
         -ngl 99 \
+        "${TEMPLATE_FLAGS[@]}" \
         --host 0.0.0.0 --port 8080 \
         >> "$SERVER_LOG" 2>&1 &
     SERVER_PID=$!
