@@ -1551,8 +1551,8 @@ while true; do
     echo -e " \033[1;36m--- MANAGEMENT ---\033[0m"
     echo " [5] Download Model (.gguf URL)"
     echo " [6] Delete Model"
-    echo " [99] Exit"
-    echo " [98] Back to Main Menu"
+    echo " [99] Back to Main Menu"
+    echo " [98] Exit"
     echo ""
 
     tput cnorm
@@ -1639,8 +1639,8 @@ while true; do
                 sleep 2
             fi
             ;;
-        98) exit 0 ;;
-        99) exit 42 ;;
+        98) exit 42 ;;
+        99) exit 0 ;;
         *) ;;
     esac
 done
