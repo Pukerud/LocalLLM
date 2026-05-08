@@ -480,8 +480,15 @@ install_mtp() {
     fi
 
     echo ""
-    echo " Compiling for RTX 4090 (sm_89) with CUDA..."
-    echo "   -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=89"
+    # Auto-detect GPU compute capability
+    CUDA_ARCH=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d ' .')
+    if [[ -z "$CUDA_ARCH" ]]; then
+        CUDA_ARCH="89"
+        echo -e " \033[1;33mCould not detect GPU arch. Defaulting to sm_89 (RTX 4090).\033[0m"
+    fi
+    GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
+    echo " Compiling for ${GPU_NAME} (sm_${CUDA_ARCH}) with CUDA..."
+    echo "   -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCH}"
     echo ""
 
     export CC=gcc
@@ -493,7 +500,7 @@ install_mtp() {
     echo "--- CMAKE CONFIGURE ---" > "../$DEBUG_LOG"
     cmake -B build \
         -DGGML_CUDA=ON \
-        -DCMAKE_CUDA_ARCHITECTURES=89 \
+        -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCH} \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_C_COMPILER=gcc \
         -DCMAKE_CXX_COMPILER=g++ \
