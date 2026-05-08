@@ -1387,8 +1387,30 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     echo "   KV cache:    q4_0"
     echo "   Context:     ${CTX}"
     echo "   MTP tokens:  5"
+    if [[ ${#TEMPLATE_FLAGS[@]} -gt 0 ]]; then
+        echo -e "   Template:    ${GREEN}Qwen 3.6 v9 (fixed jinja)${RESET}"
+    else
+        echo -e "   Template:    ${YELLOW}Built-in (no template flags)${RESET}"
+    fi
     echo ""
     echo -e " ${GREEN}Starting server on port 8080...${RESET}"
+    echo ""
+
+    # -- Build and show the launch command --
+    launch_cmd=("$server_bin"
+        -m "$model_path"
+        --spec-type mtp --spec-draft-n-max 5
+        --cache-type-k q4_0 --cache-type-v q4_0
+        -np 1 -c "$CTX"
+        --temp 0.7 --top-k 20
+        -ngl 99
+        "${TEMPLATE_FLAGS[@]}"
+        --host 0.0.0.0 --port 8080
+    )
+
+    echo " Launch command:"
+    printf '  %q' "${launch_cmd[@]}"
+    echo ""
     echo ""
 
     echo "MTP-QuickStart: ${QUICKSTART_MODEL} [${CTX}/q4_0/mtp=5/GPUs=${GPU_COUNT}]" > .server_info_mtp
@@ -1396,19 +1418,13 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     # -- Launch server in background ------------------------------------
     {
         echo "COMMAND PROFILE: quickstart-mtp"
+        printf '%q ' "${launch_cmd[@]}"
+        echo ""
         echo ""
         echo "----- llama-server output -----"
     } > "$SERVER_LOG"
 
-    nohup "$server_bin" \
-        -m "$model_path" \
-        --spec-type mtp --spec-draft-n-max 5 \
-        --cache-type-k q4_0 --cache-type-v q4_0 \
-        -np 1 -c "$CTX" \
-        --temp 0.7 --top-k 20 \
-        -ngl 99 \
-        "${TEMPLATE_FLAGS[@]}" \
-        --host 0.0.0.0 --port 8080 \
+    nohup "${launch_cmd[@]}" \
         >> "$SERVER_LOG" 2>&1 &
     SERVER_PID=$!
 
@@ -1455,6 +1471,15 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         echo "------------------------------------------------------------"
         read -p " Press Enter to exit..."
         exit 1
+    fi
+
+    # -- Check if template was loaded --
+    if [[ ${#TEMPLATE_FLAGS[@]} -gt 0 ]]; then
+        if grep -qi 'chat_template\|jinja' "$SERVER_LOG" 2>/dev/null; then
+            echo -e " ${GREEN}Template loaded successfully (jinja v9).${RESET}"
+        else
+            echo -e " ${YELLOW}Note: Template flags were passed but could not confirm loading from log.${RESET}"
+        fi
     fi
 
     # -- Detect local IP for clickable URL ------------------------------
