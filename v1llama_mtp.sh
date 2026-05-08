@@ -466,7 +466,8 @@ install_mtp() {
     echo " Fetching MTP PR #22673..."
     cd "$MTP_DIR"
 
-    # Remove any stale mtp-pr branch first
+    # Switch off mtp-pr before deleting it (can't delete current branch)
+    git checkout master 2>/dev/null || git checkout main 2>/dev/null
     git branch -D mtp-pr 2>/dev/null || true
 
     if ! git fetch origin pull/22673/head:mtp-pr 2>&1; then
