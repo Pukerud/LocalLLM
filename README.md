@@ -1,5 +1,7 @@
 # LocalLLM — Multi-Engine LLM Dashboard
 
+https://github.com/user-attachments/assets/daa56313-deff-4664-a614-f2472aac92f6
+
 > **Qwen3.6-27B at ~100 tok/s with MTP speculative decoding** using [ggml-org/llama.cpp PR #22673](https://github.com/ggml-org/llama.cpp/pull/22673)
 
 ---
