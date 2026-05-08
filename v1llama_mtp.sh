@@ -109,26 +109,36 @@ get_cpu_usage() {
 }
 
 update_dashboard_stats() {
+    reset="\033[0m"; bold="\033[1m"
     if command -v nvidia-smi > /dev/null 2>&1; then
-        gpu_load=0; vram_used=0; vram_total=0; gpu_temp=0; gpu_count=0
+        gpu_load=0; vram_used=0; vram_total=0; gpu_temp_max=0; gpu_count=0
+        gpu_lines=()
         while IFS=',' read -r load used total temp; do
             load=$(echo "$load" | tr -d ' ')
             used=$(echo "$used" | tr -d ' ')
             total=$(echo "$total" | tr -d ' ')
             temp=$(echo "$temp" | tr -d ' ')
+            pct=0; [[ "$total" -gt 0 ]] && pct=$(( (used * 100) / total ))
+            u_gb=$(awk "BEGIN {printf \"%.1f\", $used/1024}")
+            t_gb=$(awk "BEGIN {printf \"%.0f\", $total/1024}")
+            if [[ "$pct" -ge 90 ]]; then c="\033[1;31m"; elif [[ "$pct" -ge 50 ]]; then c="\033[1;33m"; else c="\033[1;32m"; fi
+            gpu_lines+=("   GPU ${gpu_count}:  ${load}%   |   VRAM: ${c}${u_gb} GB / ${t_gb} GB (${pct}%)${reset}   |   Temp: ${temp} degC")
             gpu_load=$((gpu_load + load))
             vram_used=$((vram_used + used))
             vram_total=$((vram_total + total))
-            [[ "$temp" -gt "$gpu_temp" ]] && gpu_temp=$temp
+            [[ "$temp" -gt "$gpu_temp_max" ]] && gpu_temp_max=$temp
             gpu_count=$((gpu_count + 1))
         done < <(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits 2>/dev/null)
-        [[ "$gpu_count" -gt 0 ]] && gpu_load=$((gpu_load / gpu_count))
+        [[ "$gpu_count" -gt 0 ]] && gpu_load_avg=$((gpu_load / gpu_count)) || gpu_load_avg=0
         if [[ "$vram_total" -gt 0 ]]; then vram_pct=$(( (vram_used * 100) / vram_total )); else vram_pct=0; fi
         vram_used_gb=$(awk "BEGIN {printf \"%.1f\", $vram_used/1024}")
         vram_total_gb=$(awk "BEGIN {printf \"%.0f\", $vram_total/1024}")
         if [[ "$vram_pct" -ge 90 ]]; then c_vram="\033[1;31m"; elif [[ "$vram_pct" -ge 50 ]]; then c_vram="\033[1;33m"; else c_vram="\033[1;32m"; fi
+        total_line="   TOTAL: VRAM: ${c_vram}${vram_used_gb} GB / ${vram_total_gb} GB (${vram_pct}%)${reset}   |   GPUs: ${gpu_count}"
     else
-        gpu_load="N/A"; gpu_temp="-"; vram_used_gb="0"; vram_total_gb="0"; vram_pct="0"; c_vram="\033[0m"
+        gpu_lines=("   GPU: N/A")
+        total_line="   TOTAL: N/A"
+        gpu_load_avg="N/A"; gpu_temp_max="-"
     fi
 
     cpu_pct=$(get_cpu_usage)
@@ -147,15 +157,19 @@ update_dashboard_stats() {
         rm -f .server_info_mtp 2>/dev/null
     fi
 
-    reset="\033[0m"; bold="\033[1m"
-
     tput sc
     tput cup 2 0
     echo -e "   ENGINE: ${bold}llama.cpp (MTP PR #22673)${reset}    |  SERVER: ${SERVER_STATUS}\033[K"
     tput cup 3 0
-    echo -e "   CPU: ${c_cpu}${cpu_pct}%${reset}   |   GPU: ${gpu_load}%   |   Temp: ${gpu_temp} degC\033[K"
-    tput cup 4 0
-    echo -e "   VRAM: ${c_vram}${vram_used_gb} GB / ${vram_total_gb} GB (${vram_pct}%)${reset}\033[K"
+    echo -e "   CPU: ${c_cpu}${cpu_pct}%${reset}\033[K"
+    row=4
+    for line in "${gpu_lines[@]}"; do
+        tput cup $row 0
+        echo -e "${line}\033[K"
+        row=$((row + 1))
+    done
+    tput cup $row 0
+    echo -e "${total_line}\033[K"
     tput rc
 }
 
@@ -1465,24 +1479,32 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     while kill -0 "$SERVER_PID" >/dev/null 2>&1; do
         # -- Read GPU stats --
         if command -v nvidia-smi > /dev/null 2>&1; then
-            gpu_load=0; vram_used=0; vram_total=0; gpu_temp=0; gpu_count=0
+            gpu_load_sum=0; vram_used=0; vram_total=0; gpu_temp_max=0; gpu_count=0
+            gpu_lines=()
             while IFS=',' read -r load used total temp; do
                 load=$(echo "$load" | tr -d ' ')
                 used=$(echo "$used" | tr -d ' ')
                 total=$(echo "$total" | tr -d ' ')
                 temp=$(echo "$temp" | tr -d ' ')
-                gpu_load=$((gpu_load + load))
+                pct=0; [[ "$total" -gt 0 ]] && pct=$(( (used * 100) / total ))
+                u_gb=$(awk "BEGIN {printf \"%.1f\", $used/1024}")
+                t_gb=$(awk "BEGIN {printf \"%.0f\", $total/1024}")
+                if [[ "$pct" -ge 90 ]]; then c="\033[1;31m"; elif [[ "$pct" -ge 50 ]]; then c="\033[1;33m"; else c="\033[1;32m"; fi
+                gpu_lines+=("  GPU ${gpu_count}:  ${load}%   |   VRAM: ${c}${u_gb} GB / ${t_gb} GB (${pct}%)${RESET}   |   Temp: ${temp} degC")
+                gpu_load_sum=$((gpu_load_sum + load))
                 vram_used=$((vram_used + used))
                 vram_total=$((vram_total + total))
-                [[ "$temp" -gt "$gpu_temp" ]] && gpu_temp=$temp
+                [[ "$temp" -gt "$gpu_temp_max" ]] && gpu_temp_max=$temp
                 gpu_count=$((gpu_count + 1))
             done < <(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits 2>/dev/null)
-            [[ "$gpu_count" -gt 0 ]] && gpu_load=$((gpu_load / gpu_count))
-            if [[ "$vram_total" -gt 0 ]]; then vram_pct=$(( (vram_used * 100) / vram_total )); else vram_pct=0; fi
+            [[ "$gpu_count" -gt 0 ]] && vram_pct=$(( (vram_used * 100) / vram_total )) || vram_pct=0
             vram_used_gb=$(awk "BEGIN {printf \"%.1f\", $vram_used/1024}")
             vram_total_gb=$(awk "BEGIN {printf \"%.0f\", $vram_total/1024}")
+            if [[ "$vram_pct" -ge 90 ]]; then c_vram="\033[1;31m"; elif [[ "$vram_pct" -ge 50 ]]; then c_vram="\033[1;33m"; else c_vram="\033[1;32m"; fi
+            total_line="  TOTAL: VRAM: ${c_vram}${vram_used_gb} GB / ${vram_total_gb} GB (${vram_pct}%)${RESET}   |   GPUs: ${gpu_count}"
         else
-            gpu_load="N/A"; gpu_temp="-"; vram_used_gb="0"; vram_total_gb="0"; vram_pct="0"
+            gpu_lines=("  GPU: N/A")
+            total_line="  TOTAL: N/A"
         fi
 
         read cpu user nice system idle iowait irq softirq steal guest < /proc/stat
@@ -1499,14 +1521,35 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         # -- Redraw header --
         tput sc
         tput cup 8 0
-        echo -e "  CPU: ${cpu_pct}%   |   GPU: ${gpu_load}%   |   Temp: ${gpu_temp} degC"
-        echo -e "  VRAM: ${vram_used_gb} GB / ${vram_total_gb} GB (${vram_pct}%)"
+        echo -e "  CPU: ${cpu_pct}%"
+        row=9
+        for line in "${gpu_lines[@]}"; do
+            tput cup $row 0
+            echo -e "${line}"
+            row=$((row + 1))
+        done
+        tput cup $row 0
+        echo -e "${total_line}"
+        row=$((row + 1))
+        tput cup $row 0
         echo ""
+        row=$((row + 1))
+        tput cup $row 0
         echo -e "  ${BOLD}Chat URL:${RESET}  http://${LOCAL_IP}:8080"
+        row=$((row + 1))
+        tput cup $row 0
         echo ""
+        row=$((row + 1))
+        tput cup $row 0
         echo "  [1] Stop server and return to menu"
+        row=$((row + 1))
+        tput cup $row 0
         echo "  [2] Return to menu (keep server running)"
+        row=$((row + 1))
+        tput cup $row 0
         echo ""
+        row=$((row + 1))
+        tput cup $row 0
         echo -n "  Select [1/2]: "
         tput rc
 
