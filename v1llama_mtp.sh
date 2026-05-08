@@ -69,6 +69,100 @@ if ! command -v /usr/local/cuda/bin/nvcc > /dev/null 2>&1; then
     echo "CUDA 12.4 installed successfully."
 fi
 
+# =========================================================================
+# QUICKSTART MODE — one-shot: build, download model, start server
+# =========================================================================
+QUICKSTART_MODEL_URL="https://huggingface.co/llmfan46/Qwen3.6-27B-uncensored-heretic-v2-Native-MTP-Preserved-GGUF/resolve/main/Qwen3.6-27B-uncensored-heretic-v2-Native-MTP-Preserved-Q4_K_S.gguf"
+QUICKSTART_MODEL="Qwen3.6-27B-uncensored-heretic-v2-Native-MTP-Preserved-Q4_K_S.gguf"
+
+if [[ "${1:-}" == "--quickstart" ]]; then
+    echo ""
+    echo -e " ${BOLD}${CYAN}=============================================${RESET}"
+    echo -e " ${BOLD}${CYAN} HostLLM — Quick Start (one-click MTP)${RESET}"
+    echo -e " ${BOLD}${CYAN}=============================================${RESET}"
+    echo ""
+
+    # -- Step 1: Build binary if missing --------------------------------
+    server_bin="./${MTP_DIR}/build/bin/llama-server"
+    if [[ ! -x "$server_bin" ]]; then
+        echo -e " ${YELLOW}[1/3]${RESET} Binary not found. Building llama.cpp (MTP)..."
+        echo ""
+        install_mtp
+        if [[ ! -x "$server_bin" ]]; then
+            echo -e " ${RED}Build failed. Cannot continue.${RESET}"
+            read -p " Press Enter to exit..."
+            exit 1
+        fi
+    else
+        echo -e " ${GREEN}[1/3]${RESET} Binary ready."
+    fi
+
+    # -- Step 2: Download model if missing ------------------------------
+    model_path="${MODELS_DIR}/${QUICKSTART_MODEL}"
+    if [[ ! -f "$model_path" ]]; then
+        echo ""
+        echo -e " ${YELLOW}[2/3]${RESET} Downloading default model..."
+        echo "   ${QUICKSTART_MODEL}"
+        echo "   This is ~16 GB and may take a while."
+        echo ""
+        wget --show-progress -O "$model_path" "$QUICKSTART_MODEL_URL"
+        if [[ $? -ne 0 ]]; then
+            echo -e " ${RED}Download failed. Check internet connection.${RESET}"
+            rm -f "$model_path"
+            read -p " Press Enter to exit..."
+            exit 1
+        fi
+    else
+        echo -e " ${GREEN}[2/3]${RESET} Model ready."
+    fi
+
+    # -- Step 3: Detect GPUs, calculate context, launch -----------------
+    echo ""
+    echo -e " ${YELLOW}[3/3]${RESET} Detecting hardware..."
+
+    GPU_COUNT=$(nvidia-smi -L 2>/dev/null | wc -l)
+    if [[ "$GPU_COUNT" -eq 0 ]]; then
+        echo -e " ${RED}No NVIDIA GPUs detected.${RESET}"
+        read -p " Press Enter to exit..."
+        exit 1
+    fi
+
+    TOTAL_VRAM_MB=0
+    while read -r vram; do
+        TOTAL_VRAM_MB=$((TOTAL_VRAM_MB + vram))
+    done < <(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null)
+    TOTAL_VRAM_GB=$((TOTAL_VRAM_MB / 1024))
+
+    # Model ~16 GB, reserve 1 GB overhead per GPU
+    AVAIL_GB=$((TOTAL_VRAM_GB - 16 - GPU_COUNT))
+
+    # ~25K context per available GB at q4_0 KV
+    CTX=$((AVAIL_GB * 25000))
+    [[ $CTX -lt 8192 ]]   && CTX=8192
+    [[ $CTX -gt 262144 ]] && CTX=262144
+
+    echo "   GPUs:        ${GPU_COUNT}"
+    echo "   Total VRAM:  ${TOTAL_VRAM_GB} GB"
+    echo "   Model size:  ~16 GB (Q4_K_S)"
+    echo "   KV cache:    q4_0"
+    echo "   Context:     ${CTX}"
+    echo "   MTP tokens:  5"
+    echo ""
+    echo -e " ${GREEN}Starting server on port 8080...${RESET}"
+    echo ""
+
+    echo "MTP-QuickStart: ${QUICKSTART_MODEL} [${CTX}/q4_0/mtp=5/GPUs=${GPU_COUNT}]" > .server_info_mtp
+
+    exec "$server_bin" \
+        -m "$model_path" \
+        --spec-type mtp --spec-draft-n-max 5 \
+        --cache-type-k q4_0 --cache-type-v q4_0 \
+        -np 1 -c "$CTX" \
+        --temp 0.7 --top-k 20 \
+        -ngl 99 \
+        --host 0.0.0.0 --port 8080
+fi
+
 cleanup() {
     kill -9 "$MONITOR_PID" > /dev/null 2>&1
     wait "$MONITOR_PID" > /dev/null 2>&1

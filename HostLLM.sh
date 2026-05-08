@@ -142,6 +142,10 @@ while true; do
     fi
 
     echo ""
+    echo "  Quick Start:"
+    echo "  ------------"
+    echo -e "  ${BOLD}[0]${RESET} Quick Start   One-click MTP — auto-install, download model, start server"
+    echo ""
     echo "  Engines:"
     echo "  -------"
     echo -e "  ${BOLD}[1]${RESET} llama.cpp       ik_llama.cpp — max context (262K), all GGUF models"
@@ -161,6 +165,22 @@ while true; do
     choice=$(echo "$choice" | tr -d '[:space:]')
 
     case $choice in
+        0)
+            if [[ "$active" != "none" ]]; then
+                echo ""
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [6].${RESET}"
+                sleep 2
+                continue
+            fi
+            if [[ ! -x "${SCRIPT_DIR}/v1llama_mtp.sh" ]]; then
+                echo ""
+                echo -e "  ${RED}v1llama_mtp.sh not found or not executable.${RESET}"
+                sleep 2
+                continue
+            fi
+            cd "${SCRIPT_DIR}"
+            exec ./v1llama_mtp.sh --quickstart
+            ;;
         1)
             if [[ "$active" != "none" && "$active" != "llamacpp" ]]; then
                 echo ""
