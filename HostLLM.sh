@@ -179,7 +179,8 @@ while true; do
                 continue
             fi
             cd "${SCRIPT_DIR}"
-            exec ./v1llama_mtp.sh --quickstart
+            ./v1llama_mtp.sh --quickstart
+            [[ $? -eq 42 ]] && exit 0
             ;;
         1)
             if [[ "$active" != "none" && "$active" != "llamacpp" ]]; then
@@ -195,7 +196,8 @@ while true; do
                 continue
             fi
             cd "${SCRIPT_DIR}"
-            exec ./v1llama_cpp.sh
+            ./v1llama_cpp.sh
+            [[ $? -eq 42 ]] && exit 0
             ;;
         2)
             if [[ "$active" != "none" && "$active" != "dflash" ]]; then
@@ -211,7 +213,8 @@ while true; do
                 continue
             fi
             cd "${SCRIPT_DIR}"
-            exec ./v1dflash_llama_cpp.sh
+            ./v1dflash_llama_cpp.sh
+            [[ $? -eq 42 ]] && exit 0
             ;;
         3)
             if [[ "$active" != "none" && "$active" != "vllm" ]]; then
@@ -227,7 +230,8 @@ while true; do
                 continue
             fi
             cd "${SCRIPT_DIR}"
-            exec ./v1_vllm.sh
+            ./v1_vllm.sh
+            [[ $? -eq 42 ]] && exit 0
             ;;
         4)
             if [[ "$active" != "none" && "$active" != "lucebox" ]]; then
@@ -243,7 +247,8 @@ while true; do
                 continue
             fi
             cd "${SCRIPT_DIR}"
-            exec ./v1lucebox.sh
+            ./v1lucebox.sh
+            [[ $? -eq 42 ]] && exit 0
             ;;
         5)
             if [[ "$active" != "none" && "$active" != "mtp" ]]; then
@@ -259,7 +264,8 @@ while true; do
                 continue
             fi
             cd "${SCRIPT_DIR}"
-            exec ./v1llama_mtp.sh
+            ./v1llama_mtp.sh
+            [[ $? -eq 42 ]] && exit 0
             ;;
         6)
             stop_all

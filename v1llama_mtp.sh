@@ -318,12 +318,13 @@ if [[ "${1:-}" == "--quickstart" ]]; then
 fi
 
 cleanup() {
+    local exit_code=$?
     kill -9 "$MONITOR_PID" > /dev/null 2>&1
     wait "$MONITOR_PID" > /dev/null 2>&1
     tput csr 0 "$(tput lines)"
     tput cnorm
     echo ""
-    exit
+    exit $exit_code
 }
 trap cleanup INT TERM EXIT
 
@@ -1550,6 +1551,7 @@ while true; do
     echo " [5] Download Model (.gguf URL)"
     echo " [6] Delete Model"
     echo " [99] Exit"
+    echo " [98] Back to Main Menu"
     echo ""
 
     tput cnorm
@@ -1636,7 +1638,8 @@ while true; do
                 sleep 2
             fi
             ;;
-        99) cleanup ;;
+        98) exit 0 ;;
+        99) exit 42 ;;
         *) ;;
     esac
 done
