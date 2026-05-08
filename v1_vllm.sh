@@ -38,12 +38,13 @@ fi
 MONITOR_PID=""
 
 cleanup() {
+    local exit_code=$?
     kill -9 "$MONITOR_PID" > /dev/null 2>&1
     wait "$MONITOR_PID" > /dev/null 2>&1
     tput csr 0 "$(tput lines)"
     tput cnorm
     echo ""
-    exit
+    exit $exit_code
 }
 trap cleanup INT TERM EXIT
 
@@ -649,7 +650,8 @@ while true; do
     echo " [9] View Server Logs"
     echo " [s] Setup Status"
     echo " [0] INSTALL / UPDATE (Docker image + Genesis patches)"
-    echo " [99] Exit"
+    echo " [99] Back to Main Menu"
+    echo " [98] Exit"
     echo ""
 
     tput cnorm
@@ -701,8 +703,11 @@ while true; do
         0)
             install_update
             ;;
+        98)
+            exit 42
+            ;;
         99)
-            cleanup
+            exit 0
             ;;
         *)
             ;;

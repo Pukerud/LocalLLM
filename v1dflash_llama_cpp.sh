@@ -27,12 +27,13 @@ if ! command -v /usr/local/cuda/bin/nvcc > /dev/null 2>&1; then
 fi
 
 cleanup() {
+    local exit_code=$?
     kill -9 "$MONITOR_PID" > /dev/null 2>&1
     wait "$MONITOR_PID" > /dev/null 2>&1
     tput csr 0 "$(tput lines)"
     tput cnorm
     echo ""
-    exit
+    exit $exit_code
 }
 trap cleanup INT TERM EXIT
 
@@ -769,7 +770,8 @@ while true; do
     echo " [3] Download Model (.gguf URL)"
     echo " [4] Delete Model"
     echo " [0] INSTALL / UPDATE buun-llama-cpp (DFlash fork)"
-    echo " [99] Exit"
+    echo " [99] Back to Main Menu"
+    echo " [98] Exit"
     echo ""
 
     tput cnorm
@@ -849,7 +851,8 @@ while true; do
                 sleep 2
             fi
             ;;
-        99) cleanup ;;
+        98) exit 42 ;;
+        99) exit 0 ;;
         *) ;;
     esac
 done

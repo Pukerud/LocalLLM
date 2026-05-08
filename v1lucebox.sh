@@ -108,12 +108,13 @@ monitor_loop() {
 }
 
 cleanup() {
+    local exit_code=$?
     kill -9 "$MONITOR_PID" > /dev/null 2>&1
     wait "$MONITOR_PID" > /dev/null 2>&1
     tput csr 0 "$(tput lines)"
     tput cnorm
     echo ""
-    exit
+    exit $exit_code
 }
 trap cleanup INT TERM EXIT
 
@@ -462,7 +463,8 @@ while true; do
     echo -e "  ${BOLD}[5]${RESET} Test with curl"
     echo -e "  ${BOLD}[6]${RESET} Tail server log"
     echo -e "  ${BOLD}[7]${RESET} Rebuild binary"
-    echo -e "  ${BOLD}[0]${RESET} Back to engine picker"
+    echo -e "  ${BOLD}[99]${RESET} Back to Main Menu"
+    echo -e "  ${BOLD}[98]${RESET} Exit"
     echo ""
     tput cnorm
     read -p "  Select: " choice
@@ -516,7 +518,10 @@ while true; do
             echo ""
             read -p "  Press Enter to continue..."
             ;;
-        0)
+        98)
+            exit 42
+            ;;
+        99)
             exit 0
             ;;
         *)
