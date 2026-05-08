@@ -1549,13 +1549,13 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         done
         tput cup $row 0; echo -e "${total_line}\033[K"
         row=$((row + 1))
-        tput cup $row 0; echo "\033[K"
+        tput cup $row 0; echo -e "\033[K"
         row=$((row + 1))
         tput cup $row 0; echo -e "  [1] Stop server and return to menu\033[K"
         row=$((row + 1))
         tput cup $row 0; echo -e "  [2] Return to menu (keep server running)\033[K"
         row=$((row + 1))
-        tput cup $row 0; echo "\033[K"
+        tput cup $row 0; echo -e "\033[K"
         row=$((row + 1))
         tput cup $row 0; echo -n "  Select [1/2]: "
         tput rc
