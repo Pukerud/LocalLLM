@@ -40,18 +40,20 @@ if ! command -v /usr/local/cuda/bin/nvcc > /dev/null 2>&1; then
     # Detect Ubuntu codename for the correct repo URL
     UBUNTU_CODENAME=$(lsb_release -cs 2>/dev/null || echo "jammy")
     case "$UBUNTU_CODENAME" in
-        focal|groovy|hirsute|impish) UBUNTU_CODENAME="ubuntu2004" ;;
-        *) UBUNTU_CODENAME="ubuntu2204" ;;
+        focal|groovy|hirsute|impish) REPO_DISTRO="ubuntu2004" ;;
+        *) REPO_DISTRO="ubuntu2204" ;;
     esac
 
-    sudo apt update
-    sudo apt install -y ca-certificates gnupg
-    sudo install -m 0755 -d /etc/apt/keyrings
-    wget -q "https://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_CODENAME}/x86_64/keyring.gpg" \
-        -O /etc/apt/keyrings/cuda-keyring.gpg
-    sudo chmod a+r /etc/apt/keyrings/cuda-keyring.gpg
-    echo "deb [signed-by=/etc/apt/keyrings/cuda-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_CODENAME}/x86_64/ /" \
-        | sudo tee /etc/apt/sources.list.d/cuda.list > /dev/null
+    # Remove any stale manual repo/keyring from previous attempts
+    sudo rm -f /etc/apt/sources.list.d/cuda.list /etc/apt/keyrings/cuda-keyring.gpg
+
+    # Use NVIDIA's .deb keyring package (handles GPG + repo setup cleanly)
+    TMPDIR=$(mktemp -d)
+    wget -q "https://developer.download.nvidia.com/compute/cuda/repos/${REPO_DISTRO}/x86_64/cuda-keyring_1.1-1_all.deb" \
+        -O "${TMPDIR}/cuda-keyring.deb"
+    sudo dpkg -i "${TMPDIR}/cuda-keyring.deb"
+    rm -rf "${TMPDIR}"
+
     sudo apt update
     sudo apt install -y cuda-toolkit-12-4
 
@@ -59,7 +61,7 @@ if ! command -v /usr/local/cuda/bin/nvcc > /dev/null 2>&1; then
         echo ""
         echo " CUDA Toolkit install failed. Cannot compile with GPU support."
         echo " Install manually: sudo apt install cuda-toolkit-12-4"
-        echo " Or check /etc/apt/sources.list.d/cuda.list"
+        echo " Or check /etc/apt/sources.list.d/"
         read -p " Press Enter to exit..."
         exit 1
     fi
