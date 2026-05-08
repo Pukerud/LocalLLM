@@ -1462,6 +1462,11 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     [[ -z "$LOCAL_IP" ]] && LOCAL_IP="localhost"
 
     # -- Show running dashboard -----------------------------------------
+    # Count GPUs for layout
+    GPU_DISPLAY_COUNT=$(nvidia-smi -L 2>/dev/null | wc -l)
+    [[ "$GPU_DISPLAY_COUNT" -eq 0 ]] && GPU_DISPLAY_COUNT=1
+
+    # Static header — printed once (rows 0-21)
     clear
     echo "=================================================================="
     echo -e "  ${GREEN}${BOLD}MTP SERVER RUNNING${RESET}"
@@ -1485,6 +1490,9 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     echo -e "  ${BOLD}Anthropic SDK:${RESET}  base_url → http://${LOCAL_IP}:8080/v1"
     echo "=================================================================="
     echo ""
+
+    # Live section starts at row 22
+    LIVE_START=22
 
     # Interactive dashboard with stats + menu
     while kill -0 "$SERVER_PID" >/dev/null 2>&1; do
@@ -1529,42 +1537,27 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         cpu_adiff=$((cpu_ac - cpu_ap))
         if [[ "$cpu_diff" -gt 0 ]]; then cpu_pct=$(( (cpu_adiff * 100) / cpu_diff )); else cpu_pct=0; fi
 
-        # -- Redraw header --
+        # -- Redraw live section only (below static header) --
+        row=$LIVE_START
         tput sc
-        tput cup 8 0
-        echo -e "  CPU: ${cpu_pct}%"
-        row=9
+
+        tput cup $row 0; echo -e "  CPU: ${cpu_pct}%\033[K"
+        row=$((row + 1))
         for line in "${gpu_lines[@]}"; do
-            tput cup $row 0
-            echo -e "${line}"
+            tput cup $row 0; echo -e "${line}\033[K"
             row=$((row + 1))
         done
-        tput cup $row 0
-        echo -e "${total_line}"
+        tput cup $row 0; echo -e "${total_line}\033[K"
         row=$((row + 1))
-        tput cup $row 0
-        echo ""
+        tput cup $row 0; echo "\033[K"
         row=$((row + 1))
-        tput cup $row 0
-        echo -e "  ${BOLD}API Base:${RESET}  http://${LOCAL_IP}:8080/v1"
+        tput cup $row 0; echo -e "  [1] Stop server and return to menu\033[K"
         row=$((row + 1))
-        tput cup $row 0
-        echo -e "  ${YELLOW}API Key:${RESET} any string (e.g. sk-1234) or leave blank"
+        tput cup $row 0; echo -e "  [2] Return to menu (keep server running)\033[K"
         row=$((row + 1))
-        tput cup $row 0
-        echo ""
+        tput cup $row 0; echo "\033[K"
         row=$((row + 1))
-        tput cup $row 0
-        echo "  [1] Stop server and return to menu"
-        row=$((row + 1))
-        tput cup $row 0
-        echo "  [2] Return to menu (keep server running)"
-        row=$((row + 1))
-        tput cup $row 0
-        echo ""
-        row=$((row + 1))
-        tput cup $row 0
-        echo -n "  Select [1/2]: "
+        tput cup $row 0; echo -n "  Select [1/2]: "
         tput rc
 
         # -- Wait for input with timeout --
