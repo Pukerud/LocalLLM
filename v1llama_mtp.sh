@@ -34,8 +34,17 @@ for cmd in curl jq wget git cmake gcc g++; do
 done
 
 if ! command -v /usr/local/cuda/bin/nvcc > /dev/null 2>&1; then
-    echo "Warning: Modern CUDA toolkit (12+) not found at /usr/local/cuda/bin/nvcc."
-    sleep 2
+    echo "CUDA Toolkit not found. Installing cuda-toolkit-12-4..."
+    sudo apt update
+    sudo apt install -y ca-certificates gnupg
+    sudo install -m 0755 -d /etc/apt/keyrings
+    wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/keyring.gpg \
+        -O /etc/apt/keyrings/cuda-keyring.gpg
+    sudo chmod a+r /etc/apt/keyrings/cuda-keyring.gpg
+    echo "deb [signed-by=/etc/apt/keyrings/cuda-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" \
+        | sudo tee /etc/apt/sources.list.d/cuda.list > /dev/null
+    sudo apt update
+    sudo apt install -y cuda-toolkit-12-4
 fi
 
 cleanup() {
