@@ -110,12 +110,19 @@ get_cpu_usage() {
 
 update_dashboard_stats() {
     if command -v nvidia-smi > /dev/null 2>&1; then
-        stats=$(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits)
-        IFS=',' read -r gpu_load vram_used vram_total gpu_temp <<< "$stats"
-        gpu_load=$(echo "$gpu_load" | tr -d ' ')
-        vram_used=$(echo "$vram_used" | tr -d ' ')
-        vram_total=$(echo "$vram_total" | tr -d ' ')
-        gpu_temp=$(echo "$gpu_temp" | tr -d ' ')
+        gpu_load=0; vram_used=0; vram_total=0; gpu_temp=0; gpu_count=0
+        while IFS=',' read -r load used total temp; do
+            load=$(echo "$load" | tr -d ' ')
+            used=$(echo "$used" | tr -d ' ')
+            total=$(echo "$total" | tr -d ' ')
+            temp=$(echo "$temp" | tr -d ' ')
+            gpu_load=$((gpu_load + load))
+            vram_used=$((vram_used + used))
+            vram_total=$((vram_total + total))
+            [[ "$temp" -gt "$gpu_temp" ]] && gpu_temp=$temp
+            gpu_count=$((gpu_count + 1))
+        done < <(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits 2>/dev/null)
+        [[ "$gpu_count" -gt 0 ]] && gpu_load=$((gpu_load / gpu_count))
         if [[ "$vram_total" -gt 0 ]]; then vram_pct=$(( (vram_used * 100) / vram_total )); else vram_pct=0; fi
         vram_used_gb=$(awk "BEGIN {printf \"%.1f\", $vram_used/1024}")
         vram_total_gb=$(awk "BEGIN {printf \"%.0f\", $vram_total/1024}")
@@ -1458,12 +1465,19 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     while kill -0 "$SERVER_PID" >/dev/null 2>&1; do
         # -- Read GPU stats --
         if command -v nvidia-smi > /dev/null 2>&1; then
-            stats=$(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits 2>/dev/null)
-            IFS=',' read -r gpu_load vram_used vram_total gpu_temp <<< "$stats"
-            gpu_load=$(echo "$gpu_load" | tr -d ' ')
-            vram_used=$(echo "$vram_used" | tr -d ' ')
-            vram_total=$(echo "$vram_total" | tr -d ' ')
-            gpu_temp=$(echo "$gpu_temp" | tr -d ' ')
+            gpu_load=0; vram_used=0; vram_total=0; gpu_temp=0; gpu_count=0
+            while IFS=',' read -r load used total temp; do
+                load=$(echo "$load" | tr -d ' ')
+                used=$(echo "$used" | tr -d ' ')
+                total=$(echo "$total" | tr -d ' ')
+                temp=$(echo "$temp" | tr -d ' ')
+                gpu_load=$((gpu_load + load))
+                vram_used=$((vram_used + used))
+                vram_total=$((vram_total + total))
+                [[ "$temp" -gt "$gpu_temp" ]] && gpu_temp=$temp
+                gpu_count=$((gpu_count + 1))
+            done < <(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits 2>/dev/null)
+            [[ "$gpu_count" -gt 0 ]] && gpu_load=$((gpu_load / gpu_count))
             if [[ "$vram_total" -gt 0 ]]; then vram_pct=$(( (vram_used * 100) / vram_total )); else vram_pct=0; fi
             vram_used_gb=$(awk "BEGIN {printf \"%.1f\", $vram_used/1024}")
             vram_total_gb=$(awk "BEGIN {printf \"%.0f\", $vram_total/1024}")
