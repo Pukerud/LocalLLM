@@ -1467,11 +1467,22 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     echo -e "  ${GREEN}${BOLD}MTP SERVER RUNNING${RESET}"
     echo "=================================================================="
     echo ""
-    echo -e "  ${BOLD}Chat URL:${RESET}  http://${LOCAL_IP}:8080"
-    echo ""
     echo "  Model:   ${QUICKSTART_MODEL}"
     echo "  Context: ${CTX}  |  KV: q4_0  |  MTP: 5"
     echo "  GPUs:    ${GPU_COUNT}x (${TOTAL_VRAM_GB} GB total)"
+    echo ""
+    echo -e "  ${CYAN}${BOLD}Connect from any device on your network:${RESET}"
+    echo ""
+    echo -e "  ${BOLD}Chat UI:${RESET}       http://${LOCAL_IP}:8080"
+    echo -e "  ${BOLD}API Base:${RESET}      http://${LOCAL_IP}:8080/v1"
+    echo -e "  ${BOLD}Anthropic:${RESET}     http://${LOCAL_IP}:8080/v1/messages"
+    echo ""
+    echo -e "  ${YELLOW}API Key:${RESET} any string (e.g. sk-1234) or leave blank"
+    echo ""
+    echo -e "  ${BOLD}OpenWebUI:${RESET}    OpenAI base URL → http://${LOCAL_IP}:8080/v1"
+    echo -e "  ${BOLD}Pi / Codex:${RESET}    OPENAI_API_BASE=http://${LOCAL_IP}:8080/v1"
+    echo -e "  ${BOLD}Cline / Continue:${RESET} OpenAI compatible → http://${LOCAL_IP}:8080/v1"
+    echo -e "  ${BOLD}Anthropic SDK:${RESET}  base_url → http://${LOCAL_IP}:8080/v1"
     echo "=================================================================="
     echo ""
 
@@ -1535,7 +1546,10 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         echo ""
         row=$((row + 1))
         tput cup $row 0
-        echo -e "  ${BOLD}Chat URL:${RESET}  http://${LOCAL_IP}:8080"
+        echo -e "  ${BOLD}API Base:${RESET}  http://${LOCAL_IP}:8080/v1"
+        row=$((row + 1))
+        tput cup $row 0
+        echo -e "  ${YELLOW}API Key:${RESET} any string (e.g. sk-1234) or leave blank"
         row=$((row + 1))
         tput cup $row 0
         echo ""
