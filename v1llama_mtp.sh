@@ -34,17 +34,37 @@ for cmd in curl jq wget git cmake gcc g++; do
 done
 
 if ! command -v /usr/local/cuda/bin/nvcc > /dev/null 2>&1; then
+    echo ""
     echo "CUDA Toolkit not found. Installing cuda-toolkit-12-4..."
+
+    # Detect Ubuntu codename for the correct repo URL
+    UBUNTU_CODENAME=$(lsb_release -cs 2>/dev/null || echo "jammy")
+    case "$UBUNTU_CODENAME" in
+        focal|groovy|hirsute|impish) UBUNTU_CODENAME="ubuntu2004" ;;
+        *) UBUNTU_CODENAME="ubuntu2204" ;;
+    esac
+
     sudo apt update
     sudo apt install -y ca-certificates gnupg
     sudo install -m 0755 -d /etc/apt/keyrings
-    wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/keyring.gpg \
+    wget -q "https://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_CODENAME}/x86_64/keyring.gpg" \
         -O /etc/apt/keyrings/cuda-keyring.gpg
     sudo chmod a+r /etc/apt/keyrings/cuda-keyring.gpg
-    echo "deb [signed-by=/etc/apt/keyrings/cuda-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" \
+    echo "deb [signed-by=/etc/apt/keyrings/cuda-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_CODENAME}/x86_64/ /" \
         | sudo tee /etc/apt/sources.list.d/cuda.list > /dev/null
     sudo apt update
     sudo apt install -y cuda-toolkit-12-4
+
+    if ! command -v /usr/local/cuda/bin/nvcc > /dev/null 2>&1; then
+        echo ""
+        echo " CUDA Toolkit install failed. Cannot compile with GPU support."
+        echo " Install manually: sudo apt install cuda-toolkit-12-4"
+        echo " Or check /etc/apt/sources.list.d/cuda.list"
+        read -p " Press Enter to exit..."
+        exit 1
+    fi
+
+    echo "CUDA 12.4 installed successfully."
 fi
 
 cleanup() {
