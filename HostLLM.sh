@@ -40,6 +40,59 @@ get_server_info() {
     fi
 }
 
+check_update() {
+    echo ""
+    echo "  Checking for updates..."
+    cd "${SCRIPT_DIR}"
+
+    if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+        echo -e "  ${RED}Not a git repository. Cannot check for updates.${RESET}"
+        sleep 2
+        return
+    fi
+
+    LOCAL_HASH=$(git rev-parse HEAD)
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+    git fetch origin 2>/dev/null
+    if [[ $? -ne 0 ]]; then
+        echo -e "  ${RED}Failed to fetch from remote.${RESET}"
+        sleep 2
+        return
+    fi
+
+    REMOTE_HASH=$(git rev-parse "origin/${BRANCH}" 2>/dev/null)
+    if [[ -z "$REMOTE_HASH" ]]; then
+        echo -e "  ${RED}Could not determine remote branch.${RESET}"
+        sleep 2
+        return
+    fi
+
+    if [[ "$LOCAL_HASH" == "$REMOTE_HASH" ]]; then
+        echo -e "  ${GREEN}Already up to date.${RESET}"
+        sleep 2
+        return
+    fi
+
+    echo -e "  ${YELLOW}New commits found on origin/${BRANCH}:${RESET}"
+    echo ""
+    git log --oneline "${LOCAL_HASH}..${REMOTE_HASH}"
+    echo ""
+    read -p "  Update now? (y/N): " upd
+    upd=$(echo "$upd" | tr -d '[:space:]')
+    if [[ "$upd" == "y" || "$upd" == "Y" ]]; then
+        git pull origin "$BRANCH"
+        if [[ $? -eq 0 ]]; then
+            echo -e "  ${GREEN}Updated. Restarting...${RESET}"
+            sleep 1
+            exec "$0"
+        else
+            echo -e "  ${RED}Update failed. Check for conflicts.${RESET}"
+            sleep 2
+        fi
+    fi
+}
+
 stop_all() {
     echo ""
     echo " Stopping llama-server..."
@@ -100,7 +153,8 @@ while true; do
     echo "  Controls:"
     echo "  ---------"
     echo -e "  ${BOLD}[6]${RESET} Kill All    Stop whatever is running"
-    echo -e "  ${BOLD}[7]${RESET} Exit"
+    echo -e "  ${BOLD}[7]${RESET} Update      Check git repo for newer version"
+    echo -e "  ${BOLD}[8]${RESET} Exit"
     echo ""
 
     read -p "  Select: " choice
@@ -191,6 +245,9 @@ while true; do
             stop_all
             ;;
         7)
+            check_update
+            ;;
+        8)
             exit 0
             ;;
         *)
