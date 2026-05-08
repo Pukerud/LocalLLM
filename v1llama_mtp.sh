@@ -1344,8 +1344,13 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         exit 1
     fi
 
-    # Model ~16 GB, reserve 1 GB overhead per GPU
-    AVAIL_GB=$((TOTAL_VRAM_GB - 16 - GPU_COUNT))
+    # Model ~16 GB, reserve overhead per GPU
+    # Multi-GPU: bottleneck is per-GPU free space (model + KV split across cards)
+    if [[ "$GPU_COUNT" -gt 1 ]]; then
+        AVAIL_GB=$(( (TOTAL_VRAM_GB - 16) / GPU_COUNT - 2 ))
+    else
+        AVAIL_GB=$((TOTAL_VRAM_GB - 16 - 1))
+    fi
 
     if [[ "$AVAIL_GB" -lt 1 ]]; then
         echo -e " ${YELLOW}Warning: Very tight VRAM. Context will be minimal (8K).${RESET}"
