@@ -35,7 +35,16 @@ done
 
 if ! command -v /usr/local/cuda/bin/nvcc > /dev/null 2>&1; then
     echo ""
-    echo "CUDA Toolkit not found. Installing cuda-toolkit-12-4..."
+    # Detect highest GPU arch to pick the right CUDA version
+    MAX_GPU_ARCH=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null \
+        | tr -d ' .' | sort -n | tail -1)
+    if [[ "$MAX_GPU_ARCH" -ge 120 ]]; then
+        CUDA_PKG="cuda-toolkit-12-8"
+        echo "CUDA Toolkit not found. Blackwell GPU detected (sm_${MAX_GPU_ARCH}), installing ${CUDA_PKG}..."
+    else
+        CUDA_PKG="cuda-toolkit-12-4"
+        echo "CUDA Toolkit not found. Installing ${CUDA_PKG}..."
+    fi
 
     # Detect Ubuntu codename for the correct repo URL
     UBUNTU_CODENAME=$(lsb_release -cs 2>/dev/null || echo "jammy")
@@ -55,18 +64,18 @@ if ! command -v /usr/local/cuda/bin/nvcc > /dev/null 2>&1; then
     rm -rf "${TMPDIR}"
 
     sudo apt update
-    sudo apt install -y cuda-toolkit-12-4
+    sudo apt install -y "$CUDA_PKG"
 
     if ! command -v /usr/local/cuda/bin/nvcc > /dev/null 2>&1; then
         echo ""
         echo " CUDA Toolkit install failed. Cannot compile with GPU support."
-        echo " Install manually: sudo apt install cuda-toolkit-12-4"
+        echo " Install manually: sudo apt install ${CUDA_PKG}"
         echo " Or check /etc/apt/sources.list.d/"
         read -p " Press Enter to exit..."
         exit 1
     fi
 
-    echo "CUDA 12.4 installed successfully."
+    echo "${CUDA_PKG} installed successfully."
 fi
 
 # =========================================================================
@@ -480,15 +489,16 @@ install_mtp() {
     fi
 
     echo ""
-    # Auto-detect GPU compute capability
-    CUDA_ARCH=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d ' .')
-    if [[ -z "$CUDA_ARCH" ]]; then
-        CUDA_ARCH="89"
+    # Auto-detect all GPU compute capabilities
+    CUDA_ARCHS=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null \
+        | tr -d ' .' | sort -u | tr '\n' ';' | sed 's/;$//')
+    if [[ -z "$CUDA_ARCHS" ]]; then
+        CUDA_ARCHS="89"
         echo -e " \033[1;33mCould not detect GPU arch. Defaulting to sm_89 (RTX 4090).\033[0m"
     fi
-    GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
-    echo " Compiling for ${GPU_NAME} (sm_${CUDA_ARCH}) with CUDA..."
-    echo "   -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCH}"
+    GPU_NAMES=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | tr '\n' ', ' | sed 's/, $//')
+    echo " Compiling for ${GPU_NAMES} (sm_${CUDA_ARCHS}) with CUDA..."
+    echo "   -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCHS}"
     echo ""
 
     export CC=gcc
@@ -500,7 +510,7 @@ install_mtp() {
     echo "--- CMAKE CONFIGURE ---" > "../$DEBUG_LOG"
     cmake -B build \
         -DGGML_CUDA=ON \
-        -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCH} \
+        -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHS}" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_C_COMPILER=gcc \
         -DCMAKE_CXX_COMPILER=g++ \
