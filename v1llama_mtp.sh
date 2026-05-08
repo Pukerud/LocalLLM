@@ -78,244 +78,9 @@ if ! command -v /usr/local/cuda/bin/nvcc > /dev/null 2>&1; then
     echo "${CUDA_PKG} installed successfully."
 fi
 
-# =========================================================================
-# QUICKSTART MODE — one-shot: build, download model, start server
-# =========================================================================
+# Variables for quickstart model (used by both quickstart and main menu)
 QUICKSTART_MODEL_URL="https://huggingface.co/llmfan46/Qwen3.6-27B-uncensored-heretic-v2-Native-MTP-Preserved-GGUF/resolve/main/Qwen3.6-27B-uncensored-heretic-v2-Native-MTP-Preserved-Q4_K_S.gguf"
 QUICKSTART_MODEL="Qwen3.6-27B-uncensored-heretic-v2-Native-MTP-Preserved-Q4_K_S.gguf"
-
-if [[ "${1:-}" == "--quickstart" ]]; then
-    echo ""
-    echo -e " ${BOLD}${CYAN}=============================================${RESET}"
-    echo -e " ${BOLD}${CYAN} HostLLM — Quick Start (one-click MTP)${RESET}"
-    echo -e " ${BOLD}${CYAN}=============================================${RESET}"
-    echo ""
-
-    # -- Step 1: Build binary if missing --------------------------------
-    server_bin="./${MTP_DIR}/build/bin/llama-server"
-    if [[ ! -x "$server_bin" ]]; then
-        echo -e " ${YELLOW}[1/3]${RESET} Binary not found. Building llama.cpp (MTP)..."
-        echo ""
-        install_mtp
-        if [[ ! -x "$server_bin" ]]; then
-            echo -e " ${RED}Build failed. Cannot continue.${RESET}"
-            read -p " Press Enter to exit..."
-            exit 1
-        fi
-    fi
-
-    # Verify MTP support before proceeding
-    if ! $server_bin -h 2>&1 | grep -q 'spec-type.*mtp'; then
-        echo -e " ${RED}Binary does not support MTP speculative decoding.${RESET}"
-        echo -e " The PR may not have been checked out. Re-run install from the menu."
-        read -p " Press Enter to exit..."
-        exit 1
-    fi
-
-    echo -e " ${GREEN}[1/3]${RESET} Binary ready (MTP verified)."
-
-    # -- Step 2: Download model if missing ------------------------------
-    model_path="${MODELS_DIR}/${QUICKSTART_MODEL}"
-    if [[ ! -f "$model_path" ]]; then
-        echo ""
-        echo -e " ${YELLOW}[2/3]${RESET} Downloading default model..."
-        echo "   ${QUICKSTART_MODEL}"
-        echo "   This is ~16 GB and may take a while."
-        echo ""
-        wget --show-progress -O "$model_path" "$QUICKSTART_MODEL_URL"
-        if [[ $? -ne 0 ]]; then
-            echo -e " ${RED}Download failed. Check internet connection.${RESET}"
-            rm -f "$model_path"
-            read -p " Press Enter to exit..."
-            exit 1
-        fi
-    else
-        echo -e " ${GREEN}[2/3]${RESET} Model ready."
-    fi
-
-    # -- Step 3: Detect GPUs, calculate context -------------------------
-    echo ""
-    echo -e " ${YELLOW}[3/3]${RESET} Detecting hardware..."
-
-    GPU_COUNT=$(nvidia-smi -L 2>/dev/null | wc -l)
-    if [[ "$GPU_COUNT" -eq 0 ]]; then
-        echo -e " ${RED}No NVIDIA GPUs detected.${RESET}"
-        read -p " Press Enter to exit..."
-        exit 1
-    fi
-
-    TOTAL_VRAM_MB=0
-    while read -r vram; do
-        TOTAL_VRAM_MB=$((TOTAL_VRAM_MB + vram))
-    done < <(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null)
-    TOTAL_VRAM_GB=$((TOTAL_VRAM_MB / 1024))
-
-    # GPU names for display
-    GPU_NAMES=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | tr '\n' '|' | sed 's/|$//')
-
-    echo "   GPUs:        ${GPU_NAMES}"
-    echo "   Total VRAM:  ${TOTAL_VRAM_GB} GB (${GPU_COUNT} GPU(s))"
-
-    # Minimum VRAM check — model is ~16 GB
-    if [[ "$TOTAL_VRAM_GB" -lt 16 ]]; then
-        echo ""
-        echo -e " ${RED}Not enough VRAM. Need at least 16 GB total, found ${TOTAL_VRAM_GB} GB.${RESET}"
-        echo " Consider a smaller model or adding more GPUs."
-        read -p " Press Enter to exit..."
-        exit 1
-    fi
-
-    # Model ~16 GB, reserve 1 GB overhead per GPU
-    AVAIL_GB=$((TOTAL_VRAM_GB - 16 - GPU_COUNT))
-
-    if [[ "$AVAIL_GB" -lt 1 ]]; then
-        echo -e " ${YELLOW}Warning: Very tight VRAM. Context will be minimal (8K).${RESET}"
-        AVAIL_GB=0
-    fi
-
-    # ~25K context per available GB at q4_0 KV
-    CTX=$((AVAIL_GB * 25000))
-    [[ $CTX -lt 8192 ]]   && CTX=8192
-    [[ $CTX -gt 262144 ]] && CTX=262144
-
-    echo "   Model size:  ~16 GB (Q4_K_S)"
-    echo "   KV cache:    q4_0"
-    echo "   Context:     ${CTX}"
-    echo "   MTP tokens:  5"
-    echo ""
-    echo -e " ${GREEN}Starting server on port 8080...${RESET}"
-    echo ""
-
-    echo "MTP-QuickStart: ${QUICKSTART_MODEL} [${CTX}/q4_0/mtp=5/GPUs=${GPU_COUNT}]" > .server_info_mtp
-
-    # -- Launch server in background ------------------------------------
-    {
-        echo "COMMAND PROFILE: quickstart-mtp"
-        echo ""
-        echo "----- llama-server output -----"
-    } > "$SERVER_LOG"
-
-    nohup "$server_bin" \
-        -m "$model_path" \
-        --spec-type mtp --spec-draft-n-max 5 \
-        --cache-type-k q4_0 --cache-type-v q4_0 \
-        -np 1 -c "$CTX" \
-        --temp 0.7 --top-k 20 \
-        -ngl 99 \
-        --host 0.0.0.0 --port 8080 \
-        >> "$SERVER_LOG" 2>&1 &
-    SERVER_PID=$!
-
-    # -- Wait for health check ------------------------------------------
-    FAILED=0
-    LOADED=0
-
-    echo " Waiting for server to load model..."
-    for i in $(seq 1 180); do
-        if ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
-            FAILED=1
-            break
-        fi
-
-        if grep -Eqi 'unknown argument|unrecognized option|invalid option|error:.*argument|usage:' "$SERVER_LOG" 2>/dev/null; then
-            kill "$SERVER_PID" >/dev/null 2>&1 || true
-            FAILED=1
-            break
-        fi
-
-        if grep -Eqi 'out of memory|failed to allocate|CUDA error' "$SERVER_LOG" 2>/dev/null; then
-            kill "$SERVER_PID" >/dev/null 2>&1 || true
-            FAILED=1
-            break
-        fi
-
-        CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8080/health" 2>/dev/null || true)
-        if [[ "$CODE" == "200" ]]; then
-            LOADED=1
-            break
-        fi
-
-        sleep 1
-    done
-
-    if [[ "$FAILED" -eq 1 ]] || ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
-        rm -f .server_info_mtp
-        echo ""
-        echo -e " ${RED}Server failed during startup.${RESET}"
-        echo ""
-        echo " Last 50 lines of ${SERVER_LOG}:"
-        echo "------------------------------------------------------------"
-        tail -n 50 "$SERVER_LOG"
-        echo "------------------------------------------------------------"
-        read -p " Press Enter to exit..."
-        exit 1
-    fi
-
-    # -- Detect local IP for clickable URL ------------------------------
-    LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-    [[ -z "$LOCAL_IP" ]] && LOCAL_IP="localhost"
-
-    # -- Show running dashboard -----------------------------------------
-    clear
-    echo "=================================================================="
-    echo -e "  ${GREEN}${BOLD}MTP SERVER RUNNING${RESET}"
-    echo "=================================================================="
-    echo ""
-    echo -e "  ${BOLD}Chat URL:${RESET}  http://${LOCAL_IP}:8080"
-    echo ""
-    echo "  Model:   ${QUICKSTART_MODEL}"
-    echo "  Context: ${CTX}  |  KV: q4_0  |  MTP: 5"
-    echo "  GPUs:    ${GPU_COUNT}x (${TOTAL_VRAM_GB} GB total)"
-    echo ""
-    echo "  Press Ctrl+C to stop server"
-    echo "=================================================================="
-    echo ""
-
-    # Live stats loop
-    tput civis
-    while kill -0 "$SERVER_PID" >/dev/null 2>&1; do
-        if command -v nvidia-smi > /dev/null 2>&1; then
-            stats=$(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits 2>/dev/null)
-            IFS=',' read -r gpu_load vram_used vram_total gpu_temp <<< "$stats"
-            gpu_load=$(echo "$gpu_load" | tr -d ' ')
-            vram_used=$(echo "$vram_used" | tr -d ' ')
-            vram_total=$(echo "$vram_total" | tr -d ' ')
-            gpu_temp=$(echo "$gpu_temp" | tr -d ' ')
-            if [[ "$vram_total" -gt 0 ]]; then vram_pct=$(( (vram_used * 100) / vram_total )); else vram_pct=0; fi
-            vram_used_gb=$(awk "BEGIN {printf \"%.1f\", $vram_used/1024}")
-            vram_total_gb=$(awk "BEGIN {printf \"%.0f\", $vram_total/1024}")
-        else
-            gpu_load="N/A"; gpu_temp="-"; vram_used_gb="0"; vram_total_gb="0"; vram_pct="0"
-        fi
-
-        read cpu user nice system idle iowait irq softirq steal guest < /proc/stat
-        cpu_ap=$((user+nice+system+irq+softirq+steal))
-        cpu_tp=$((user+nice+system+idle+iowait+irq+softirq+steal))
-        sleep 1
-        read cpu user nice system idle iowait irq softirq steal guest < /proc/stat
-        cpu_ac=$((user+nice+system+irq+softirq+steal))
-        cpu_tc=$((user+nice+system+idle+iowait+irq+softirq+steal))
-        cpu_diff=$((cpu_tc - cpu_tp))
-        cpu_adiff=$((cpu_ac - cpu_ap))
-        if [[ "$cpu_diff" -gt 0 ]]; then cpu_pct=$(( (cpu_adiff * 100) / cpu_diff )); else cpu_pct=0; fi
-
-        tput sc
-        tput cup 11 0
-        echo -e "  CPU: ${cpu_pct}%   |   GPU: ${gpu_load}%   |   Temp: ${gpu_temp} degC"
-        echo -e "  VRAM: ${vram_used_gb} GB / ${vram_total_gb} GB (${vram_pct}%)"
-        echo ""
-        echo -e "  ${BOLD}Chat URL:${RESET}  http://${LOCAL_IP}:8080"
-        tput rc
-        tput cup 17 0
-    done
-
-    tput cnorm
-    echo ""
-    echo -e " ${RED}Server stopped.${RESET}"
-    rm -f .server_info_mtp 2>/dev/null
-    read -p " Press Enter to exit..."
-    exit 0
-fi
 
 cleanup() {
     local exit_code=$?
@@ -1478,6 +1243,242 @@ quick_start_mtp() {
         read -p " Press Enter to return to menu..."
     fi
 }
+
+# =========================================================================
+# QUICKSTART MODE — one-shot: build, download model, start server
+# =========================================================================
+if [[ "${1:-}" == "--quickstart" ]]; then
+    echo ""
+    echo -e " ${BOLD}${CYAN}=============================================${RESET}"
+    echo -e " ${BOLD}${CYAN} HostLLM — Quick Start (one-click MTP)${RESET}"
+    echo -e " ${BOLD}${CYAN}=============================================${RESET}"
+    echo ""
+
+    # -- Step 1: Build binary if missing --------------------------------
+    server_bin="./${MTP_DIR}/build/bin/llama-server"
+    if [[ ! -x "$server_bin" ]]; then
+        echo -e " ${YELLOW}[1/3]${RESET} Binary not found. Building llama.cpp (MTP)..."
+        echo ""
+        install_mtp
+        if [[ ! -x "$server_bin" ]]; then
+            echo -e " ${RED}Build failed. Cannot continue.${RESET}"
+            read -p " Press Enter to exit..."
+            exit 1
+        fi
+    fi
+
+    # Verify MTP support before proceeding
+    if ! $server_bin -h 2>&1 | grep -q 'spec-type.*mtp'; then
+        echo -e " ${RED}Binary does not support MTP speculative decoding.${RESET}"
+        echo -e " The PR may not have been checked out. Re-run install from the menu."
+        read -p " Press Enter to exit..."
+        exit 1
+    fi
+
+    echo -e " ${GREEN}[1/3]${RESET} Binary ready (MTP verified)."
+
+    # -- Step 2: Download model if missing ------------------------------
+    model_path="${MODELS_DIR}/${QUICKSTART_MODEL}"
+    if [[ ! -f "$model_path" ]]; then
+        echo ""
+        echo -e " ${YELLOW}[2/3]${RESET} Downloading default model..."
+        echo "   ${QUICKSTART_MODEL}"
+        echo "   This is ~16 GB and may take a while."
+        echo ""
+        wget --show-progress -O "$model_path" "$QUICKSTART_MODEL_URL"
+        if [[ $? -ne 0 ]]; then
+            echo -e " ${RED}Download failed. Check internet connection.${RESET}"
+            rm -f "$model_path"
+            read -p " Press Enter to exit..."
+            exit 1
+        fi
+    else
+        echo -e " ${GREEN}[2/3]${RESET} Model ready."
+    fi
+
+    # -- Step 3: Detect GPUs, calculate context -------------------------
+    echo ""
+    echo -e " ${YELLOW}[3/3]${RESET} Detecting hardware..."
+
+    GPU_COUNT=$(nvidia-smi -L 2>/dev/null | wc -l)
+    if [[ "$GPU_COUNT" -eq 0 ]]; then
+        echo -e " ${RED}No NVIDIA GPUs detected.${RESET}"
+        read -p " Press Enter to exit..."
+        exit 1
+    fi
+
+    TOTAL_VRAM_MB=0
+    while read -r vram; do
+        TOTAL_VRAM_MB=$((TOTAL_VRAM_MB + vram))
+    done < <(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null)
+    TOTAL_VRAM_GB=$((TOTAL_VRAM_MB / 1024))
+
+    # GPU names for display
+    GPU_NAMES=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | tr '\n' '|' | sed 's/|$//')
+
+    echo "   GPUs:        ${GPU_NAMES}"
+    echo "   Total VRAM:  ${TOTAL_VRAM_GB} GB (${GPU_COUNT} GPU(s))"
+
+    # Minimum VRAM check — model is ~16 GB
+    if [[ "$TOTAL_VRAM_GB" -lt 16 ]]; then
+        echo ""
+        echo -e " ${RED}Not enough VRAM. Need at least 16 GB total, found ${TOTAL_VRAM_GB} GB.${RESET}"
+        echo " Consider a smaller model or adding more GPUs."
+        read -p " Press Enter to exit..."
+        exit 1
+    fi
+
+    # Model ~16 GB, reserve 1 GB overhead per GPU
+    AVAIL_GB=$((TOTAL_VRAM_GB - 16 - GPU_COUNT))
+
+    if [[ "$AVAIL_GB" -lt 1 ]]; then
+        echo -e " ${YELLOW}Warning: Very tight VRAM. Context will be minimal (8K).${RESET}"
+        AVAIL_GB=0
+    fi
+
+    # ~25K context per available GB at q4_0 KV
+    CTX=$((AVAIL_GB * 25000))
+    [[ $CTX -lt 8192 ]]   && CTX=8192
+    [[ $CTX -gt 262144 ]] && CTX=262144
+
+    echo "   Model size:  ~16 GB (Q4_K_S)"
+    echo "   KV cache:    q4_0"
+    echo "   Context:     ${CTX}"
+    echo "   MTP tokens:  5"
+    echo ""
+    echo -e " ${GREEN}Starting server on port 8080...${RESET}"
+    echo ""
+
+    echo "MTP-QuickStart: ${QUICKSTART_MODEL} [${CTX}/q4_0/mtp=5/GPUs=${GPU_COUNT}]" > .server_info_mtp
+
+    # -- Launch server in background ------------------------------------
+    {
+        echo "COMMAND PROFILE: quickstart-mtp"
+        echo ""
+        echo "----- llama-server output -----"
+    } > "$SERVER_LOG"
+
+    nohup "$server_bin" \
+        -m "$model_path" \
+        --spec-type mtp --spec-draft-n-max 5 \
+        --cache-type-k q4_0 --cache-type-v q4_0 \
+        -np 1 -c "$CTX" \
+        --temp 0.7 --top-k 20 \
+        -ngl 99 \
+        --host 0.0.0.0 --port 8080 \
+        >> "$SERVER_LOG" 2>&1 &
+    SERVER_PID=$!
+
+    # -- Wait for health check ------------------------------------------
+    FAILED=0
+    LOADED=0
+
+    echo " Waiting for server to load model..."
+    for i in $(seq 1 180); do
+        if ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
+            FAILED=1
+            break
+        fi
+
+        if grep -Eqi 'unknown argument|unrecognized option|invalid option|error:.*argument|usage:' "$SERVER_LOG" 2>/dev/null; then
+            kill "$SERVER_PID" >/dev/null 2>&1 || true
+            FAILED=1
+            break
+        fi
+
+        if grep -Eqi 'out of memory|failed to allocate|CUDA error' "$SERVER_LOG" 2>/dev/null; then
+            kill "$SERVER_PID" >/dev/null 2>&1 || true
+            FAILED=1
+            break
+        fi
+
+        CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8080/health" 2>/dev/null || true)
+        if [[ "$CODE" == "200" ]]; then
+            LOADED=1
+            break
+        fi
+
+        sleep 1
+    done
+
+    if [[ "$FAILED" -eq 1 ]] || ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
+        rm -f .server_info_mtp
+        echo ""
+        echo -e " ${RED}Server failed during startup.${RESET}"
+        echo ""
+        echo " Last 50 lines of ${SERVER_LOG}:"
+        echo "------------------------------------------------------------"
+        tail -n 50 "$SERVER_LOG"
+        echo "------------------------------------------------------------"
+        read -p " Press Enter to exit..."
+        exit 1
+    fi
+
+    # -- Detect local IP for clickable URL ------------------------------
+    LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+    [[ -z "$LOCAL_IP" ]] && LOCAL_IP="localhost"
+
+    # -- Show running dashboard -----------------------------------------
+    clear
+    echo "=================================================================="
+    echo -e "  ${GREEN}${BOLD}MTP SERVER RUNNING${RESET}"
+    echo "=================================================================="
+    echo ""
+    echo -e "  ${BOLD}Chat URL:${RESET}  http://${LOCAL_IP}:8080"
+    echo ""
+    echo "  Model:   ${QUICKSTART_MODEL}"
+    echo "  Context: ${CTX}  |  KV: q4_0  |  MTP: 5"
+    echo "  GPUs:    ${GPU_COUNT}x (${TOTAL_VRAM_GB} GB total)"
+    echo ""
+    echo "  Press Ctrl+C to stop server"
+    echo "=================================================================="
+    echo ""
+
+    # Live stats loop
+    tput civis
+    while kill -0 "$SERVER_PID" >/dev/null 2>&1; do
+        if command -v nvidia-smi > /dev/null 2>&1; then
+            stats=$(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits 2>/dev/null)
+            IFS=',' read -r gpu_load vram_used vram_total gpu_temp <<< "$stats"
+            gpu_load=$(echo "$gpu_load" | tr -d ' ')
+            vram_used=$(echo "$vram_used" | tr -d ' ')
+            vram_total=$(echo "$vram_total" | tr -d ' ')
+            gpu_temp=$(echo "$gpu_temp" | tr -d ' ')
+            if [[ "$vram_total" -gt 0 ]]; then vram_pct=$(( (vram_used * 100) / vram_total )); else vram_pct=0; fi
+            vram_used_gb=$(awk "BEGIN {printf \"%.1f\", $vram_used/1024}")
+            vram_total_gb=$(awk "BEGIN {printf \"%.0f\", $vram_total/1024}")
+        else
+            gpu_load="N/A"; gpu_temp="-"; vram_used_gb="0"; vram_total_gb="0"; vram_pct="0"
+        fi
+
+        read cpu user nice system idle iowait irq softirq steal guest < /proc/stat
+        cpu_ap=$((user+nice+system+irq+softirq+steal))
+        cpu_tp=$((user+nice+system+idle+iowait+irq+softirq+steal))
+        sleep 1
+        read cpu user nice system idle iowait irq softirq steal guest < /proc/stat
+        cpu_ac=$((user+nice+system+irq+softirq+steal))
+        cpu_tc=$((user+nice+system+idle+iowait+irq+softirq+steal))
+        cpu_diff=$((cpu_tc - cpu_tp))
+        cpu_adiff=$((cpu_ac - cpu_ap))
+        if [[ "$cpu_diff" -gt 0 ]]; then cpu_pct=$(( (cpu_adiff * 100) / cpu_diff )); else cpu_pct=0; fi
+
+        tput sc
+        tput cup 11 0
+        echo -e "  CPU: ${cpu_pct}%   |   GPU: ${gpu_load}%   |   Temp: ${gpu_temp} degC"
+        echo -e "  VRAM: ${vram_used_gb} GB / ${vram_total_gb} GB (${vram_pct}%)"
+        echo ""
+        echo -e "  ${BOLD}Chat URL:${RESET}  http://${LOCAL_IP}:8080"
+        tput rc
+        tput cup 17 0
+    done
+
+    tput cnorm
+    echo ""
+    echo -e " ${RED}Server stopped.${RESET}"
+    rm -f .server_info_mtp 2>/dev/null
+    read -p " Press Enter to exit..."
+    exit 0
+fi
 
 # -- Main Menu -------------------------------------------------------------
 
