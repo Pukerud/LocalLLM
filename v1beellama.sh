@@ -950,11 +950,13 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         exit 1
     fi
 
-    # Context calculation for BeeLlama DFlash with TurboQuant
+    # Context calculation for BeeLlama with TurboQuant
     # Calibrated from real 3090 (24GB) data points:
     #   IQ4_XS: 15+2=17GB used → 6.8GB free → 262K ctx (turbo3_tcq/turbo3_tcq)  ≈ 38K/GB
     #   Q5_K_M: 19+2=21GB used → 2.8GB free → 200K ctx (turbo4/turbo3_tcq)      ≈ 71K/GB
-    DRAFT_GB=2
+    # Multi-GPU: no draft model (DFlash off), so more VRAM available
+    DRAFT_GB=0
+    [[ "$GPU_COUNT" -eq 1 ]] && DRAFT_GB=2
     OVERHEAD_GB=1
 
     if [[ "$GPU_COUNT" -gt 1 ]]; then
@@ -981,7 +983,11 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     [[ $CTX -gt 262144 ]] && CTX=262144
 
     echo "   Target:      ${QS_TARGET_LABEL}"
-    echo "   Draft:       Q5_K_M (~1.2 GB)"
+    if [[ "$GPU_COUNT" -gt 1 ]]; then
+        echo "   DFlash:      OFF (multi-GPU upstream bug)"
+    else
+        echo "   Draft:       Q5_K_M (~1.2 GB)"
+    fi
     echo "   Vision:      mmproj-BF16 (CPU offload)"
     echo "   KV cache:    K=${QS_CACHE_K}, V=${QS_CACHE_V}"
     echo "   Context:     ${CTX}"
@@ -992,23 +998,23 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     echo -e " ${YELLOW}[4/4]${RESET} Starting BeeLlama DFlash server..."
     echo ""
 
-    # Multi-GPU workaround: beellama.cpp GPU cross-ring D2D crashes
-    # with multiple GPUs (illegal memory access in dflash_kv_cache_update).
-    # Keep draft on CPU for multi-GPU to disable GPU ring buffer.
+    # Multi-GPU workaround: beellama.cpp DFlash crashes with multiple GPUs.
+    # The target model's hidden states span two GPUs, and dflash_kv_cache_update_gpu
+    # can't gather them — CUDA error: illegal memory access (upstream bug).
+    # Fix: disable DFlash for multi-GPU, run without speculative decoding.
     if [[ "$GPU_COUNT" -gt 1 ]]; then
-        QS_DRAFT_NGL="0"
-        echo -e " ${YELLOW}Note:${RESET} Multi-GPU detected — draft model on CPU (upstream GPU ring bug)"
+        USE_DFLASH=false
+        echo -e " ${YELLOW}Note:${RESET} Multi-GPU detected — DFlash disabled (upstream multi-GPU bug)"
+        echo -e "         Server will run without speculative decoding (slower but stable)."
+        echo ""
     else
-        QS_DRAFT_NGL="all"
+        USE_DFLASH=true
     fi
 
     launch_cmd=("$server_bin"
         -m "${MODELS_DIR}/${QS_TARGET}"
-        --spec-draft-model "${MODELS_DIR}/${QS_DRAFT}"
-        --spec-type dflash
-        --spec-dflash-cross-ctx 1024
         -np 1 --kv-unified
-        -ngl all --spec-draft-ngl ${QS_DRAFT_NGL}
+        -ngl all
         -b 2048 -ub 256
         --ctx-size "$CTX"
         --cache-type-k ${QS_CACHE_K} --cache-type-v ${QS_CACHE_V}
@@ -1025,6 +1031,17 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         --host 0.0.0.0 --port 8080
     )
 
+    # Add DFlash flags for single GPU only
+    if [[ "$USE_DFLASH" == true ]]; then
+        # Insert DFlash flags after the model flag (position 2)
+        launch_cmd=("${launch_cmd[@]:0:2}"
+            --spec-draft-model "${MODELS_DIR}/${QS_DRAFT}"
+            --spec-type dflash
+            --spec-dflash-cross-ctx 1024
+            --spec-draft-ngl all
+            "${launch_cmd[@]:2}")
+    fi
+
     # Only add mmproj if the file exists
     if [[ ! -f "${MODELS_DIR}/${QS_MMPROJ}" ]]; then
         # Remove mmproj flags
@@ -1036,7 +1053,11 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     echo ""
     echo ""
 
-    echo "BEELLAMA-QuickStart: ${QS_TARGET} + ${QS_DRAFT} [ctx=${CTX}/${QS_CACHE_K}/${QS_CACHE_V}/GPUs=${GPU_COUNT}]" > .server_info_beellama
+    if [[ "$USE_DFLASH" == true ]]; then
+        echo "BEELLAMA-QuickStart: ${QS_TARGET} + ${QS_DRAFT} [ctx=${CTX}/${QS_CACHE_K}/${QS_CACHE_V}/GPUs=${GPU_COUNT}]" > .server_info_beellama
+    else
+        echo "BEELLAMA-QuickStart: ${QS_TARGET} (no DFlash) [ctx=${CTX}/${QS_CACHE_K}/${QS_CACHE_V}/GPUs=${GPU_COUNT}]" > .server_info_beellama
+    fi
 
     {
         echo "COMMAND PROFILE: quickstart-beellama"
@@ -1096,8 +1117,12 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     echo "=================================================================="
     echo ""
     echo "  Model:   ${QS_TARGET}"
-    echo "  Draft:   ${QS_DRAFT}"
-    echo "  Context: ${CTX}  |  KV: K=${QS_CACHE_K}, V=${QS_CACHE_V}  |  DFlash: cross-ctx 1024"
+    if [[ "$USE_DFLASH" == true ]]; then
+        echo "  Draft:   ${QS_DRAFT}"
+        echo "  Context: ${CTX}  |  KV: K=${QS_CACHE_K}, V=${QS_CACHE_V}  |  DFlash: cross-ctx 1024"
+    else
+        echo "  Context: ${CTX}  |  KV: K=${QS_CACHE_K}, V=${QS_CACHE_V}  |  DFlash: OFF (multi-GPU)"
+    fi
     echo "  Vision:  ON (CPU offload)  |  Reasoning: ON"
     echo "  GPUs:    ${GPU_COUNT}x (${TOTAL_VRAM_GB} GB total)"
     echo ""
