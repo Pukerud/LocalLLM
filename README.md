@@ -21,27 +21,29 @@ chmod +x HostLLM.sh v1*.sh
 ./HostLLM.sh
 ```
 
-Press **[0]** from the main menu for the **one-click Quick Start** — it auto-installs everything, downloads a model, and starts the server. No technical knowledge needed.
+Press **[0]** from the main menu for the **one-click Quick Start** — it auto-installs everything, downloads models, and starts the server. No technical knowledge needed.
 
 ### What Quick Start does automatically
 
 1. **Installs CUDA Toolkit** if missing (12.4 or 12.8 for Blackwell GPUs)
-2. **Builds llama.cpp** with MTP PR #22673
-3. **Downloads the default model** (~16 GB, Q4_K_S)
+2. **Builds BeeLlama.cpp** with DFlash, TurboQuant/TCQ, Flash Attention
+3. **Downloads 3 models**: target (~15 GB IQ4_XS), draft (~1.2 GB Q5_K_M), mmproj (~0.9 GB)
 4. **Detects your GPU(s)** and auto-calculates the optimal context size
-5. **Applies fixed jinja chat template** (bundled)
-6. **Starts the server** and shows connection info
+5. **Starts the server** with vision, reasoning, and DFlash enabled
+6. **Shows connection info** with all API endpoints
 
 ### Quick Start final display
 
 ```
 ==================================================================
-  MTP SERVER RUNNING
+  BEELLAMA DFLASH SERVER RUNNING
 ==================================================================
 
-  Model:   Qwen3.6-27B-uncensored-heretic-v2-Native-MTP-Preserved-Q4_K_S.gguf
-  Context: 131072  |  KV: q4_0  |  MTP: 5
-  GPUs:    2x (24 GB total)
+  Model:   Qwen3.6-27B-NEO-CODE-HERE-2T-OT-IQ4_XS
+  Draft:   Qwen3.6-27B-DFlash-Q5_K_M
+  Context: 262144  |  KV: turbo3_tcq  |  DFlash: cross-ctx 1024
+  Vision:  ON (CPU offload)  |  Reasoning: ON
+  GPUs:    1x RTX 3090 (24 GB)
 
   Connect from any device on your network:
 
@@ -83,22 +85,23 @@ Stats update live. The server stays running when you press **[2]** — access it
 
   Quick Start:
   ------------
-  [0] Quick Start   One-click MTP — auto-install, download model, start server
+  [0] Quick Start           BeeLlama DFlash — ~105 tok/s, vision, reasoning (Tested on 3090)
+  [1] Quick Start (Legacy)  MTP — ~100 tok/s, no vision (Tested on 4090)
 
   Engines:
   -------
-  [1] llama.cpp       ik_llama.cpp — max context (262K), all GGUF models
-  [2] DFlash llama.cpp buun-llama-cpp — DFlash speculative decoding
-  [3] vLLM            Docker — max throughput (50-127 TPS), tool calls
-  [4] Lucebox DFlash  lucebox-hub — DDTree (~104 t/s on 4090)
-  [5] llama.cpp MTP   ggml-org/llama.cpp — native MTP speculative decoding
-  [6] BeeLlama DFlash Anbeeld/beellama.cpp — DFlash + TurboQuant + vision + reasoning
+  [2] llama.cpp       ik_llama.cpp — max context (262K), all GGUF models
+  [3] DFlash llama.cpp buun-llama-cpp — DFlash speculative decoding
+  [4] vLLM            Docker — max throughput (50-127 TPS), tool calls
+  [5] Lucebox DFlash  lucebox-hub — DDTree (~104 t/s on 4090)
+  [6] llama.cpp MTP   ggml-org/llama.cpp — native MTP speculative decoding
+  [7] BeeLlama DFlash Anbeeld/beellama.cpp — full dashboard (manual control)
 
   Controls:
   ---------
-  [7] Kill All    Stop whatever is running
-  [8] Update      Check git repo for newer version
-  [9] Exit
+  [8] Kill All    Stop whatever is running
+  [9] Update      Check git repo for newer version
+  [10] Exit
 
   Select:
 ```
@@ -140,17 +143,18 @@ Quick Start auto-detects your GPU(s) and adjusts:
 
 | # | Engine | Script | Speed | Status | Best for |
 |---|--------|--------|------:|--------|----------|
-| **0** | **Quick Start** | `v1llama_mtp.sh --quickstart` | auto | ✅ | One-click, noobs |
-| **1** | **llama.cpp** (ik_llama.cpp) | `v1llama_cpp.sh` | ~35-40 tok/s | ✅ Stable | Vision, max context (262K) |
-| **2** | **DFlash** (buun fork) | `v1dflash_llama_cpp.sh` | — | ❌ | Under development |
-| **3** | **vLLM** (Docker) | `v1_vllm.sh` | ~70 tok/s* | ✅ Working | Production API, tool use |
-| **4** | **Lucebox DFlash** | `v1lucebox.sh` | **~104 tok/s** | ⚠️ Unstable | Fastest when stable |
-| **5** | **llama.cpp MTP** (PR #22673) | `v1llama_mtp.sh` | **~100 tok/s** | ✅ Working | Fast text, native MTP |
-| **6** | **BeeLlama DFlash** (Anbeeld) | `v1beellama.sh` | **~100+ tok/s** | ✅ Working | DFlash + TurboQuant/TCQ KV, vision, reasoning |
+| **0** | **Quick Start** | `v1beellama.sh --quickstart` | **~105 tok/s** | ✅ | One-click BeeLlama DFlash, vision, reasoning |
+| **1** | **Quick Start (Legacy)** | `v1llama_mtp.sh --quickstart` | **~100 tok/s** | ✅ | One-click MTP, no vision |
+| **2** | **llama.cpp** (ik_llama.cpp) | `v1llama_cpp.sh` | ~35-40 tok/s | ✅ Stable | Vision, max context (262K) |
+| **3** | **DFlash** (buun fork) | `v1dflash_llama_cpp.sh` | — | ❌ | Under development |
+| **4** | **vLLM** (Docker) | `v1_vllm.sh` | ~70 tok/s* | ✅ Working | Production API, tool use |
+| **5** | **Lucebox DFlash** | `v1lucebox.sh` | **~104 tok/s** | ⚠️ Unstable | Fastest when stable |
+| **6** | **llama.cpp MTP** (PR #22673) | `v1llama_mtp.sh` | **~100 tok/s** | ✅ Working | Fast text, native MTP |
+| **7** | **BeeLlama DFlash** (Anbeeld) | `v1beellama.sh` | **~100+ tok/s** | ✅ Working | Full dashboard, manual control |
 
 All share `llama_models/` and port 8080. Only one runs at a time.
 
-**Recommended:** Engine **0** (Quick Start), **5** (MTP dashboard), or **6** (BeeLlama DFlash with TurboQuant).
+**Recommended:** Engine **0** (Quick Start) for best speed + quality + vision, or **7** (BeeLlama full dashboard) for manual control.
 
 \* *vLLM speed varies by preset: 20K ctx ~110 tok/s, 48K ctx ~70 tok/s, 128K ctx ~55 tok/s.*
 
@@ -355,12 +359,12 @@ Run quality benchmarks with `bash benchmarks/quality_test.sh [port] [host]` or t
 ./
 ├── HostLLM.sh              ← Engine picker (start here)
 ├── chat_templates/          ← Bundled fixed jinja templates
-├── v1llama_mtp.sh          ← Engine 5 / Quick Start dashboard
+├── v1llama_mtp.sh          ← Engine 6 / Legacy Quick Start dashboard
 ├── v1llama_cpp.sh          ← Engine 1 dashboard
 ├── v1dflash_llama_cpp.sh   ← Engine 2 dashboard
 ├── v1_vllm.sh              ← Engine 3 dashboard
 ├── v1lucebox.sh            ← Engine 4 dashboard
-├── v1beellama.sh           ← Engine 6 / BeeLlama DFlash dashboard
+├── v1beellama.sh           ← Engine 0/7 — Quick Start + full dashboard
 ├── benchmarks/             ← Speed & quality benchmark scripts
 │   ├── BENCHMARK_STANDARD.md  ← Standard format docs
 │   ├── speed_beellama.sh      ← Speed: all target×draft combos
@@ -382,7 +386,7 @@ Run quality benchmarks with `bash benchmarks/quality_test.sh [port] [host]` or t
 - `llama_models/` is gitignored — add `.gguf` files via dashboard menus or manually.
 - MTP GGUF files must be converted with the PR #22673 converter — standard GGUFs don't have MTP layers.
 - Each engine tracks its own state via `.server_info*` files — the main menu auto-detects which is running.
-- Use **[8] Update** from the main menu to pull the latest version from GitHub.
+- Use **[9] Update** from the main menu to pull the latest version from GitHub.
 
 ## License
 

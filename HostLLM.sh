@@ -13,7 +13,6 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 detect_engine() {
     if pgrep -f "llama-server" > /dev/null 2>&1; then
-        # Check which build is running by looking at server info files
         if [[ -f "${SCRIPT_DIR}/.server_info_mtp" ]]; then
             echo "mtp"
         elif [[ -f "${SCRIPT_DIR}/.server_info_beellama" ]]; then
@@ -102,7 +101,6 @@ stop_all() {
     echo " Stopping llama-server..."
     pkill -f "llama-server" 2>/dev/null && echo "   llama-server killed." || echo "   (not running)"
     echo " Stopping vLLM container..."
-    # Try compose down with saved compose file, fallback to container name
     local compose_used=""
     if [[ -f "${SCRIPT_DIR}/.server_compose" ]]; then
         compose_used=$(cat "${SCRIPT_DIR}/.server_compose")
@@ -151,22 +149,23 @@ while true; do
     echo ""
     echo "  Quick Start:"
     echo "  ------------"
-    echo -e "  ${BOLD}[0]${RESET} Quick Start   One-click MTP — auto-install, download model, start server"
+    echo -e "  ${BOLD}[0]${RESET} Quick Start           BeeLlama DFlash — ~105 tok/s, vision, reasoning (Tested on 3090)"
+    echo -e "  ${BOLD}[1]${RESET} Quick Start (Legacy)  MTP — ~100 tok/s, no vision (Tested on 4090)"
     echo ""
     echo "  Engines:"
     echo "  -------"
-    echo -e "  ${BOLD}[1]${RESET} llama.cpp       ik_llama.cpp — max context (262K), all GGUF models"
-    echo -e "  ${BOLD}[2]${RESET} DFlash llama.cpp buun-llama-cpp — DFlash speculative decoding"
-    echo -e "  ${BOLD}[3]${RESET} vLLM            Docker — max throughput (50-127 TPS), tool calls"
-    echo -e "  ${BOLD}[4]${RESET} Lucebox DFlash  lucebox-hub — DDTree (~104 t/s on 4090)"
-    echo -e "  ${BOLD}[5]${RESET} llama.cpp MTP   ggml-org/llama.cpp — native MTP speculative decoding"
-    echo -e "  ${BOLD}[6]${RESET} BeeLlama DFlash Anbeeld/beellama.cpp — DFlash + TurboQuant + vision + reasoning"
+    echo -e "  ${BOLD}[2]${RESET} llama.cpp       ik_llama.cpp — max context (262K), all GGUF models"
+    echo -e "  ${BOLD}[3]${RESET} DFlash llama.cpp buun-llama-cpp — DFlash speculative decoding"
+    echo -e "  ${BOLD}[4]${RESET} vLLM            Docker — max throughput (50-127 TPS), tool calls"
+    echo -e "  ${BOLD}[5]${RESET} Lucebox DFlash  lucebox-hub — DDTree (~104 t/s on 4090)"
+    echo -e "  ${BOLD}[6]${RESET} llama.cpp MTP   ggml-org/llama.cpp — native MTP speculative decoding"
+    echo -e "  ${BOLD}[7]${RESET} BeeLlama DFlash Anbeeld/beellama.cpp — full dashboard (manual control)"
     echo ""
     echo "  Controls:"
     echo "  ---------"
-    echo -e "  ${BOLD}[7]${RESET} Kill All    Stop whatever is running"
-    echo -e "  ${BOLD}[8]${RESET} Update      Check git repo for newer version"
-    echo -e "  ${BOLD}[9]${RESET} Exit"
+    echo -e "  ${BOLD}[8]${RESET} Kill All    Stop whatever is running"
+    echo -e "  ${BOLD}[9]${RESET} Update      Check git repo for newer version"
+    echo -e "  ${BOLD}[10]${RESET} Exit"
     echo ""
 
     read -p "  Select: " choice
@@ -176,7 +175,24 @@ while true; do
         0)
             if [[ "$active" != "none" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [7].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
+                sleep 2
+                continue
+            fi
+            if [[ ! -x "${SCRIPT_DIR}/v1beellama.sh" ]]; then
+                echo ""
+                echo -e "  ${RED}v1beellama.sh not found or not executable.${RESET}"
+                sleep 2
+                continue
+            fi
+            cd "${SCRIPT_DIR}"
+            ./v1beellama.sh --quickstart
+            [[ $? -eq 42 ]] && exit 0
+            ;;
+        1)
+            if [[ "$active" != "none" ]]; then
+                echo ""
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
                 sleep 2
                 continue
             fi
@@ -190,10 +206,10 @@ while true; do
             ./v1llama_mtp.sh --quickstart
             [[ $? -eq 42 ]] && exit 0
             ;;
-        1)
+        2)
             if [[ "$active" != "none" && "$active" != "llamacpp" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [7].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
                 sleep 2
                 continue
             fi
@@ -207,10 +223,10 @@ while true; do
             ./v1llama_cpp.sh
             [[ $? -eq 42 ]] && exit 0
             ;;
-        2)
+        3)
             if [[ "$active" != "none" && "$active" != "dflash" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [7].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
                 sleep 2
                 continue
             fi
@@ -224,10 +240,10 @@ while true; do
             ./v1dflash_llama_cpp.sh
             [[ $? -eq 42 ]] && exit 0
             ;;
-        3)
+        4)
             if [[ "$active" != "none" && "$active" != "vllm" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [7].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
                 sleep 2
                 continue
             fi
@@ -241,10 +257,10 @@ while true; do
             ./v1_vllm.sh
             [[ $? -eq 42 ]] && exit 0
             ;;
-        4)
+        5)
             if [[ "$active" != "none" && "$active" != "lucebox" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [7].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
                 sleep 2
                 continue
             fi
@@ -258,10 +274,10 @@ while true; do
             ./v1lucebox.sh
             [[ $? -eq 42 ]] && exit 0
             ;;
-        5)
+        6)
             if [[ "$active" != "none" && "$active" != "mtp" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [7].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
                 sleep 2
                 continue
             fi
@@ -275,10 +291,10 @@ while true; do
             ./v1llama_mtp.sh
             [[ $? -eq 42 ]] && exit 0
             ;;
-        6)
+        7)
             if [[ "$active" != "none" && "$active" != "beellama" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [7].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
                 sleep 2
                 continue
             fi
@@ -292,13 +308,13 @@ while true; do
             ./v1beellama.sh
             [[ $? -eq 42 ]] && exit 0
             ;;
-        7)
+        8)
             stop_all
             ;;
-        8)
+        9)
             check_update
             ;;
-        9)
+        10)
             exit 0
             ;;
         *)

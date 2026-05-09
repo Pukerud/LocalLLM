@@ -86,6 +86,362 @@ cleanup() {
 }
 trap cleanup INT TERM EXIT
 
+# ── Quickstart mode ───────────────────────────────────────────────────────
+
+if [[ "${1:-}" == "--quickstart" ]]; then
+
+    # Quickstart model URLs
+    QS_TARGET="Qwen3.6-27B-NEO-CODE-HERE-2T-OT-IQ4_XS.gguf"
+    QS_TARGET_URL="https://huggingface.co/DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/resolve/main/Qwen3.6-27B-NEO-CODE-HERE-2T-OT-IQ4_XS.gguf"
+    QS_DRAFT="Qwen3.6-27B-DFlash-Q5_K_M.gguf"
+    QS_DRAFT_URL="https://huggingface.co/Ardenzard/Qwen3.6-27B-DFlash-GGUF/resolve/main/Qwen3.6-27B-DFlash-Q5_K_M.gguf"
+    QS_MMPROJ="mmproj-BF16.gguf"
+    QS_MMPROJ_URL="https://huggingface.co/DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/resolve/main/mmproj-BF16.gguf"
+
+    echo ""
+    echo -e " ${BOLD}${CYAN}=============================================${RESET}"
+    echo -e " ${BOLD}${CYAN} HostLLM — Quick Start (BeeLlama DFlash)${RESET}"
+    echo -e " ${BOLD}${CYAN}=============================================${RESET}"
+    echo ""
+
+    # -- Step 1: Build binary if missing ----------------------------------
+    server_bin="./${BEELLAMA_DIR}/build/bin/llama-server"
+    if [[ ! -x "$server_bin" ]]; then
+        echo -e " ${YELLOW}[1/4]${RESET} Binary not found. Building BeeLlama.cpp..."
+        echo ""
+        install_beellama
+        if [[ ! -x "$server_bin" ]]; then
+            echo -e " ${RED}Build failed. Cannot continue.${RESET}"
+            read -p " Press Enter to exit..."
+            exit 1
+        fi
+    else
+        echo -e " ${GREEN}[1/4]${RESET} Binary ready."
+    fi
+
+    # -- Step 2: Download models if missing --------------------------------
+    missing=0
+    [[ ! -f "${MODELS_DIR}/${QS_TARGET}" ]] && missing=$((missing + 1))
+    [[ ! -f "${MODELS_DIR}/${QS_DRAFT}" ]]  && missing=$((missing + 1))
+    [[ ! -f "${MODELS_DIR}/${QS_MMPROJ}" ]] && missing=$((missing + 1))
+
+    if [[ $missing -gt 0 ]]; then
+        echo ""
+        echo -e " ${YELLOW}[2/4]${RESET} Downloading ${missing} model(s)..."
+        total_dl_gb=0
+        [[ ! -f "${MODELS_DIR}/${QS_TARGET}" ]] && total_dl_gb=$((total_dl_gb + 15))
+        [[ ! -f "${MODELS_DIR}/${QS_DRAFT}" ]]  && total_dl_gb=$((total_dl_gb + 2))
+        [[ ! -f "${MODELS_DIR}/${QS_MMPROJ}" ]] && total_dl_gb=$((total_dl_gb + 1))
+        echo "   Total download: ~${total_dl_gb} GB"
+        echo ""
+
+        if [[ ! -f "${MODELS_DIR}/${QS_TARGET}" ]]; then
+            echo "   Downloading target: ${QS_TARGET} (~15 GB)..."
+            wget --show-progress -O "${MODELS_DIR}/${QS_TARGET}" "$QS_TARGET_URL"
+            if [[ $? -ne 0 ]]; then
+                echo -e " ${RED}Target model download failed.${RESET}"
+                rm -f "${MODELS_DIR}/${QS_TARGET}"
+                read -p " Press Enter to exit..."
+                exit 1
+            fi
+        fi
+
+        if [[ ! -f "${MODELS_DIR}/${QS_DRAFT}" ]]; then
+            echo "   Downloading draft: ${QS_DRAFT} (~1.2 GB)..."
+            wget --show-progress -O "${MODELS_DIR}/${QS_DRAFT}" "$QS_DRAFT_URL"
+            if [[ $? -ne 0 ]]; then
+                echo -e " ${RED}Draft model download failed.${RESET}"
+                rm -f "${MODELS_DIR}/${QS_DRAFT}"
+                read -p " Press Enter to exit..."
+                exit 1
+            fi
+        fi
+
+        if [[ ! -f "${MODELS_DIR}/${QS_MMPROJ}" ]]; then
+            echo "   Downloading mmproj: ${QS_MMPROJ} (~0.9 GB)..."
+            wget --show-progress -O "${MODELS_DIR}/${QS_MMPROJ}" "$QS_MMPROJ_URL"
+            if [[ $? -ne 0 ]]; then
+                echo -e " ${YELLOW}mmproj download failed. Continuing without vision.${RESET}"
+                rm -f "${MODELS_DIR}/${QS_MMPROJ}"
+            fi
+        fi
+    else
+        echo -e " ${GREEN}[2/4]${RESET} All models ready."
+    fi
+
+    # -- Step 3: Detect GPUs, calculate context -----------------------------
+    echo ""
+    echo -e " ${YELLOW}[3/4]${RESET} Detecting hardware..."
+
+    GPU_COUNT=$(nvidia-smi -L 2>/dev/null | wc -l)
+    if [[ "$GPU_COUNT" -eq 0 ]]; then
+        echo -e " ${RED}No NVIDIA GPUs detected.${RESET}"
+        read -p " Press Enter to exit..."
+        exit 1
+    fi
+
+    TOTAL_VRAM_MB=0
+    while read -r vram; do
+        TOTAL_VRAM_MB=$((TOTAL_VRAM_MB + vram))
+    done < <(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null)
+    TOTAL_VRAM_GB=$((TOTAL_VRAM_MB / 1024))
+
+    GPU_NAMES=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | tr '\n' '|' | sed 's/|$//')
+
+    echo "   GPUs:        ${GPU_NAMES}"
+    echo "   Total VRAM:  ${TOTAL_VRAM_GB} GB (${GPU_COUNT} GPU(s))"
+
+    if [[ "$TOTAL_VRAM_GB" -lt 16 ]]; then
+        echo ""
+        echo -e " ${RED}Not enough VRAM. Need at least 16 GB total, found ${TOTAL_VRAM_GB} GB.${RESET}"
+        read -p " Press Enter to exit..."
+        exit 1
+    fi
+
+    # Context calculation for BeeLlama DFlash with TurboQuant
+    # IQ4_XS model ~15GB, draft ~1.2GB, mmproj on CPU
+    # turbo3_tcq gives massive compression — calibrated from real 3090 data:
+    #   24GB single GPU fits 262K ctx at 90% VRAM with Q4_K_M
+    MODEL_GB=15  # IQ4_XS
+    DRAFT_GB=2   # Q5_K_M draft
+    OVERHEAD_GB=1 # system + compute
+
+    if [[ "$GPU_COUNT" -gt 1 ]]; then
+        PER_GPU_GB=$(( TOTAL_VRAM_GB / GPU_COUNT ))
+        AVAIL_GB=$(( PER_GPU_GB - (MODEL_GB / GPU_COUNT) - (DRAFT_GB / GPU_COUNT) - OVERHEAD_GB ))
+    else
+        AVAIL_GB=$(( TOTAL_VRAM_GB - MODEL_GB - DRAFT_GB - OVERHEAD_GB ))
+    fi
+
+    if [[ "$AVAIL_GB" -lt 1 ]]; then
+        echo -e " ${YELLOW}Warning: Very tight VRAM. Context will be minimal (8K).${RESET}"
+        AVAIL_GB=0
+    fi
+
+    # TurboQuant turbo3_tcq gives ~50K ctx per GB of available VRAM
+    # (calibrated: 6GB free → 262K = ~43K/GB, use 50K for headroom)
+    CTX=$(( AVAIL_GB * 50000 ))
+    [[ $CTX -lt 8192 ]]   && CTX=8192
+    [[ $CTX -gt 262144 ]] && CTX=262144
+
+    echo "   Target:      IQ4_XS (~15 GB)"
+    echo "   Draft:       Q5_K_M (~1.2 GB)"
+    echo "   Vision:      mmproj-BF16 (CPU offload)"
+    echo "   KV cache:    turbo3_tcq"
+    echo "   Context:     ${CTX}"
+    echo "   Reasoning:   ON"
+    echo ""
+
+    # -- Step 4: Launch server --------------------------------------------
+    echo -e " ${YELLOW}[4/4]${RESET} Starting BeeLlama DFlash server..."
+    echo ""
+
+    launch_cmd=("$server_bin"
+        -m "${MODELS_DIR}/${QS_TARGET}"
+        --spec-draft-model "${MODELS_DIR}/${QS_DRAFT}"
+        --spec-type dflash
+        --spec-dflash-cross-ctx 1024
+        -np 1 --kv-unified
+        -ngl all --spec-draft-ngl all
+        -b 2048 -ub 256
+        --ctx-size "$CTX"
+        --cache-type-k turbo3_tcq --cache-type-v turbo3_tcq
+        --flash-attn on
+        --cache-ram 0 --jinja
+        --no-mmap --mlock
+        --no-host --metrics
+        --log-timestamps --log-prefix --log-colors off
+        --reasoning on
+        --temp 0.6 --top-k 20 --min-p 0.0
+        --mmproj "${MODELS_DIR}/${QS_MMPROJ}"
+        --no-mmproj-offload
+        --chat-template-kwargs '{"preserve_thinking":true}'
+        --host 0.0.0.0 --port 8080
+    )
+
+    # Only add mmproj if the file exists
+    if [[ ! -f "${MODELS_DIR}/${QS_MMPROJ}" ]]; then
+        # Remove mmproj flags
+        launch_cmd=($(printf '%s\n' "${launch_cmd[@]}" | grep -v 'mmproj' | grep -v 'no-mmproj'))
+    fi
+
+    echo " Launch command:"
+    printf '  %q' "${launch_cmd[@]}"
+    echo ""
+    echo ""
+
+    echo "BEELLAMA-QuickStart: ${QS_TARGET} + ${QS_DRAFT} [ctx=${CTX}/turbo3_tcq/GPUs=${GPU_COUNT}]" > .server_info_beellama
+
+    {
+        echo "COMMAND PROFILE: quickstart-beellama"
+        printf '%q ' "${launch_cmd[@]}"
+        echo ""
+        echo ""
+        echo "----- llama-server output -----"
+    } > "$SERVER_LOG"
+
+    nohup "${launch_cmd[@]}" >> "$SERVER_LOG" 2>&1 &
+    SERVER_PID=$!
+
+    FAILED=0
+    LOADED=0
+
+    echo " Waiting for server to load model..."
+    for i in $(seq 1 180); do
+        if ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
+            FAILED=1; break
+        fi
+        if grep -Eqi 'unknown argument|unrecognized option|invalid option|error:.*argument|usage:' "$SERVER_LOG" 2>/dev/null; then
+            kill "$SERVER_PID" >/dev/null 2>&1 || true
+            FAILED=1; break
+        fi
+        if grep -Eqi 'out of memory|failed to allocate|CUDA error' "$SERVER_LOG" 2>/dev/null; then
+            kill "$SERVER_PID" >/dev/null 2>&1 || true
+            FAILED=1; break
+        fi
+        CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8080/health" 2>/dev/null || true)
+        if [[ "$CODE" == "200" ]]; then
+            LOADED=1; break
+        fi
+        sleep 1
+    done
+
+    if [[ "$FAILED" -eq 1 ]] || ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
+        rm -f .server_info_beellama
+        echo ""
+        echo -e " ${RED}Server failed during startup.${RESET}"
+        echo ""
+        echo " Last 50 lines of ${SERVER_LOG}:"
+        echo "------------------------------------------------------------"
+        tail -n 50 "$SERVER_LOG"
+        echo "------------------------------------------------------------"
+        read -p " Press Enter to exit..."
+        exit 1
+    fi
+
+    # -- Detect local IP --------------------------------------------------
+    LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+    [[ -z "$LOCAL_IP" ]] && LOCAL_IP="localhost"
+
+    # -- Show running dashboard -------------------------------------------
+    clear
+    echo "=================================================================="
+    echo -e "  ${GREEN}${BOLD}BEELLAMA DFLASH SERVER RUNNING${RESET}"
+    echo "=================================================================="
+    echo ""
+    echo "  Model:   ${QS_TARGET}"
+    echo "  Draft:   ${QS_DRAFT}"
+    echo "  Context: ${CTX}  |  KV: turbo3_tcq  |  DFlash: cross-ctx 1024"
+    echo "  Vision:  ON (CPU offload)  |  Reasoning: ON"
+    echo "  GPUs:    ${GPU_COUNT}x (${TOTAL_VRAM_GB} GB total)"
+    echo ""
+    echo -e "  ${CYAN}${BOLD}Connect from any device on your network:${RESET}"
+    echo ""
+    echo -e "  ${BOLD}Chat UI:${RESET}       http://${LOCAL_IP}:8080"
+    echo -e "  ${BOLD}API Base:${RESET}      http://${LOCAL_IP}:8080/v1"
+    echo -e "  ${BOLD}Anthropic:${RESET}     http://${LOCAL_IP}:8080/v1/messages"
+    echo ""
+    echo -e "  ${YELLOW}API Key:${RESET} any string (e.g. sk-1234) or leave blank"
+    echo ""
+    echo -e "  ${BOLD}OpenWebUI:${RESET}    OpenAI base URL → http://${LOCAL_IP}:8080/v1"
+    echo -e "  ${BOLD}Pi / Codex:${RESET}    OPENAI_API_BASE=http://${LOCAL_IP}:8080/v1"
+    echo -e "  ${BOLD}Cline / Continue:${RESET} OpenAI compatible → http://${LOCAL_IP}:8080/v1"
+    echo -e "  ${BOLD}Anthropic SDK:${RESET}  base_url → http://${LOCAL_IP}:8080/v1"
+    echo "=================================================================="
+    echo ""
+
+    LIVE_START=22
+
+    while kill -0 "$SERVER_PID" >/dev/null 2>&1; do
+        if command -v nvidia-smi > /dev/null 2>&1; then
+            gpu_load_sum=0; vram_used=0; vram_total=0; gpu_temp_max=0; gpu_count=0
+            gpu_lines=()
+            while IFS=',' read -r load used total temp; do
+                load=$(echo "$load" | tr -d ' ')
+                used=$(echo "$used" | tr -d ' ')
+                total=$(echo "$total" | tr -d ' ')
+                temp=$(echo "$temp" | tr -d ' ')
+                pct=0; [[ "$total" -gt 0 ]] && pct=$(( (used * 100) / total ))
+                u_gb=$(awk "BEGIN {printf \"%.1f\", $used/1024}")
+                t_gb=$(awk "BEGIN {printf \"%.0f\", $total/1024}")
+                if [[ "$pct" -ge 90 ]]; then c="\033[1;31m"; elif [[ "$pct" -ge 50 ]]; then c="\033[1;33m"; else c="\033[1;32m"; fi
+                gpu_lines+=("  GPU ${gpu_count}:  ${load}%   |   VRAM: ${c}${u_gb} GB / ${t_gb} GB (${pct}%)${RESET}   |   Temp: ${temp} degC")
+                gpu_load_sum=$((gpu_load_sum + load))
+                vram_used=$((vram_used + used))
+                vram_total=$((vram_total + total))
+                [[ "$temp" -gt "$gpu_temp_max" ]] && gpu_temp_max=$temp
+                gpu_count=$((gpu_count + 1))
+            done < <(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits 2>/dev/null)
+            [[ "$gpu_count" -gt 0 ]] && vram_pct=$(( (vram_used * 100) / vram_total )) || vram_pct=0
+            vram_used_gb=$(awk "BEGIN {printf \"%.1f\", $vram_used/1024}")
+            vram_total_gb=$(awk "BEGIN {printf \"%.0f\", $vram_total/1024}")
+            if [[ "$vram_pct" -ge 90 ]]; then c_vram="\033[1;31m"; elif [[ "$vram_pct" -ge 50 ]]; then c_vram="\033[1;33m"; else c_vram="\033[1;32m"; fi
+            total_line="  TOTAL: VRAM: ${c_vram}${vram_used_gb} GB / ${vram_total_gb} GB (${vram_pct}%)${RESET}   |   GPUs: ${gpu_count}"
+        else
+            gpu_lines=("  GPU: N/A")
+            total_line="  TOTAL: N/A"
+        fi
+
+        read cpu user nice system idle iowait irq softirq steal guest < /proc/stat
+        cpu_ap=$((user+nice+system+irq+softirq+steal))
+        cpu_tp=$((user+nice+system+idle+iowait+irq+softirq+steal))
+        sleep 0.5
+        read cpu user nice system idle iowait irq softirq steal guest < /proc/stat
+        cpu_ac=$((user+nice+system+irq+softirq+steal))
+        cpu_tc=$((user+nice+system+idle+iowait+irq+softirq+steal))
+        cpu_diff=$((cpu_tc - cpu_tp))
+        cpu_adiff=$((cpu_ac - cpu_ap))
+        if [[ "$cpu_diff" -gt 0 ]]; then cpu_pct=$(( (cpu_adiff * 100) / cpu_diff )); else cpu_pct=0; fi
+
+        row=$LIVE_START
+        tput sc
+
+        tput cup $row 0; echo -e "  CPU: ${cpu_pct}%\033[K"
+        row=$((row + 1))
+        for line in "${gpu_lines[@]}"; do
+            tput cup $row 0; echo -e "${line}\033[K"
+            row=$((row + 1))
+        done
+        tput cup $row 0; echo -e "${total_line}\033[K"
+        row=$((row + 1))
+        tput cup $row 0; echo -e "\033[K"
+        row=$((row + 1))
+        tput cup $row 0; echo -e "  [1] Stop server and return to menu\033[K"
+        row=$((row + 1))
+        tput cup $row 0; echo -e "  [2] Return to menu (keep server running)\033[K"
+        row=$((row + 1))
+        tput cup $row 0; echo -e "\033[K"
+        row=$((row + 1))
+        tput cup $row 0; echo -n "  Select [1/2]: "
+        tput rc
+
+        read -t 3 -n 1 qs_choice 2>/dev/null || continue
+        echo ""
+        case "$qs_choice" in
+            1)
+                echo ""
+                echo -e "  ${YELLOW}Stopping server...${RESET}"
+                kill "$SERVER_PID" >/dev/null 2>&1 || true
+                wait "$SERVER_PID" >/dev/null 2>&1 || true
+                rm -f .server_info_beellama 2>/dev/null
+                echo -e "  ${GREEN}Server stopped.${RESET}"
+                sleep 1
+                exit 0
+                ;;
+            2)
+                exit 0
+                ;;
+        esac
+    done
+
+    # Server died
+    echo -e " ${RED}Server process exited unexpectedly.${RESET}"
+    echo " Check ${SERVER_LOG} for details."
+    rm -f .server_info_beellama 2>/dev/null
+    read -p " Press Enter to exit..."
+    exit 1
+fi
+
 # ── Dashboard monitoring ─────────────────────────────────────────────────
 
 get_cpu_usage() {
