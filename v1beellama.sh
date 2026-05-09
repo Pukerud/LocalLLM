@@ -811,18 +811,49 @@ start_beellama_server() {
 
 if [[ "${1:-}" == "--quickstart" ]]; then
 
-    # Quickstart model URLs
-    QS_TARGET="Qwen3.6-27B-NEO-CODE-HERE-2T-OT-IQ4_XS.gguf"
-    QS_TARGET_URL="https://huggingface.co/DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/resolve/main/Qwen3.6-27B-NEO-CODE-HERE-2T-OT-IQ4_XS.gguf"
+    echo ""
+    echo -e " ${BOLD}${CYAN}=============================================${RESET}"
+    echo -e " ${BOLD}${CYAN} HostLLM — Quick Start (BeeLlama DFlash)${RESET}"
+    echo -e " ${BOLD}${CYAN}=============================================${RESET}"
+    echo ""
+
+    # -- Step 0: Pick model ---------------------------------------------
+    echo -e " Pick your model:"
+    echo ""
+    echo -e "  ${BOLD}[1]${RESET} IQ4_XS  — Speed king   (~15 GB)  → 262K context, up to 105 tok/s"
+    echo -e "  ${BOLD}[2]${RESET} Q5_K_M  — Best quality (~19 GB)  → 200K context, up to 95 tok/s"
+    echo ""
+    read -p " Select [1/2]: " model_pick
+    model_pick=$(echo "$model_pick" | tr -d '[:space:]')
+
     QS_DRAFT="Qwen3.6-27B-DFlash-Q5_K_M.gguf"
     QS_DRAFT_URL="https://huggingface.co/Ardenzard/Qwen3.6-27B-DFlash-GGUF/resolve/main/Qwen3.6-27B-DFlash-Q5_K_M.gguf"
     QS_MMPROJ="mmproj-BF16.gguf"
     QS_MMPROJ_URL="https://huggingface.co/DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/resolve/main/mmproj-BF16.gguf"
 
-    echo ""
-    echo -e " ${BOLD}${CYAN}=============================================${RESET}"
-    echo -e " ${BOLD}${CYAN} HostLLM — Quick Start (BeeLlama DFlash)${RESET}"
-    echo -e " ${BOLD}${CYAN}=============================================${RESET}"
+    if [[ "$model_pick" == "2" ]]; then
+        QS_TARGET="Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q5_K_M.gguf"
+        QS_TARGET_URL="https://huggingface.co/DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/resolve/main/Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q5_K_M.gguf"
+        QS_TARGET_LABEL="Q5_K_M (~19 GB)"
+        QS_MODEL_GB=19
+        QS_MIN_VRAM=20
+        QS_CACHE_K="turbo4"
+        QS_CACHE_V="turbo3_tcq"
+        # Calibrated: 24GB GPU, 19GB model + 2GB draft = 2.8GB free → 200K ctx
+        # = ~71K ctx per GB
+        QS_CTX_PER_GB=71000
+    else
+        QS_TARGET="Qwen3.6-27B-NEO-CODE-HERE-2T-OT-IQ4_XS.gguf"
+        QS_TARGET_URL="https://huggingface.co/DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/resolve/main/Qwen3.6-27B-NEO-CODE-HERE-2T-OT-IQ4_XS.gguf"
+        QS_TARGET_LABEL="IQ4_XS (~15 GB)"
+        QS_MODEL_GB=15
+        QS_MIN_VRAM=16
+        QS_CACHE_K="turbo3_tcq"
+        QS_CACHE_V="turbo3_tcq"
+        # Calibrated: 24GB GPU, 15GB model + 2GB draft = 6.8GB free → 262K ctx
+        # = ~38K ctx per GB
+        QS_CTX_PER_GB=38000
+    fi
     echo ""
 
     # -- Step 1: Build binary if missing ----------------------------------
@@ -853,11 +884,11 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         [[ ! -f "${MODELS_DIR}/${QS_TARGET}" ]] && total_dl_gb=$((total_dl_gb + 15))
         [[ ! -f "${MODELS_DIR}/${QS_DRAFT}" ]]  && total_dl_gb=$((total_dl_gb + 2))
         [[ ! -f "${MODELS_DIR}/${QS_MMPROJ}" ]] && total_dl_gb=$((total_dl_gb + 1))
-        echo "   Total download: ~${total_dl_gb} GB"
+        echo "   Total download: ~${total_dl_gb} GB (${QS_TARGET_LABEL})"
         echo ""
 
         if [[ ! -f "${MODELS_DIR}/${QS_TARGET}" ]]; then
-            echo "   Downloading target: ${QS_TARGET} (~15 GB)..."
+            echo "   Downloading target: ${QS_TARGET}..."
             wget --show-progress -O "${MODELS_DIR}/${QS_TARGET}" "$QS_TARGET_URL"
             if [[ $? -ne 0 ]]; then
                 echo -e " ${RED}Target model download failed.${RESET}"
@@ -912,26 +943,25 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     echo "   GPUs:        ${GPU_NAMES}"
     echo "   Total VRAM:  ${TOTAL_VRAM_GB} GB (${GPU_COUNT} GPU(s))"
 
-    if [[ "$TOTAL_VRAM_GB" -lt 16 ]]; then
+    if [[ "$TOTAL_VRAM_GB" -lt "$QS_MIN_VRAM" ]]; then
         echo ""
-        echo -e " ${RED}Not enough VRAM. Need at least 16 GB total, found ${TOTAL_VRAM_GB} GB.${RESET}"
+        echo -e " ${RED}Not enough VRAM. Need at least ${QS_MIN_VRAM} GB total for ${QS_TARGET_LABEL}, found ${TOTAL_VRAM_GB} GB.${RESET}"
         read -p " Press Enter to exit..."
         exit 1
     fi
 
     # Context calculation for BeeLlama DFlash with TurboQuant
-    # IQ4_XS model ~15GB, draft ~1.2GB, mmproj on CPU
-    # turbo3_tcq gives massive compression — calibrated from real 3090 data:
-    #   24GB single GPU fits 262K ctx at 90% VRAM with Q4_K_M
-    MODEL_GB=15  # IQ4_XS
-    DRAFT_GB=2   # Q5_K_M draft
-    OVERHEAD_GB=1 # system + compute
+    # Calibrated from real 3090 (24GB) data points:
+    #   IQ4_XS: 15+2=17GB used → 6.8GB free → 262K ctx (turbo3_tcq/turbo3_tcq)  ≈ 38K/GB
+    #   Q5_K_M: 19+2=21GB used → 2.8GB free → 200K ctx (turbo4/turbo3_tcq)      ≈ 71K/GB
+    DRAFT_GB=2
+    OVERHEAD_GB=1
 
     if [[ "$GPU_COUNT" -gt 1 ]]; then
         PER_GPU_GB=$(( TOTAL_VRAM_GB / GPU_COUNT ))
-        AVAIL_GB=$(( PER_GPU_GB - (MODEL_GB / GPU_COUNT) - (DRAFT_GB / GPU_COUNT) - OVERHEAD_GB ))
+        AVAIL_GB=$(( PER_GPU_GB - (QS_MODEL_GB / GPU_COUNT) - (DRAFT_GB / GPU_COUNT) - OVERHEAD_GB ))
     else
-        AVAIL_GB=$(( TOTAL_VRAM_GB - MODEL_GB - DRAFT_GB - OVERHEAD_GB ))
+        AVAIL_GB=$(( TOTAL_VRAM_GB - QS_MODEL_GB - DRAFT_GB - OVERHEAD_GB ))
     fi
 
     if [[ "$AVAIL_GB" -lt 1 ]]; then
@@ -939,16 +969,14 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         AVAIL_GB=0
     fi
 
-    # TurboQuant turbo3_tcq gives ~50K ctx per GB of available VRAM
-    # (calibrated: 6GB free → 262K = ~43K/GB, use 50K for headroom)
-    CTX=$(( AVAIL_GB * 50000 ))
+    CTX=$(( AVAIL_GB * QS_CTX_PER_GB ))
     [[ $CTX -lt 8192 ]]   && CTX=8192
     [[ $CTX -gt 262144 ]] && CTX=262144
 
-    echo "   Target:      IQ4_XS (~15 GB)"
+    echo "   Target:      ${QS_TARGET_LABEL}"
     echo "   Draft:       Q5_K_M (~1.2 GB)"
     echo "   Vision:      mmproj-BF16 (CPU offload)"
-    echo "   KV cache:    turbo3_tcq"
+    echo "   KV cache:    K=${QS_CACHE_K}, V=${QS_CACHE_V}"
     echo "   Context:     ${CTX}"
     echo "   Reasoning:   ON"
     echo ""
@@ -966,7 +994,7 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         -ngl all --spec-draft-ngl all
         -b 2048 -ub 256
         --ctx-size "$CTX"
-        --cache-type-k turbo3_tcq --cache-type-v turbo3_tcq
+        --cache-type-k ${QS_CACHE_K} --cache-type-v ${QS_CACHE_V}
         --flash-attn on
         --cache-ram 0 --jinja
         --no-mmap --mlock
@@ -991,7 +1019,7 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     echo ""
     echo ""
 
-    echo "BEELLAMA-QuickStart: ${QS_TARGET} + ${QS_DRAFT} [ctx=${CTX}/turbo3_tcq/GPUs=${GPU_COUNT}]" > .server_info_beellama
+    echo "BEELLAMA-QuickStart: ${QS_TARGET} + ${QS_DRAFT} [ctx=${CTX}/${QS_CACHE_K}/${QS_CACHE_V}/GPUs=${GPU_COUNT}]" > .server_info_beellama
 
     {
         echo "COMMAND PROFILE: quickstart-beellama"
@@ -1052,7 +1080,7 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     echo ""
     echo "  Model:   ${QS_TARGET}"
     echo "  Draft:   ${QS_DRAFT}"
-    echo "  Context: ${CTX}  |  KV: turbo3_tcq  |  DFlash: cross-ctx 1024"
+    echo "  Context: ${CTX}  |  KV: K=${QS_CACHE_K}, V=${QS_CACHE_V}  |  DFlash: cross-ctx 1024"
     echo "  Vision:  ON (CPU offload)  |  Reasoning: ON"
     echo "  GPUs:    ${GPU_COUNT}x (${TOTAL_VRAM_GB} GB total)"
     echo ""
