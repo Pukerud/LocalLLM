@@ -992,13 +992,23 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     echo -e " ${YELLOW}[4/4]${RESET} Starting BeeLlama DFlash server..."
     echo ""
 
+    # Multi-GPU workaround: beellama.cpp GPU cross-ring D2D crashes
+    # with multiple GPUs (illegal memory access in dflash_kv_cache_update).
+    # Keep draft on CPU for multi-GPU to disable GPU ring buffer.
+    if [[ "$GPU_COUNT" -gt 1 ]]; then
+        QS_DRAFT_NGL="0"
+        echo -e " ${YELLOW}Note:${RESET} Multi-GPU detected — draft model on CPU (upstream GPU ring bug)"
+    else
+        QS_DRAFT_NGL="all"
+    fi
+
     launch_cmd=("$server_bin"
         -m "${MODELS_DIR}/${QS_TARGET}"
         --spec-draft-model "${MODELS_DIR}/${QS_DRAFT}"
         --spec-type dflash
         --spec-dflash-cross-ctx 1024
         -np 1 --kv-unified
-        -ngl all --spec-draft-ngl all
+        -ngl all --spec-draft-ngl ${QS_DRAFT_NGL}
         -b 2048 -ub 256
         --ctx-size "$CTX"
         --cache-type-k ${QS_CACHE_K} --cache-type-v ${QS_CACHE_V}
