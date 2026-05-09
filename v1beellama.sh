@@ -508,10 +508,12 @@ update_dashboard_stats() {
 
     tput sc
     tput cup 2 0
-    echo -e "   ENGINE: ${bold}BeeLlama.cpp (DFlash + TurboQuant)${reset}    |  SERVER: ${SERVER_STATUS}\033[K"
+    echo -e "   ENGINE: ${bold}BeeLlama.cpp (DFlash + TurboQuant)${reset}\033[K"
     tput cup 3 0
+    echo -e "   SERVER: ${SERVER_STATUS}\033[K"
+    tput cup 4 0
     echo -e "   CPU: ${c_cpu}${cpu_pct}%${reset}\033[K"
-    row=4
+    row=5
     for line in "${gpu_lines[@]}"; do
         tput cup $row 0
         echo -e "${line}\033[K"
@@ -531,14 +533,14 @@ monitor_loop() {
 
 setup_scroll_region() {
     clear
-    tput csr 7 "$(tput lines)"
+    tput csr 8 "$(tput lines)"
     tput cup 0 0
     echo "==========================================================================================================================="
     echo "   BEELLAMA.CPP DFLASH DASHBOARD v1.0  --  Anbeeld/beellama.cpp"
     echo "==========================================================================================================================="
-    tput cup 5 0
-    echo "==========================================================================================================================="
     tput cup 6 0
+    echo "==========================================================================================================================="
+    tput cup 7 0
     echo "   LOG OUTPUT:"
     echo "---------------------------------------------------------------------------------------------------------------------------"
 }
