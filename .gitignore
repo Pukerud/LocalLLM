@@ -35,3 +35,6 @@ beellama_compile_debug.log
 *.safetensors.index.json
 *.gguf
 *.bin
+# Benchmark logs and results
+bench_logs/
+bench_results.txt
