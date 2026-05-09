@@ -270,8 +270,30 @@ install_beellama() {
         -DCMAKE_BUILD_TYPE=Release \
         2>&1 | tee -a "../$DEBUG_LOG"
 
-    echo "--- CMAKE BUILD ---" >> "../$DEBUG_LOG"
-    cmake --build build --config Release -j$(nproc) 2>&1 | tee -a "../$DEBUG_LOG"
+    # ── Patch known build issues in beellama.cpp ──
+    echo ""
+    echo " Patching known build issues..."
+
+    # Fix 1: llama-context.cpp — auto* can't deduce between nullptr and function pointer
+    if grep -q 'const auto \* cb_eval_new = dflash_graph_hidden_ready' src/llama-context.cpp 2>/dev/null; then
+        sed -i 's|const auto \* cb_eval_new = dflash_graph_hidden_ready ? nullptr : dflash_eval_callback;|ggml_backend_sched_eval_callback cb_eval_new = dflash_graph_hidden_ready ? nullptr : dflash_eval_callback;|' src/llama-context.cpp
+        echo "   [llama-context.cpp] Fixed auto* type deduction for cb_eval_new"
+    fi
+
+    # Fix 2: server-context.cpp — missing #include <cfloat> for FLT_MAX
+    if grep -q 'FLT_MAX' tools/server/server-context.cpp 2>/dev/null && ! grep -q '#include <cfloat>' tools/server/server-context.cpp 2>/dev/null; then
+        sed -i '/#include <cmath>/i #include <cfloat>' tools/server/server-context.cpp
+        echo "   [server-context.cpp] Added missing #include <cfloat>"
+    fi
+
+    # Fix 3: test-reasoning-budget.cpp — missing #include <climits> for INT_MAX
+    if grep -q 'INT_MAX' tests/test-reasoning-budget.cpp 2>/dev/null && ! grep -q '#include <climits>' tests/test-reasoning-budget.cpp 2>/dev/null; then
+        sed -i '1i #include <climits>' tests/test-reasoning-budget.cpp
+        echo "   [test-reasoning-budget.cpp] Added missing #include <climits>"
+    fi
+
+    echo "--- CMAKE BUILD (llama-server only) ---" >> "../$DEBUG_LOG"
+    cmake --build build --config Release -j$(nproc) --target llama-server 2>&1 | tee -a "../$DEBUG_LOG"
     BUILD_STATUS=${PIPESTATUS[0]}
     cd ..
 
