@@ -85,8 +85,8 @@ Stats update live. The server stays running when you press **[2]** — access it
 
   Quick Start:
   ------------
-  [0] Quick Start           BeeLlama DFlash — up to 105 tok/s, vision, reasoning (Tested on 3090)
-  [1] Quick Start (Legacy)  MTP — up to 100 tok/s, no vision (Tested on 4090)
+  [0] Quick Start           BeeLlama DFlash — up to 105 tok/s, vision, reasoning, dual GPU (no draft) (Tested on 3090)
+  [1] Quick Start (Legacy)  MTP — up to 100 tok/s, no vision, dual GPU (Tested on 4090)
 
   Engines:
   -------
@@ -143,8 +143,8 @@ Quick Start auto-detects your GPU(s) and adjusts:
 
 | # | Engine | Script | Speed | Status | Best for |
 |---|--------|--------|------:|--------|----------|
-| **0** | **Quick Start** | `v1beellama.sh --quickstart` | **up to 105 tok/s** | ✅ | One-click BeeLlama DFlash, vision, reasoning |
-| **1** | **Quick Start (Legacy)** | `v1llama_mtp.sh --quickstart` | **up to 100 tok/s** | ✅ | One-click MTP, no vision |
+| **0** | **Quick Start** | `v1beellama.sh --quickstart` | **up to 105 tok/s** | ✅ | BeeLlama DFlash, vision, reasoning, dual GPU (no draft) |
+| **1** | **Quick Start (Legacy)** | `v1llama_mtp.sh --quickstart` | **up to 100 tok/s** | ✅ | MTP, dual GPU, no vision |
 | **2** | **llama.cpp** (ik_llama.cpp) | `v1llama_cpp.sh` | ~35-40 tok/s | ✅ Stable | Vision, max context (262K) |
 | **3** | **DFlash** (buun fork) | `v1dflash_llama_cpp.sh` | — | ❌ | Under development |
 | **4** | **vLLM** (Docker) | `v1_vllm.sh` | ~70 tok/s* | ✅ Working | Production API, tool use |
