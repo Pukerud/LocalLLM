@@ -294,40 +294,40 @@ All three can be downloaded from the dashboard menu ([5], [6], [7]).
 | Reasoning | ON | ON |
 | Vision | ON (CPU offload) | ON (CPU offload) |
 
-### Benchmarks (RTX 3090, 24 GB, 100K ctx, turbo3_tcq KV)
+### Benchmarks (RTX 3090, 24 GB, 100K ctx, turbo3_tcq KV, 2025-05-09)
 
-Benchmarked with 1024 completion tokens, `--reasoning on`, `--temp 0.6 --top-k 20`.
+_Prompt: "Write a Python function that finds the longest increasing subsequence..." | 1024 max tokens | temp=0.6 | top-k=20 | reasoning on_
 
 #### Target: Qwen3.6-27B-Q4_K_M (16 GB)
 
-| Draft | Accept Rate | Accepted/Generated | Speed (tok/s) |
-|-------|-------------|-------------------|---------------|
-| Q6_K (1.4 GB) | 47.2% | 860/1822 | **102.9** |
-| Q8_0 (1.8 GB) | 41.8% | 856/2049 | 101.7 |
-| IQ4_XS (892 MB) | **48.0%** | 853/1778 | 98.4 |
-| Q5_K_M (1.2 GB) | 41.5% | 833/2008 | 90.0 |
+| Draft | Accept Rate | Accepted / Generated | Speed (tok/s) | Prompt (tok/s) |
+|-------|-------------|---------------------|---------------|----------------|
+| Q6_K (1.4 GB) | 47.2% | 860/1822 | **102.9** | 188.4 |
+| Q8_0 (1.8 GB) | 41.8% | 856/2049 | 101.7 | 184.9 |
+| IQ4_XS (892 MB) | **48.0%** | 853/1778 | 98.4 | 187.8 |
+| Q5_K_M (1.2 GB) | 41.5% | 833/2008 | 90.0 | 184.6 |
 
 #### Target: Qwen3.6-27B-NEO-CODE-HERE-2T-OT-IQ4_XS (15 GB)
 
-| Draft | Accept Rate | Accepted/Generated | Speed (tok/s) |
-|-------|-------------|-------------------|---------------|
-| Q5_K_M (1.2 GB) | **49.1%** | 853/1736 | **104.8** |
-| Q8_0 (1.8 GB) | 44.0% | 837/1903 | 95.0 |
-| Q6_K (1.4 GB) | 43.2% | 822/1901 | 87.9 |
-| IQ4_XS (892 MB) | 40.5% | 802/1982 | 83.3 |
+| Draft | Accept Rate | Accepted / Generated | Speed (tok/s) | Prompt (tok/s) |
+|-------|-------------|---------------------|---------------|----------------|
+| Q5_K_M (1.2 GB) | **49.1%** | 853/1736 | **104.8** | 230.5 |
+| Q8_0 (1.8 GB) | 44.0% | 837/1903 | 95.0 | 212.5 |
+| Q6_K (1.4 GB) | 43.2% | 822/1901 | 87.9 | 227.5 |
+| IQ4_XS (892 MB) | 40.5% | 802/1982 | 83.3 | 242.5 |
 
 #### Target: Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q5_K_M (19 GB)
 
-| Draft | Accept Rate | Accepted/Generated | Speed (tok/s) |
-|-------|-------------|-------------------|---------------|
-| IQ4_XS (892 MB) | **42.0%** | 798/1898 | 74.1 |
-| Q8_0 (1.8 GB) | 39.8% | 817/2054 | **78.5** |
-| Q6_K (1.4 GB) | 38.8% | 814/2099 | 76.6 |
-| Q5_K_M (1.2 GB) | 38.5% | 807/2097 | 73.8 |
+| Draft | Accept Rate | Accepted / Generated | Speed (tok/s) | Prompt (tok/s) |
+|-------|-------------|---------------------|---------------|----------------|
+| IQ4_XS (892 MB) | **42.0%** | 798/1898 | 74.1 | 261.8 |
+| Q8_0 (1.8 GB) | 39.8% | 817/2054 | **78.5** | 255.0 |
+| Q6_K (1.4 GB) | 38.8% | 814/2099 | 76.6 | 255.9 |
+| Q5_K_M (1.2 GB) | 38.5% | 807/2097 | 73.8 | 258.6 |
 
-**Best overall combo:** Q4_K_M target + Q6_K draft = **102.9 tok/s** at 47.2% acceptance.
+**Best overall:** IQ4_XS target + Q5_K_M draft = **104.8 tok/s** at **49.1%** acceptance.
 
-**Best acceptance:** IQ4_XS target + Q5_K_M draft = **49.1%** acceptance at **104.8 tok/s**.
+**Best acceptance:** Q4_K_M target + IQ4_XS draft = **48.0%** at 98.4 tok/s.
 
 Run your own benchmarks with `./bench_beellama.sh`.
 
