@@ -38,3 +38,4 @@ beellama_compile_debug.log
 # Benchmark logs and results
 bench_logs/
 bench_results.txt
+bench_quality/
