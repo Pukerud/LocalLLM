@@ -16,6 +16,8 @@ detect_engine() {
         # Check which build is running by looking at server info files
         if [[ -f "${SCRIPT_DIR}/.server_info_mtp" ]]; then
             echo "mtp"
+        elif [[ -f "${SCRIPT_DIR}/.server_info_beellama" ]]; then
+            echo "beellama"
         elif [[ -f "${SCRIPT_DIR}/.server_info_dflash" ]]; then
             echo "dflash"
         else
@@ -31,6 +33,8 @@ detect_engine() {
 get_server_info() {
     if [[ -f "${SCRIPT_DIR}/.server_info_mtp" ]]; then
         cat "${SCRIPT_DIR}/.server_info_mtp"
+    elif [[ -f "${SCRIPT_DIR}/.server_info_beellama" ]]; then
+        cat "${SCRIPT_DIR}/.server_info_beellama"
     elif [[ -f "${SCRIPT_DIR}/.server_info" ]]; then
         cat "${SCRIPT_DIR}/.server_info"
     elif [[ -f "${SCRIPT_DIR}/.server_info_dflash" ]]; then
@@ -109,7 +113,7 @@ stop_all() {
         docker rm -f vllm-hostllm 2>/dev/null || true
     fi
     echo "   vLLM stopped."
-    rm -f "${SCRIPT_DIR}/.server_info" "${SCRIPT_DIR}/.server_info_dflash" "${SCRIPT_DIR}/.server_info_mtp"
+    rm -f "${SCRIPT_DIR}/.server_info" "${SCRIPT_DIR}/.server_info_dflash" "${SCRIPT_DIR}/.server_info_mtp" "${SCRIPT_DIR}/.server_info_beellama"
     echo ""
     echo -e " ${GREEN}All engines stopped.${RESET}"
     sleep 1
@@ -134,6 +138,9 @@ while true; do
     elif [[ "$active" == "mtp" ]]; then
         echo -e "  Status:  ${GREEN}llama.cpp MTP RUNNING${RESET}"
         if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
+    elif [[ "$active" == "beellama" ]]; then
+        echo -e "  Status:  ${GREEN}BeeLlama DFlash RUNNING${RESET}"
+        if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
     elif [[ "$active" == "vllm" ]]; then
         echo -e "  Status:  ${GREEN}vLLM RUNNING${RESET}"
         if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
@@ -153,12 +160,13 @@ while true; do
     echo -e "  ${BOLD}[3]${RESET} vLLM            Docker — max throughput (50-127 TPS), tool calls"
     echo -e "  ${BOLD}[4]${RESET} Lucebox DFlash  lucebox-hub — DDTree (~104 t/s on 4090)"
     echo -e "  ${BOLD}[5]${RESET} llama.cpp MTP   ggml-org/llama.cpp — native MTP speculative decoding"
+    echo -e "  ${BOLD}[6]${RESET} BeeLlama DFlash Anbeeld/beellama.cpp — DFlash + TurboQuant + vision + reasoning"
     echo ""
     echo "  Controls:"
     echo "  ---------"
-    echo -e "  ${BOLD}[6]${RESET} Kill All    Stop whatever is running"
-    echo -e "  ${BOLD}[7]${RESET} Update      Check git repo for newer version"
-    echo -e "  ${BOLD}[8]${RESET} Exit"
+    echo -e "  ${BOLD}[7]${RESET} Kill All    Stop whatever is running"
+    echo -e "  ${BOLD}[8]${RESET} Update      Check git repo for newer version"
+    echo -e "  ${BOLD}[9]${RESET} Exit"
     echo ""
 
     read -p "  Select: " choice
@@ -168,7 +176,7 @@ while true; do
         0)
             if [[ "$active" != "none" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [6].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [7].${RESET}"
                 sleep 2
                 continue
             fi
@@ -185,7 +193,7 @@ while true; do
         1)
             if [[ "$active" != "none" && "$active" != "llamacpp" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [6].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [7].${RESET}"
                 sleep 2
                 continue
             fi
@@ -202,7 +210,7 @@ while true; do
         2)
             if [[ "$active" != "none" && "$active" != "dflash" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [6].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [7].${RESET}"
                 sleep 2
                 continue
             fi
@@ -219,7 +227,7 @@ while true; do
         3)
             if [[ "$active" != "none" && "$active" != "vllm" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [6].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [7].${RESET}"
                 sleep 2
                 continue
             fi
@@ -236,7 +244,7 @@ while true; do
         4)
             if [[ "$active" != "none" && "$active" != "lucebox" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [6].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [7].${RESET}"
                 sleep 2
                 continue
             fi
@@ -253,7 +261,7 @@ while true; do
         5)
             if [[ "$active" != "none" && "$active" != "mtp" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [6].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [7].${RESET}"
                 sleep 2
                 continue
             fi
@@ -268,12 +276,29 @@ while true; do
             [[ $? -eq 42 ]] && exit 0
             ;;
         6)
-            stop_all
+            if [[ "$active" != "none" && "$active" != "beellama" ]]; then
+                echo ""
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [7].${RESET}"
+                sleep 2
+                continue
+            fi
+            if [[ ! -x "${SCRIPT_DIR}/v1beellama.sh" ]]; then
+                echo ""
+                echo -e "  ${RED}v1beellama.sh not found or not executable.${RESET}"
+                sleep 2
+                continue
+            fi
+            cd "${SCRIPT_DIR}"
+            ./v1beellama.sh
+            [[ $? -eq 42 ]] && exit 0
             ;;
         7)
-            check_update
+            stop_all
             ;;
         8)
+            check_update
+            ;;
+        9)
             exit 0
             ;;
         *)

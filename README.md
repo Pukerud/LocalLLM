@@ -6,7 +6,7 @@ https://github.com/user-attachments/assets/daa56313-deff-4664-a614-f2472aac92f6
 
 ---
 
-A collection of launch scripts to run 27B-class LLMs locally on NVIDIA GPUs. Five inference engines, one port (8080).
+A collection of launch scripts to run 27B-class LLMs locally on NVIDIA GPUs. Six inference engines, one port (8080).
 
 **🟢 NVIDIA GPUs only** — all engines require CUDA.
 
@@ -92,12 +92,13 @@ Stats update live. The server stays running when you press **[2]** — access it
   [3] vLLM            Docker — max throughput (50-127 TPS), tool calls
   [4] Lucebox DFlash  lucebox-hub — DDTree (~104 t/s on 4090)
   [5] llama.cpp MTP   ggml-org/llama.cpp — native MTP speculative decoding
+  [6] BeeLlama DFlash Anbeeld/beellama.cpp — DFlash + TurboQuant + vision + reasoning
 
   Controls:
   ---------
-  [6] Kill All    Stop whatever is running
-  [7] Update      Check git repo for newer version
-  [8] Exit
+  [7] Kill All    Stop whatever is running
+  [8] Update      Check git repo for newer version
+  [9] Exit
 
   Select:
 ```
@@ -145,10 +146,11 @@ Quick Start auto-detects your GPU(s) and adjusts:
 | **3** | **vLLM** (Docker) | `v1_vllm.sh` | ~70 tok/s* | ✅ Working | Production API, tool use |
 | **4** | **Lucebox DFlash** | `v1lucebox.sh` | **~104 tok/s** | ⚠️ Unstable | Fastest when stable |
 | **5** | **llama.cpp MTP** (PR #22673) | `v1llama_mtp.sh` | **~100 tok/s** | ✅ Working | Fast text, native MTP |
+| **6** | **BeeLlama DFlash** (Anbeeld) | `v1beellama.sh` | **~100+ tok/s** | ✅ Working | DFlash + TurboQuant/TCQ KV, vision, reasoning |
 
 All share `llama_models/` and port 8080. Only one runs at a time.
 
-**Recommended:** Engine **0** (Quick Start) or **5** (full MTP dashboard).
+**Recommended:** Engine **0** (Quick Start), **5** (MTP dashboard), or **6** (BeeLlama DFlash with TurboQuant).
 
 \* *vLLM speed varies by preset: 20K ctx ~110 tok/s, 48K ctx ~70 tok/s, 128K ctx ~55 tok/s.*
 
@@ -220,6 +222,80 @@ For users who want full control over settings. Uses [ggml-org/llama.cpp](https:/
 
 ---
 
+## Engine 6 — BeeLlama DFlash (TurboQuant + Vision + Reasoning)
+
+Uses [Anbeeld/beellama.cpp](https://github.com/Anbeeld/beellama.cpp) — a fork with DFlash speculative decoding, TurboQuant/TCQ KV cache compression, working vision, and reasoning support. Follows the [official quickstart guide](https://github.com/Anbeeld/beellama.cpp/blob/main/docs/quickstart-qwen36-dflash.md).
+
+### Advantages over other engines
+
+- **TurboQuant + TCQ KV cache** — `turbo4` (4.125 bpv) and `turbo3_tcq` (3.25 bpv) compress KV cache up to ~5× vs FP16, fitting 120K+ context in 24 GB VRAM with better precision than `q4_0`
+- **DFlash speculative decoding** — a small draft model reads hidden states from the target model via cross-attention, predicting multiple tokens ahead for verification in a single forward pass
+- **Vision works** — `--mmproj` + `--no-mmproj-offload` runs the multimodal projector on CPU, freeing GPU VRAM
+- **Reasoning ON** — thinking tokens give the drafter richer context for better predictions (`--reasoning on` + `preserve_thinking`)
+- **Adaptive draft depth** — automatically adjusts draft depth based on real-time acceptance rates
+
+### Dashboard menu
+
+```
+ --- SETUP ---
+ [0] Install / Update beellama.cpp (Anbeeld/beellama.cpp)
+
+ --- BEELLAMA DFLASH SERVER ---
+ [1] Start DFlash Server (Precision preset — Q5_K_S + turbo4 + reasoning ON)
+ [2] Start DFlash Server (Speed preset — Q4_K_M + turbo3_tcq)
+ [3] Start DFlash Server (Custom — pick everything)
+ [4] Stop Server
+
+ --- MANAGEMENT ---
+ [5] Download Target Model
+ [6] Download DFlash Draft Model
+ [7] Download mmproj (vision projector)
+ [8] Delete Model
+
+ [99] Back to Main Menu
+ [98] Exit
+```
+
+### Config presets
+
+| Preset | Target | Draft | K cache | V cache | Context | Reasoning |
+|--------|--------|-------|---------|---------|---------|----------|
+| **Precision** | Q5_K_S | Q4_K_M | turbo4 | turbo3_tcq | 122800 | ON |
+| **Speed/VRAM** | Q4_K_M | Q4_K_M | turbo3_tcq | turbo3_tcq | 131072 | ON |
+| **Custom** | manual | manual | manual | manual | manual | manual |
+
+### Required models
+
+**Target model** — from [unsloth/Qwen3.6-27B-GGUF](https://huggingface.co/unsloth/Qwen3.6-27B-GGUF):
+- `Qwen3.6-27B-Q5_K_S.gguf` (precision preset)
+- `Qwen3.6-27B-Q4_K_M.gguf` (speed/VRAM preset)
+
+**DFlash draft model** — from [spiritbuun/Qwen3.6-27B-DFlash-GGUF](https://huggingface.co/spiritbuun/Qwen3.6-27B-DFlash-GGUF) or [Ardenzard/Qwen3.6-27B-DFlash-GGUF](https://huggingface.co/Ardenzard/Qwen3.6-27B-DFlash-GGUF):
+- `Qwen3.6-27B-DFlash-Q4_K_M.gguf` (recommended, ~2.7 GB)
+- `Qwen3.6-27B-DFlash-Q5_K_M.gguf` (more precision, ~3.1 GB)
+- `Qwen3.6-27B-DFlash-IQ4_XS.gguf` (smallest, ~1.5 GB)
+
+**Multimodal projector** (optional, for vision) — from [unsloth/Qwen3.6-27B-GGUF](https://huggingface.co/unsloth/Qwen3.6-27B-GGUF):
+- `mmproj-BF16.gguf`
+
+All three can be downloaded from the dashboard menu ([5], [6], [7]).
+
+### Recommended settings (RTX 3090/4090, 24 GB)
+
+| Setting | Precision | Speed/VRAM |
+|---------|-----------|------------|
+| Target | Q5_K_S (~19 GB) | Q4_K_M (~16 GB) |
+| Draft | Q4_K_M (~2.7 GB) | Q4_K_M (~2.7 GB) |
+| Context | 122800 | 131072 |
+| K cache | turbo4 (4.125 bpv) | turbo3_tcq (3.25 bpv) |
+| V cache | turbo3_tcq (3.25 bpv) | turbo3_tcq (3.25 bpv) |
+| Cross-ctx | 1024 | 1024 |
+| `-ub` | 256 | 256 |
+| Reasoning | ON | ON |
+| Vision | ON (CPU offload) | ON (CPU offload) |
+
+---
+
 ## Directory Layout
 
 ```
@@ -231,10 +307,12 @@ For users who want full control over settings. Uses [ggml-org/llama.cpp](https:/
 ├── v1dflash_llama_cpp.sh   ← Engine 2 dashboard
 ├── v1_vllm.sh              ← Engine 3 dashboard
 ├── v1lucebox.sh            ← Engine 4 dashboard
+├── v1beellama.sh           ← Engine 6 / BeeLlama DFlash dashboard
 ├── llama_models/           ← Shared GGUF model pool
 ├── llama_cpp_mtp/          ← MTP build (gitignored)
 ├── ik_llama.cpp/           ← llama.cpp build (gitignored)
 ├── buun-llama-cpp/         ← DFlash build (gitignored)
+├── beellama-cpp/           ← BeeLlama build (gitignored)
 ├── lucebox-hub/            ← Lucebox build (gitignored)
 └── vllm_models/            ← vLLM Docker + model weights (gitignored)
 ```
@@ -246,7 +324,7 @@ For users who want full control over settings. Uses [ggml-org/llama.cpp](https:/
 - `llama_models/` is gitignored — add `.gguf` files via dashboard menus or manually.
 - MTP GGUF files must be converted with the PR #22673 converter — standard GGUFs don't have MTP layers.
 - Each engine tracks its own state via `.server_info*` files — the main menu auto-detects which is running.
-- Use **[7] Update** from the main menu to pull the latest version from GitHub.
+- Use **[8] Update** from the main menu to pull the latest version from GitHub.
 
 ## License
 
