@@ -717,10 +717,11 @@ start_beellama_server() {
         cmd+=(--chat-template-kwargs '{"preserve_thinking":true}')
     fi
 
-    # Probee args — add if the binary supports them
-    if arg_probe_valid "$server_bin" --spec-draft-temp auto; then
-        cmd+=(--spec-draft-temp auto)
-    fi
+    # Note: --spec-draft-temp is not in the reference quickstart and may affect quality.
+    # Uncomment below only if you know you want sampled DFlash.
+    # if arg_probe_valid "$server_bin" --spec-draft-temp auto; then
+    #     cmd+=(--spec-draft-temp auto)
+    # fi
 
     # State file
     echo "BEELLAMA: ${target} + Draft(${draft_model}) [ctx=${ctx}, K=${cache_k}, V=${cache_v}]" > .server_info_beellama
