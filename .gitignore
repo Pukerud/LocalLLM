@@ -35,7 +35,11 @@ beellama_compile_debug.log
 *.safetensors.index.json
 *.gguf
 *.bin
-# Benchmark logs and results
+
+# Benchmark outputs (scripts are tracked, results are not)
 bench_logs/
-bench_results.txt
+bench_results*.txt
 bench_quality/
+benchmarks/bench_logs/
+benchmarks/bench_quality/
+benchmarks/bench_results*.txt

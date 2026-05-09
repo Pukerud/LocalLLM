@@ -329,7 +329,23 @@ _Prompt: "Write a Python function that finds the longest increasing subsequence.
 
 **Best acceptance:** Q4_K_M target + IQ4_XS draft = **48.0%** at 98.4 tok/s.
 
-Run your own benchmarks with `./bench_beellama.sh`.
+Run speed benchmarks with `bash benchmarks/speed_beellama.sh`.
+
+### Quality Benchmark (RTX 3090, 24 GB, 100K ctx, turbo3_tcq KV, 2025-05-09)
+
+_Experimental automated quality test — 4 prompt classes scored automatically. Not a replacement for human evaluation. Uses fixed prompts with objective scoring criteria (code runs, answer matches, constraints counted, keywords checked). Run 3× per model due to temperature variance and report best._
+
+_Prompts: merge intervals (10 assertions), Einstein puzzle (15 clues), 8-constraint essay, CAP theorem (12 concepts) | temp=0.6 | reasoning on_
+
+| Model | Code | Reasoning | Instruction | Knowledge | **Best** | Range |
+|-------|------|-----------|-------------|-----------|---------|-------|
+| **NEO-CODE Q5_K_M** (19 GB) | 10/10 | **10/10** | **10/10** | 9/10 | **39/40** 🏆 | 35-39 |
+| NEO-CODE IQ4_XS (15 GB) | 10/10 | 10/10 | 8/10 | 9/10 | 37/40 | 37 |
+| Q4_K_M (16 GB) | 10/10 | 8/10 | 10/10 | 9/10 | 36/40 | 36-37 |
+
+**Q5_K_M is the best model** — highest peak (39/40) with perfect reasoning and instruction scores. IQ4_XS is the value pick (smallest, still 37/40). All models ace code generation.
+
+Run quality benchmarks with `bash benchmarks/quality_test.sh [port] [host]` or test all models with `bash benchmarks/quality_all_targets.sh`.
 
 ---
 
@@ -345,6 +361,11 @@ Run your own benchmarks with `./bench_beellama.sh`.
 ├── v1_vllm.sh              ← Engine 3 dashboard
 ├── v1lucebox.sh            ← Engine 4 dashboard
 ├── v1beellama.sh           ← Engine 6 / BeeLlama DFlash dashboard
+├── benchmarks/             ← Speed & quality benchmark scripts
+│   ├── BENCHMARK_STANDARD.md  ← Standard format docs
+│   ├── speed_beellama.sh      ← Speed: all target×draft combos
+│   ├── quality_test.sh        ← IQ test: code, reasoning, instruction, knowledge
+│   └── quality_all_targets.sh ← IQ test all models automatically
 ├── llama_models/           ← Shared GGUF model pool
 ├── llama_cpp_mtp/          ← MTP build (gitignored)
 ├── ik_llama.cpp/           ← llama.cpp build (gitignored)

@@ -10,6 +10,15 @@ PROMPT="Write a Python function that finds the longest increasing subsequence in
 GREEN=$(tput setaf 2); YELLOW=$(tput setaf 3); CYAN=$(tput setaf 6)
 RED=$(tput setaf 1); BOLD=$(tput bold); RESET=$(tput sgr0)
 
+# Run from repo root: cd /path/to/LocalLLM && bash benchmarks/speed_beellama.sh
+# Or from benchmarks/: cd benchmarks && bash speed_beellama.sh
+
+# Resolve repo root (one dir up from this script's location)
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "${SCRIPT_DIR}/../HostLLM.sh" ]]; then
+    cd "${SCRIPT_DIR}/.."
+fi
+
 SERVER_BIN="./beellama-cpp/build/bin/llama-server"
 MODELS_DIR="llama_models"
 LOG_DIR="bench_logs"
