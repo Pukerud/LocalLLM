@@ -970,6 +970,13 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     fi
 
     CTX=$(( AVAIL_GB * QS_CTX_PER_GB ))
+
+    # Multi-GPU safety: reduce context 10% for tensor split overhead
+    # Dual GPU has communication overhead + uneven layer distribution
+    if [[ "$GPU_COUNT" -gt 1 ]]; then
+        CTX=$(( CTX * 90 / 100 ))
+    fi
+
     [[ $CTX -lt 8192 ]]   && CTX=8192
     [[ $CTX -gt 262144 ]] && CTX=262144
 
