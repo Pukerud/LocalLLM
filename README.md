@@ -294,6 +294,43 @@ All three can be downloaded from the dashboard menu ([5], [6], [7]).
 | Reasoning | ON | ON |
 | Vision | ON (CPU offload) | ON (CPU offload) |
 
+### Benchmarks (RTX 3090, 24 GB, 100K ctx, turbo3_tcq KV)
+
+Benchmarked with 1024 completion tokens, `--reasoning on`, `--temp 0.6 --top-k 20`.
+
+#### Target: Qwen3.6-27B-Q4_K_M (16 GB)
+
+| Draft | Accept Rate | Accepted/Generated | Speed (tok/s) |
+|-------|-------------|-------------------|---------------|
+| Q6_K (1.4 GB) | 47.2% | 860/1822 | **102.9** |
+| Q8_0 (1.8 GB) | 41.8% | 856/2049 | 101.7 |
+| IQ4_XS (892 MB) | **48.0%** | 853/1778 | 98.4 |
+| Q5_K_M (1.2 GB) | 41.5% | 833/2008 | 90.0 |
+
+#### Target: Qwen3.6-27B-NEO-CODE-HERE-2T-OT-IQ4_XS (15 GB)
+
+| Draft | Accept Rate | Accepted/Generated | Speed (tok/s) |
+|-------|-------------|-------------------|---------------|
+| Q5_K_M (1.2 GB) | **49.1%** | 853/1736 | **104.8** |
+| Q8_0 (1.8 GB) | 44.0% | 837/1903 | 95.0 |
+| Q6_K (1.4 GB) | 43.2% | 822/1901 | 87.9 |
+| IQ4_XS (892 MB) | 40.5% | 802/1982 | 83.3 |
+
+#### Target: Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q5_K_M (19 GB)
+
+| Draft | Accept Rate | Accepted/Generated | Speed (tok/s) |
+|-------|-------------|-------------------|---------------|
+| IQ4_XS (892 MB) | **42.0%** | 798/1898 | 74.1 |
+| Q8_0 (1.8 GB) | 39.8% | 817/2054 | **78.5** |
+| Q6_K (1.4 GB) | 38.8% | 814/2099 | 76.6 |
+| Q5_K_M (1.2 GB) | 38.5% | 807/2097 | 73.8 |
+
+**Best overall combo:** Q4_K_M target + Q6_K draft = **102.9 tok/s** at 47.2% acceptance.
+
+**Best acceptance:** IQ4_XS target + Q5_K_M draft = **49.1%** acceptance at **104.8 tok/s**.
+
+Run your own benchmarks with `./bench_beellama.sh`.
+
 ---
 
 ## Directory Layout
