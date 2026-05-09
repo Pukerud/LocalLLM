@@ -374,12 +374,14 @@ start_beellama_server() {
     fi
     echo " Draft: $draft_model"
 
-    # Extract compatibility tokens from selected draft
+    # Extract compatibility tokens from selected draft (Qwen version like 3.6)
     draft_tokens=()
     d_low=$(echo "$draft_model" | tr '[:upper:]' '[:lower:]')
-    for tok in $(echo "$d_low" | sed 's/[-_.]/ /g'); do
-        if [[ "$tok" =~ ^[0-9]+\.[0-9]+$ ]]; then
-            draft_tokens+=("$tok")
+    # Extract version numbers like 3.6 from tokens like "qwen3.6" or plain "3.6"
+    for tok in $(echo "$d_low" | sed 's/[-_]/ /g'); do
+        ver=$(echo "$tok" | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        if [[ -n "$ver" ]]; then
+            draft_tokens+=("$ver")
         fi
     done
 
@@ -393,7 +395,8 @@ start_beellama_server() {
             [[ -e "$f" ]] || continue
             name=$(basename "$f")
             [[ "$name" == *"mmproj"* ]] && continue
-            [[ "$name" == *"dflash"* || "$name" == *"draft"* ]] && continue
+            local_name_lower=$(echo "$name" | tr '[:upper:]' '[:lower:]')
+            [[ "$local_name_lower" == *"dflash"* || "$local_name_lower" == *"draft"* ]] && continue
             size=$(du -h "$f" | cut -f1)
             raw_data+=("${name}|${size}")
         done
@@ -825,7 +828,8 @@ while true; do
                 continue
             fi
 
-            if [[ "$local_name" == *"dflash"* || "$local_name" == *"draft"* ]]; then
+            local_name_lower=$(echo "$local_name" | tr '[:upper:]' '[:lower:]')
+            if [[ "$local_name_lower" == *"dflash"* || "$local_name_lower" == *"draft"* ]]; then
                 size=$(du -h "$f" | cut -f1)
                 draft_data+=("${name}|${size}")
                 continue
@@ -842,9 +846,11 @@ while true; do
         for d_entry in "${draft_data[@]}"; do
             d_name="${d_entry%%|*}"
             d_low=$(echo "$d_name" | tr '[:upper:]' '[:lower:]')
-            for tok in $(echo "$d_low" | sed 's/[-_.]/ /g'); do
-                if [[ "$tok" =~ ^[0-9]+\.[0-9]+$ ]] || [[ "$tok" =~ ^[0-9]+b$ ]]; then
-                    draft_tokens+=("$tok")
+            # Extract version numbers like 3.6 from tokens like "qwen3.6" or plain "3.6"
+            for tok in $(echo "$d_low" | sed 's/[-_]/ /g'); do
+                ver=$(echo "$tok" | grep -oE '[0-9]+\.[0-9]+' | head -1)
+                if [[ -n "$ver" ]]; then
+                    draft_tokens+=("$ver")
                 fi
             done
         done
