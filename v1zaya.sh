@@ -526,8 +526,8 @@ start_server() {
     # Multi-GPU: recommend DP+EP for 2+ GPUs
     if [[ "$gpu_count" -ge 2 ]]; then
         echo -e " ${YELLOW}Note: For multi-GPU, Zyphra recommends DP+EP (not TP).${RESET}"
-        echo " Adding --data-parallel ${gpu_count} --enable-expert-parallel"
-        cmd+=" --data-parallel ${gpu_count} --enable-expert-parallel"
+        echo " Adding --data-parallel-size ${gpu_count} --enable-expert-parallel"
+        cmd+=" --data-parallel-size ${gpu_count} --enable-expert-parallel"
     fi
 
     echo ""
