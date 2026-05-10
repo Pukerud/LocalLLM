@@ -173,38 +173,50 @@ while true; do
 
     case $choice in
         0)
-            if [[ "$active" != "none" ]]; then
+            if [[ "$active" == "beellama" ]]; then
+                # Already running — re-enter full dashboard
+                cd "${SCRIPT_DIR}"
+                ./v1beellama.sh
+                [[ $? -eq 42 ]] && exit 0
+            elif [[ "$active" != "none" ]]; then
                 echo ""
                 echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
                 sleep 2
                 continue
+            else
+                if [[ ! -x "${SCRIPT_DIR}/v1beellama.sh" ]]; then
+                    echo ""
+                    echo -e "  ${RED}v1beellama.sh not found or not executable.${RESET}"
+                    sleep 2
+                    continue
+                fi
+                cd "${SCRIPT_DIR}"
+                ./v1beellama.sh --quickstart
+                [[ $? -eq 42 ]] && exit 0
             fi
-            if [[ ! -x "${SCRIPT_DIR}/v1beellama.sh" ]]; then
-                echo ""
-                echo -e "  ${RED}v1beellama.sh not found or not executable.${RESET}"
-                sleep 2
-                continue
-            fi
-            cd "${SCRIPT_DIR}"
-            ./v1beellama.sh --quickstart
-            [[ $? -eq 42 ]] && exit 0
             ;;
         1)
-            if [[ "$active" != "none" ]]; then
+            if [[ "$active" == "mtp" ]]; then
+                # Already running — re-enter full dashboard
+                cd "${SCRIPT_DIR}"
+                ./v1llama_mtp.sh
+                [[ $? -eq 42 ]] && exit 0
+            elif [[ "$active" != "none" ]]; then
                 echo ""
                 echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
                 sleep 2
                 continue
+            else
+                if [[ ! -x "${SCRIPT_DIR}/v1llama_mtp.sh" ]]; then
+                    echo ""
+                    echo -e "  ${RED}v1llama_mtp.sh not found or not executable.${RESET}"
+                    sleep 2
+                    continue
+                fi
+                cd "${SCRIPT_DIR}"
+                ./v1llama_mtp.sh --quickstart
+                [[ $? -eq 42 ]] && exit 0
             fi
-            if [[ ! -x "${SCRIPT_DIR}/v1llama_mtp.sh" ]]; then
-                echo ""
-                echo -e "  ${RED}v1llama_mtp.sh not found or not executable.${RESET}"
-                sleep 2
-                continue
-            fi
-            cd "${SCRIPT_DIR}"
-            ./v1llama_mtp.sh --quickstart
-            [[ $? -eq 42 ]] && exit 0
             ;;
         2)
             if [[ "$active" != "none" && "$active" != "llamacpp" ]]; then
