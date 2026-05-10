@@ -257,19 +257,44 @@ install_update() {
     echo " nvcc: $(nvcc --version 2>/dev/null | tail -1)"
 
     # --- PyTorch (build dependency for vLLM) ---
-    if ! python3 -c "import torch" > /dev/null 2>&1; then
-        echo " Installing PyTorch (required for vLLM build)..."
-        # Detect CUDA version for torch index
-        local cuda_ver
-        cuda_ver=$(nvcc --version 2>/dev/null | grep -oP 'release \K\d+\.\d+' || echo "12.4")
-        local cu_tag
-        cu_tag=$(echo "$cuda_ver" | tr -d '.')
-        # Only major version matters for torch index (cu121, cu124)
-        cu_tag="cu${cu_tag:0:4}"
-        echo " CUDA ${cuda_ver} → torch index ${cu_tag}"
-        python3 -m pip install torch --index-url "https://download.pytorch.org/whl/${cu_tag}" 2>&1 | tail -5
+    # IMPORTANT: vLLM's pip install may pull in a newer torch with wrong CUDA version.
+    # We must pin torch to match the DRIVER's CUDA capability, not nvcc's version.
+    local driver_cuda
+    driver_cuda=$(nvidia-smi 2>/dev/null | grep -oP 'CUDA Version: \K[\d.]+' || echo "12.4")
+    echo " Driver CUDA version: ${driver_cuda}"
+    # Map driver CUDA to available PyTorch wheel tags
+    # cu121, cu124, cu126, cu128 — pick the highest that driver supports
+    local torch_index
+    case "$driver_cuda" in
+        13.*) torch_index="cu130" ;;
+        12.8|12.9) torch_index="cu128" ;;
+        12.6|12.7) torch_index="cu126" ;;
+        12.4|12.5) torch_index="cu124" ;;
+        12.*) torch_index="cu121" ;;
+        *) torch_index="cu124" ;;
+    esac
+    echo " Using PyTorch wheel index: ${torch_index}"
+
+    local torch_installed
+    torch_installed=$(python3 -c 'import torch; print(torch.version.cuda)' 2>/dev/null || echo "")
+    if [[ -n "$torch_installed" ]]; then
+        # Check if installed torch CUDA matches driver
+        local torch_cu_major torch_cu_minor
+        torch_cu_major=$(echo "$torch_installed" | cut -d. -f1)
+        torch_cu_minor=$(echo "$torch_installed" | cut -d. -f2)
+        local driver_major driver_minor
+        driver_major=$(echo "$driver_cuda" | cut -d. -f1)
+        driver_minor=$(echo "$driver_cuda" | cut -d. -f2)
+        if [[ "$torch_cu_major" -gt "$driver_major" ]] || { [[ "$torch_cu_major" -eq "$driver_major" ]] && [[ "$torch_cu_minor" -gt "$driver_minor" ]]; }; then
+            echo -e " ${YELLOW}⚠ Installed torch CUDA ${torch_installed} > driver CUDA ${driver_cuda}${RESET}"
+            echo " Reinstalling PyTorch with matching CUDA version..."
+            python3 -m pip install torch --index-url "https://download.pytorch.org/whl/${torch_index}" 2>&1 | tail -5
+        else
+            echo " PyTorch $(python3 -c 'import torch; print(torch.__version__)' 2>/dev/null) CUDA ${torch_installed} — OK"
+        fi
     else
-        echo " PyTorch $(python3 -c 'import torch; print(torch.__version__)' 2>/dev/null) — OK"
+        echo " Installing PyTorch (required for vLLM build)..."
+        python3 -m pip install torch --index-url "https://download.pytorch.org/whl/${torch_index}" 2>&1 | tail -5
     fi
 
     echo ""
@@ -352,7 +377,21 @@ install_update() {
     echo " Build parallelism: MAX_JOBS=${MAX_JOBS} (${nproc_total} CPUs detected, capped for RAM safety)"
     echo ""
 
-    python3 -m pip install -U "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" 2>&1 | tee "${SCRIPT_DIR}/zaya_build.log" | tail -30
+    # Pin torch version so vLLM's deps don't pull a newer CUDA build
+    local torch_ver
+    torch_ver=$(python3 -c 'import torch; print(torch.__version__.split("+")[0])' 2>/dev/null || echo "")
+    local torch_constraint=""
+    if [[ -n "$torch_ver" ]]; then
+        torch_constraint="torch==${torch_ver}"
+        echo " Pinning torch==${torch_ver} to prevent CUDA version mismatch during vLLM install"
+    fi
+    echo ""
+
+    if [[ -n "$torch_constraint" ]]; then
+        python3 -m pip install -U "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" --constraint <(echo "$torch_constraint") 2>&1 | tee "${SCRIPT_DIR}/zaya_build.log" | tail -30
+    else
+        python3 -m pip install -U "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" 2>&1 | tee "${SCRIPT_DIR}/zaya_build.log" | tail -30
+    fi
     local rc=${PIPESTATUS[0]}
 
     # --- Cleanup temporary swap ---
