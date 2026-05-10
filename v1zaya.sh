@@ -1,10 +1,13 @@
 #!/bin/bash
 
 # =========================================================================
-# ZAYA1-8B DASHBOARD v1.0
+# ZAYA1-8B DASHBOARD v1.0  ⚠️ EXPERIMENTAL
 # Runs Zyphra/ZAYA1-8B via Zyphra's vLLM fork.
 # Novel MoE architecture: 8B total / 760M active params.
 # Requires: pip install "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr"
+#
+# ⚠️ WARNING: Zyphra's vLLM fork can HARD-CRASH the machine during install.
+#   Use at your own risk. Consider a disposable VM or container.
 # =========================================================================
 
 set +m

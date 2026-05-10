@@ -96,7 +96,7 @@ Stats update live. The server stays running when you press **[2]** — access it
   [5] Lucebox DFlash  lucebox-hub — DDTree (~104 t/s on 4090)
   [6] llama.cpp MTP   ggml-org/llama.cpp — native MTP speculative decoding
   [7] BeeLlama DFlash Anbeeld/beellama.cpp — full dashboard (manual control)
-  [8] ZAYA1-8B        Zyphra vLLM — 8B MoE, 760M active, reasoning
+  [8] ZAYA1-8B        ⚠️ EXPERIMENTAL — Zyphra vLLM, 8B MoE, 760M active, reasoning
 
   Controls:
   ---------
@@ -152,7 +152,7 @@ Quick Start auto-detects your GPU(s) and adjusts:
 | **5** | **Lucebox DFlash** | `v1lucebox.sh` | **~104 tok/s** | ⚠️ Unstable | Fastest when stable |
 | **6** | **llama.cpp MTP** (PR #22673) | `v1llama_mtp.sh` | **up to 100 tok/s** | ✅ Working | Fast text, native MTP |
 | **7** | **BeeLlama DFlash** (Anbeeld) | `v1beellama.sh` | **~100+ tok/s** | ✅ Working | Full dashboard, manual control |
-| **8** | **ZAYA1-8B** (Zyphra vLLM) | `v1zaya.sh` | TBD | ✅ Working | 8B MoE / 760M active, reasoning, tools |
+| **8** | **ZAYA1-8B** (Zyphra vLLM) | `v1zaya.sh` | TBD | ⚠️ **EXPERIMENTAL** | 8B MoE / 760M active, reasoning, tools |
 
 All share port 8080. Only one runs at a time.
 
@@ -228,7 +228,9 @@ For users who want full control over settings. Uses [ggml-org/llama.cpp](https:/
 
 ---
 
-## Engine 8 — ZAYA1-8B (Zyphra vLLM)
+## Engine 8 — ZAYA1-8B (Zyphra vLLM) ⚠️ EXPERIMENTAL
+
+> **⚠️ WARNING — EXPERIMENTAL:** Installing Zyphra's vLLM fork has been known to **crash/hard-lock the machine** during installation. Use at your own risk. Not recommended for production use. Consider using a disposable VM or container.
 
 Runs [Zyphra/ZAYA1-8B](https://huggingface.co/Zyphra/ZAYA1-8B) — a novel MoE architecture with **8B total / 760M active parameters** (16 experts, top-1 routing). Competitive with models 10× its size on math and coding benchmarks.
 
