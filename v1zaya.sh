@@ -201,21 +201,77 @@ install_update() {
 
     echo ""
     echo " Installing build dependencies..."
-    pip install -U pip wheel setuptools 2>&1 | tail -3
+
+    # --- pip bootstrap ---
+    if ! python3 -m pip --version > /dev/null 2>&1; then
+        echo " Installing pip..."
+        curl -sS https://bootstrap.pypa.io/get-pip.py | python3 2>&1 | tail -3
+    fi
+
+    # --- setuptools version compatible with torch ---
+    echo " Installing setuptools <82 (torch compatibility)..."
+    python3 -m pip install -U "setuptools<82" wheel ninja packaging 2>&1 | tail -3
+
+    # --- cmake 3.26+ required ---
+    local cmake_ver
+    cmake_ver=$(cmake --version 2>/dev/null | head -1 | grep -oP '\d+\.\d+')
+    local cmake_major cmake_minor
+    cmake_major=$(echo "$cmake_ver" | cut -d. -f1)
+    cmake_minor=$(echo "$cmake_ver" | cut -d. -f2)
+    local need_cmake=0
+    if [[ -z "$cmake_ver" ]]; then
+        need_cmake=1
+    elif [[ "$cmake_major" -lt 3 ]] || { [[ "$cmake_major" -eq 3 ]] && [[ "$cmake_minor" -lt 26 ]]; }; then
+        need_cmake=1
+    fi
+    if [[ "$need_cmake" == 1 ]]; then
+        echo " cmake ${cmake_ver:-N/A} found — vLLM requires 3.26+. Upgrading via pip..."
+        python3 -m pip install -U cmake 2>&1 | tail -3
+        # Ensure the pip-installed cmake is in PATH
+        local pip_bin
+        pip_bin=$(python3 -c "import sysconfig; print(sysconfig.get_path('scripts'))" 2>/dev/null)
+        if [[ -n "$pip_bin" && -x "${pip_bin}/cmake" ]]; then
+            export PATH="${pip_bin}:${PATH}"
+        fi
+        echo " cmake now: $(cmake --version 2>/dev/null | head -1)"
+    else
+        echo " cmake $(cmake --version 2>/dev/null | head -1) — OK"
+    fi
+
+    # --- CUDA in PATH ---
+    if ! nvcc --version > /dev/null 2>&1; then
+        if [[ -x /usr/local/cuda/bin/nvcc ]]; then
+            echo " Adding CUDA to PATH..."
+            export PATH="/usr/local/cuda/bin:${PATH}"
+            export LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}"
+        else
+            echo -e " ${RED}CUDA nvcc not found! Install CUDA Toolkit first.${RESET}"
+            sleep 3
+            return
+        fi
+    fi
+    echo " nvcc: $(nvcc --version 2>/dev/null | tail -1)"
 
     echo ""
     echo " Installing Zyphra vLLM fork (zaya1-pr branch)..."
-    echo " This will build from source — please wait..."
-    pip install -U "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" 2>&1 | tail -20
+    echo " This will build from source — please wait (10-30 min)..."
+    echo ""
+    python3 -m pip install -U "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" 2>&1 | tail -30
+    local rc=${PIPESTATUS[0]}
 
-    if [[ $? -eq 0 ]]; then
+    if [[ "$rc" -eq 0 ]]; then
         echo ""
         echo -e " ${GREEN}vLLM (Zyphra fork) installed successfully!${RESET}"
-        vllm --version 2>/dev/null
+        python3 -m vllm.entrypoints.openai.api_server --version 2>/dev/null || true
     else
         echo ""
-        echo -e " ${RED}Installation failed. Check errors above.${RESET}"
-        echo " You may need: pip install ninja packaging"
+        echo -e " ${RED}Installation failed (exit code $rc). Check errors above.${RESET}"
+        echo ""
+        echo " Common fixes:"
+        echo "  - Python 3.10+ required (current: $(python3 --version))"
+        echo "  - CUDA 12.x required (current: $(nvcc --version 2>/dev/null | tail -1))"
+        echo "  - cmake 3.26+ required (current: $(cmake --version 2>/dev/null | head -1))"
+        echo "  - 20+ GB free disk space for build"
     fi
     echo ""
     read -p " Press Enter to return to menu..."
@@ -248,7 +304,7 @@ download_model() {
     # Install huggingface-cli if needed
     if ! command -v huggingface-cli > /dev/null 2>&1; then
         echo " Installing huggingface-cli..."
-        pip install -U huggingface_hub 2>&1 | tail -3
+        python3 -m pip install -U huggingface_hub 2>&1 | tail -3
     fi
 
     mkdir -p "${LOCAL_MODEL_DIR}"
@@ -621,7 +677,7 @@ quickstart() {
     echo " [1/3] Checking Zyphra vLLM fork..."
     if ! check_vllm_zaya; then
         echo " Not installed. Installing now..."
-        pip install -U "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" 2>&1 | tail -10
+        python3 -m pip install -U "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" 2>&1 | tail -10
         if [[ $? -ne 0 ]]; then
             echo -e " ${RED}Installation failed!${RESET}"
             sleep 3
