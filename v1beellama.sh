@@ -1007,35 +1007,49 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         USE_DFLASH=true
     fi
 
-    launch_cmd=("$server_bin"
-        -m "${MODELS_DIR}/${QS_TARGET}"
-        -np 1 --kv-unified
-        -ngl all
-        -b 2048 -ub 256
-        --ctx-size "$CTX"
-        --cache-type-k ${QS_CACHE_K} --cache-type-v ${QS_CACHE_V}
-        --flash-attn on
-        --cache-ram 0 --jinja
-        --no-mmap --mlock
-        --no-host --metrics
-        --log-timestamps --log-prefix --log-colors off
-        --reasoning on
-        --temp 0.6 --top-k 20 --min-p 0.0
-        --mmproj "${MODELS_DIR}/${QS_MMPROJ}"
-        --no-mmproj-offload
-        --chat-template-kwargs '{"preserve_thinking":true}'
-        --host 0.0.0.0 --port 8080
-    )
-
-    # Add DFlash flags for single GPU only
     if [[ "$USE_DFLASH" == true ]]; then
-        # Insert DFlash flags after the model flag (position 2)
-        launch_cmd=("${launch_cmd[@]:0:2}"
+        launch_cmd=("$server_bin"
+            -m "${MODELS_DIR}/${QS_TARGET}"
             --spec-draft-model "${MODELS_DIR}/${QS_DRAFT}"
             --spec-type dflash
             --spec-dflash-cross-ctx 1024
-            --spec-draft-ngl all
-            "${launch_cmd[@]:2}")
+            -np 1 --kv-unified
+            -ngl all --spec-draft-ngl all
+            -b 2048 -ub 256
+            --ctx-size "$CTX"
+            --cache-type-k ${QS_CACHE_K} --cache-type-v ${QS_CACHE_V}
+            --flash-attn on
+            --cache-ram 0 --jinja
+            --no-mmap --mlock
+            --no-host --metrics
+            --log-timestamps --log-prefix --log-colors off
+            --reasoning on
+            --temp 0.6 --top-k 20 --min-p 0.0
+            --mmproj "${MODELS_DIR}/${QS_MMPROJ}"
+            --no-mmproj-offload
+            --chat-template-kwargs '{"preserve_thinking":true}'
+            --host 0.0.0.0 --port 8080
+        )
+    else
+        launch_cmd=("$server_bin"
+            -m "${MODELS_DIR}/${QS_TARGET}"
+            -np 1 --kv-unified
+            -ngl all
+            -b 2048 -ub 256
+            --ctx-size "$CTX"
+            --cache-type-k ${QS_CACHE_K} --cache-type-v ${QS_CACHE_V}
+            --flash-attn on
+            --cache-ram 0 --jinja
+            --no-mmap --mlock
+            --no-host --metrics
+            --log-timestamps --log-prefix --log-colors off
+            --reasoning on
+            --temp 0.6 --top-k 20 --min-p 0.0
+            --mmproj "${MODELS_DIR}/${QS_MMPROJ}"
+            --no-mmproj-offload
+            --chat-template-kwargs '{"preserve_thinking":true}'
+            --host 0.0.0.0 --port 8080
+        )
     fi
 
     # Only add mmproj if the file exists
