@@ -208,11 +208,15 @@ install_update() {
         curl -sS https://bootstrap.pypa.io/get-pip.py | python3 2>&1 | tail -3
     fi
 
+    # --- system packages ---
+    echo " Installing system build tools (ninja, g++, python3-dev)..."
+    apt-get install -y ninja-build g++ python3-dev 2>&1 | tail -3
+
     # --- setuptools version compatible with torch ---
     echo " Installing setuptools <82 (torch compatibility)..."
-    python3 -m pip install -U "setuptools<82" wheel ninja packaging 2>&1 | tail -3
+    python3 -m pip install -U "setuptools<82" wheel packaging 2>&1 | tail -3
 
-    # --- cmake 3.26+ required ---
+    # --- cmake 3.26+ required (system-wide) ---
     local cmake_ver
     cmake_ver=$(cmake --version 2>/dev/null | head -1 | grep -oP '\d+\.\d+')
     local cmake_major cmake_minor
@@ -225,14 +229,11 @@ install_update() {
         need_cmake=1
     fi
     if [[ "$need_cmake" == 1 ]]; then
-        echo " cmake ${cmake_ver:-N/A} found — vLLM requires 3.26+. Upgrading via pip..."
-        python3 -m pip install -U cmake 2>&1 | tail -3
-        # Ensure the pip-installed cmake is in PATH
-        local pip_bin
-        pip_bin=$(python3 -c "import sysconfig; print(sysconfig.get_path('scripts'))" 2>/dev/null)
-        if [[ -n "$pip_bin" && -x "${pip_bin}/cmake" ]]; then
-            export PATH="${pip_bin}:${PATH}"
-        fi
+        echo " cmake ${cmake_ver:-N/A} found — vLLM requires 3.26+. Installing system-wide..."
+        local cmake_url="https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-linux-x86_64.sh"
+        curl -sL "$cmake_url" -o /tmp/cmake-install.sh
+        bash /tmp/cmake-install.sh --prefix=/usr/local --skip-license 2>&1 | tail -3
+        rm -f /tmp/cmake-install.sh
         echo " cmake now: $(cmake --version 2>/dev/null | head -1)"
     else
         echo " cmake $(cmake --version 2>/dev/null | head -1) — OK"
@@ -252,11 +253,28 @@ install_update() {
     fi
     echo " nvcc: $(nvcc --version 2>/dev/null | tail -1)"
 
+    # --- PyTorch (build dependency for vLLM) ---
+    if ! python3 -c "import torch" > /dev/null 2>&1; then
+        echo " Installing PyTorch (required for vLLM build)..."
+        # Detect CUDA version for torch index
+        local cuda_ver
+        cuda_ver=$(nvcc --version 2>/dev/null | grep -oP 'release \K\d+\.\d+' || echo "12.4")
+        local cu_tag
+        cu_tag=$(echo "$cuda_ver" | tr -d '.')
+        # Only major version matters for torch index (cu121, cu124)
+        cu_tag="cu${cu_tag:0:4}"
+        echo " CUDA ${cuda_ver} → torch index ${cu_tag}"
+        python3 -m pip install torch --index-url "https://download.pytorch.org/whl/${cu_tag}" 2>&1 | tail -5
+    else
+        echo " PyTorch $(python3 -c 'import torch; print(torch.__version__)' 2>/dev/null) — OK"
+    fi
+
     echo ""
     echo " Installing Zyphra vLLM fork (zaya1-pr branch)..."
     echo " This will build from source — please wait (10-30 min)..."
+    echo " Full build log: ${SCRIPT_DIR}/zaya_build.log"
     echo ""
-    python3 -m pip install -U "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" 2>&1 | tail -30
+    python3 -m pip install -U "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" 2>&1 | tee "${SCRIPT_DIR}/zaya_build.log" | tail -30
     local rc=${PIPESTATUS[0]}
 
     if [[ "$rc" -eq 0 ]]; then
