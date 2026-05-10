@@ -181,7 +181,7 @@ while true; do
     echo -e "  ${BOLD}[5]${RESET} Lucebox           lucebox-hub — DDTree speculative decoding"
     echo -e "  ${BOLD}[6]${RESET} MTP               ggml-org/llama.cpp — native MTP speculative decoding"
     echo -e "  ${BOLD}[7]${RESET} BeeLlama          Anbeeld/beellama.cpp — full dashboard (manual control)"
-    echo -e "  ${BOLD}[8]${RESET} ZAYA1-8B          Zyphra vLLM — 8B MoE, 760M active, reasoning"
+    echo -e "  ${BOLD}[8]${RESET} ZAYA1-8B          ${YELLOW}${BOLD}⚠ EXPERIMENTAL${RESET} — Zyphra vLLM, 8B MoE, can crash on install"
     echo ""
     echo "  ─────────────────────────"
     echo -e "  ${BOLD}[9]${RESET} Kill All          ${BOLD}[10]${RESET} Update          ${BOLD}[11]${RESET} Exit"
@@ -350,6 +350,17 @@ while true; do
                 echo ""
                 echo -e "  ${RED}v1zaya.sh not found or not executable.${RESET}"
                 sleep 2
+                continue
+            fi
+            echo ""
+            echo -e "  ${YELLOW}${BOLD}⚠ WARNING — EXPERIMENTAL${RESET}"
+            echo -e "  ${YELLOW}Zyphra's vLLM fork can HARD-CRASH the machine during install.${RESET}"
+            echo -e "  ${YELLOW}Use at your own risk. Consider a disposable VM or container.${RESET}"
+            echo ""
+            read -p "  Continue anyway? (y/N): " confirm_zaya
+            if [[ "$confirm_zaya" != "y" && "$confirm_zaya" != "Y" ]]; then
+                echo "  Cancelled."
+                sleep 1
                 continue
             fi
             cd "${SCRIPT_DIR}"
