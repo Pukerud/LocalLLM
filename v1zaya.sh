@@ -287,14 +287,14 @@ install_update() {
         driver_minor=$(echo "$driver_cuda" | cut -d. -f2)
         if [[ "$torch_cu_major" -gt "$driver_major" ]] || { [[ "$torch_cu_major" -eq "$driver_major" ]] && [[ "$torch_cu_minor" -gt "$driver_minor" ]]; }; then
             echo -e " ${YELLOW}⚠ Installed torch CUDA ${torch_installed} > driver CUDA ${driver_cuda}${RESET}"
-            echo " Reinstalling PyTorch with matching CUDA version..."
-            python3 -m pip install torch --index-url "https://download.pytorch.org/whl/${torch_index}" 2>&1 | tail -5
+            echo " Reinstalling PyTorch with matching CUDA version (force-reinstall)..."
+            python3 -m pip install --force-reinstall torch --index-url "https://download.pytorch.org/whl/${torch_index}" 2>&1 | tail -5
         else
             echo " PyTorch $(python3 -c 'import torch; print(torch.__version__)' 2>/dev/null) CUDA ${torch_installed} — OK"
         fi
     else
-        echo " Installing PyTorch (required for vLLM build)..."
-        python3 -m pip install torch --index-url "https://download.pytorch.org/whl/${torch_index}" 2>&1 | tail -5
+        echo " Installing PyTorch (required for vLLM build, force-reinstall)..."
+        python3 -m pip install --force-reinstall torch --index-url "https://download.pytorch.org/whl/${torch_index}" 2>&1 | tail -5
     fi
 
     echo ""
