@@ -6,6 +6,7 @@ llama_cpp_mtp/
 
 # Model files (GGUF — large binary)
 llama_models/
+zaya_models/
 # vllm_models/  — un-ignored: compose files and genesis patches tracked
 # large model weights (.safetensors) still excluded below
 
@@ -14,6 +15,7 @@ llama_models/
 .server_info_dflash
 .server_info_mtp
 .server_info_beellama
+.server_info_zaya
 .server_compose
 server.log
 server_dflash.log

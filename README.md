@@ -6,7 +6,7 @@ https://github.com/user-attachments/assets/daa56313-deff-4664-a614-f2472aac92f6
 
 ---
 
-A collection of launch scripts to run 27B-class LLMs locally on NVIDIA GPUs. Six inference engines, one port (8080).
+A collection of launch scripts to run LLMs locally on NVIDIA GPUs. Eight inference engines, one port (8080).
 
 **🟢 NVIDIA GPUs only** — all engines require CUDA.
 
@@ -96,12 +96,13 @@ Stats update live. The server stays running when you press **[2]** — access it
   [5] Lucebox DFlash  lucebox-hub — DDTree (~104 t/s on 4090)
   [6] llama.cpp MTP   ggml-org/llama.cpp — native MTP speculative decoding
   [7] BeeLlama DFlash Anbeeld/beellama.cpp — full dashboard (manual control)
+  [8] ZAYA1-8B        Zyphra vLLM — 8B MoE, 760M active, reasoning
 
   Controls:
   ---------
-  [8] Kill All    Stop whatever is running
-  [9] Update      Check git repo for newer version
-  [10] Exit
+  [9] Kill All    Stop whatever is running
+  [10] Update      Check git repo for newer version
+  [11] Exit
 
   Select:
 ```
@@ -151,8 +152,9 @@ Quick Start auto-detects your GPU(s) and adjusts:
 | **5** | **Lucebox DFlash** | `v1lucebox.sh` | **~104 tok/s** | ⚠️ Unstable | Fastest when stable |
 | **6** | **llama.cpp MTP** (PR #22673) | `v1llama_mtp.sh` | **up to 100 tok/s** | ✅ Working | Fast text, native MTP |
 | **7** | **BeeLlama DFlash** (Anbeeld) | `v1beellama.sh` | **~100+ tok/s** | ✅ Working | Full dashboard, manual control |
+| **8** | **ZAYA1-8B** (Zyphra vLLM) | `v1zaya.sh` | TBD | ✅ Working | 8B MoE / 760M active, reasoning, tools |
 
-All share `llama_models/` and port 8080. Only one runs at a time.
+All share port 8080. Only one runs at a time.
 
 **Recommended:** Engine **0** (Quick Start) for best speed + quality + vision, or **7** (BeeLlama full dashboard) for manual control.
 
@@ -223,6 +225,62 @@ For users who want full control over settings. Uses [ggml-org/llama.cpp](https:/
 | KV cache | **q4_0** | Fits 256K in 24GB |
 | MTP tokens | **5** | Speculative lookahead |
 | Template | **Fixed jinja v9** | Bundled, fixes 7 bugs |
+
+---
+
+## Engine 8 — ZAYA1-8B (Zyphra vLLM)
+
+Runs [Zyphra/ZAYA1-8B](https://huggingface.co/Zyphra/ZAYA1-8B) — a novel MoE architecture with **8B total / 760M active parameters** (16 experts, top-1 routing). Competitive with models 10× its size on math and coding benchmarks.
+
+Uses [Zyphra's vLLM fork](https://github.com/Zyphra/vllm/tree/zaya1-pr) — the architecture (MoE + Mamba cache + CCA + EDA + MOD) is not supported by llama.cpp or any GGUF-based engine.
+
+### Quickstart
+
+```bash
+# 1. Install Zyphra's vLLM fork (builds from source, ~10-20 min)
+pip install "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr"
+
+# 2. Start the server
+vllm serve Zyphra/ZAYA1-8B --port 8080 \
+   --mamba-cache-dtype float32 --dtype bfloat16 \
+   --reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser zaya_xml
+```
+
+Or use the dashboard: `./HostLLM.sh` → press **[8]**.
+
+### Dashboard menu
+
+```
+ [0] Install / Update Zyphra vLLM fork
+ [1] Start Server (local model)
+ [2] Start Server (from HuggingFace Hub)
+ [5] Download Model (~16.5 GB)
+ [D] Delete Model
+ [6] Stop Server
+ [7] Quick Benchmark
+ [8] View Server Logs
+ [s] Setup Status
+```
+
+### Key specs
+
+| Property | Value |
+|----------|-------|
+| Total parameters | 8.4B |
+| Active per token | 760M |
+| Architecture | MoE (16 experts, top-1) + Mamba cache + CCA |
+| Disk size (bf16) | 16.5 GB |
+| VRAM needed | ~18 GB (fits 3090/4090) |
+| Context window | 131K |
+| Reasoning | Yes (qwen3 parser) |
+| Tool calls | Yes (zaya_xml parser) |
+
+### Recommended sampling
+
+| Use case | Temperature | top-p | top-k |
+|----------|------------|-------|-------|
+| General / math | 1.0 | 0.95 | -1 |
+| Code / agent | 0.6 | 0.95 | -1 |
 
 ---
 
@@ -365,6 +423,7 @@ Run quality benchmarks with `bash benchmarks/quality_test.sh [port] [host]` or t
 ├── v1_vllm.sh              ← Engine 3 dashboard
 ├── v1lucebox.sh            ← Engine 4 dashboard
 ├── v1beellama.sh           ← Engine 0/7 — Quick Start + full dashboard
+├── v1zaya.sh               ← Engine 8 — ZAYA1-8B (Zyphra vLLM)
 ├── benchmarks/             ← Speed & quality benchmark scripts
 │   ├── BENCHMARK_STANDARD.md  ← Standard format docs
 │   ├── speed_beellama.sh      ← Speed: all target×draft combos
@@ -377,6 +436,7 @@ Run quality benchmarks with `bash benchmarks/quality_test.sh [port] [host]` or t
 ├── beellama-cpp/           ← BeeLlama build (gitignored)
 ├── lucebox-hub/            ← Lucebox build (gitignored)
 └── vllm_models/            ← vLLM Docker + model weights (gitignored)
+├── zaya_models/            ← ZAYA1-8B model weights (gitignored)
 ```
 
 ## Notes

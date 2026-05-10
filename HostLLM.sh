@@ -22,6 +22,8 @@ detect_engine() {
         else
             echo "llamacpp"
         fi
+    elif pgrep -f "vllm.*ZAYA1-8B\|vllm.*Zyphra" > /dev/null 2>&1; then
+        echo "zaya"
     elif docker ps --filter "name=vllm-hostllm" --format '{{.Names}}' 2>/dev/null | grep -q "vllm-hostllm"; then
         echo "vllm"
     else
@@ -34,6 +36,8 @@ get_server_info() {
         cat "${SCRIPT_DIR}/.server_info_mtp"
     elif [[ -f "${SCRIPT_DIR}/.server_info_beellama" ]]; then
         cat "${SCRIPT_DIR}/.server_info_beellama"
+    elif [[ -f "${SCRIPT_DIR}/.server_info_zaya" ]]; then
+        cat "${SCRIPT_DIR}/.server_info_zaya"
     elif [[ -f "${SCRIPT_DIR}/.server_info" ]]; then
         cat "${SCRIPT_DIR}/.server_info"
     elif [[ -f "${SCRIPT_DIR}/.server_info_dflash" ]]; then
@@ -111,7 +115,18 @@ stop_all() {
         docker rm -f vllm-hostllm 2>/dev/null || true
     fi
     echo "   vLLM stopped."
-    rm -f "${SCRIPT_DIR}/.server_info" "${SCRIPT_DIR}/.server_info_dflash" "${SCRIPT_DIR}/.server_info_mtp" "${SCRIPT_DIR}/.server_info_beellama"
+    rm -f "${SCRIPT_DIR}/.server_info" "${SCRIPT_DIR}/.server_info_dflash" "${SCRIPT_DIR}/.server_info_mtp" "${SCRIPT_DIR}/.server_info_beellama" "${SCRIPT_DIR}/.server_info_zaya"
+    # Also kill ZAYA vLLM process if running
+    pids=$(pgrep -f "vllm.*ZAYA1-8B\|vllm.*Zyphra" 2>/dev/null)
+    if [[ -n "$pids" ]]; then
+        for pid in $pids; do kill "$pid" 2>/dev/null; done
+        sleep 1
+        pids=$(pgrep -f "vllm.*ZAYA1-8B\|vllm.*Zyphra" 2>/dev/null)
+        if [[ -n "$pids" ]]; then
+            for pid in $pids; do kill -9 "$pid" 2>/dev/null; done
+        fi
+        echo "   ZAYA vLLM stopped."
+    fi
     echo ""
     echo -e " ${GREEN}All engines stopped.${RESET}"
     sleep 1
@@ -139,6 +154,9 @@ while true; do
     elif [[ "$active" == "beellama" ]]; then
         echo -e "  Status:  ${GREEN}BeeLlama DFlash RUNNING${RESET}"
         if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
+    elif [[ "$active" == "zaya" ]]; then
+        echo -e "  Status:  ${GREEN}ZAYA1-8B RUNNING${RESET}"
+        if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
     elif [[ "$active" == "vllm" ]]; then
         echo -e "  Status:  ${GREEN}vLLM RUNNING${RESET}"
         if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
@@ -163,9 +181,10 @@ while true; do
     echo -e "  ${BOLD}[5]${RESET} Lucebox           lucebox-hub — DDTree speculative decoding"
     echo -e "  ${BOLD}[6]${RESET} MTP               ggml-org/llama.cpp — native MTP speculative decoding"
     echo -e "  ${BOLD}[7]${RESET} BeeLlama          Anbeeld/beellama.cpp — full dashboard (manual control)"
+    echo -e "  ${BOLD}[8]${RESET} ZAYA1-8B          Zyphra vLLM — 8B MoE, 760M active, reasoning"
     echo ""
     echo "  ─────────────────────────"
-    echo -e "  ${BOLD}[8]${RESET} Kill All          ${BOLD}[9]${RESET} Update          ${BOLD}[10]${RESET} Exit"
+    echo -e "  ${BOLD}[9]${RESET} Kill All          ${BOLD}[10]${RESET} Update          ${BOLD}[11]${RESET} Exit"
     echo ""
 
     read -p "  Select: " choice
@@ -180,7 +199,7 @@ while true; do
                 [[ $? -eq 42 ]] && exit 0
             elif [[ "$active" != "none" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
                 sleep 2
                 continue
             else
@@ -203,7 +222,7 @@ while true; do
                 [[ $? -eq 42 ]] && exit 0
             elif [[ "$active" != "none" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
                 sleep 2
                 continue
             else
@@ -221,7 +240,7 @@ while true; do
         2)
             if [[ "$active" != "none" && "$active" != "llamacpp" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
                 sleep 2
                 continue
             fi
@@ -238,7 +257,7 @@ while true; do
         3)
             if [[ "$active" != "none" && "$active" != "dflash" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
                 sleep 2
                 continue
             fi
@@ -255,7 +274,7 @@ while true; do
         4)
             if [[ "$active" != "none" && "$active" != "vllm" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
                 sleep 2
                 continue
             fi
@@ -272,7 +291,7 @@ while true; do
         5)
             if [[ "$active" != "none" && "$active" != "lucebox" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
                 sleep 2
                 continue
             fi
@@ -289,7 +308,7 @@ while true; do
         6)
             if [[ "$active" != "none" && "$active" != "mtp" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
                 sleep 2
                 continue
             fi
@@ -306,7 +325,7 @@ while true; do
         7)
             if [[ "$active" != "none" && "$active" != "beellama" ]]; then
                 echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [8].${RESET}"
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
                 sleep 2
                 continue
             fi
@@ -321,12 +340,29 @@ while true; do
             [[ $? -eq 42 ]] && exit 0
             ;;
         8)
-            stop_all
+            if [[ "$active" != "none" && "$active" != "zaya" ]]; then
+                echo ""
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
+                sleep 2
+                continue
+            fi
+            if [[ ! -x "${SCRIPT_DIR}/v1zaya.sh" ]]; then
+                echo ""
+                echo -e "  ${RED}v1zaya.sh not found or not executable.${RESET}"
+                sleep 2
+                continue
+            fi
+            cd "${SCRIPT_DIR}"
+            ./v1zaya.sh
+            [[ $? -eq 42 ]] && exit 0
             ;;
         9)
-            check_update
+            stop_all
             ;;
         10)
+            check_update
+            ;;
+        11)
             exit 0
             ;;
         *)
