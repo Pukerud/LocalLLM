@@ -277,8 +277,92 @@ install_update() {
     echo " This will build from source — please wait (10-30 min)..."
     echo " Full build log: ${SCRIPT_DIR}/zaya_build.log"
     echo ""
+
+    # --- Memory safety: pre-flight check ---
+    local mem_avail_kb
+    mem_avail_kb=$(awk '/MemAvailable/ {print $2}' /proc/meminfo)
+    local mem_avail_gb=$((mem_avail_kb / 1024 / 1024))
+    local swap_total_kb
+    swap_total_kb=$(awk '/SwapTotal/ {print $2}' /proc/meminfo)
+    local swap_total_gb=$((swap_total_kb / 1024 / 1024))
+    local need_gb=30  # vLLM build needs ~30-40GB peak
+
+    echo -e " ${CYAN}Memory pre-flight check:${RESET}"
+    echo "   Available RAM: ${mem_avail_gb} GB"
+    echo "   Current swap:  ${swap_total_gb} GB"
+    echo "   Recommended:   ${need_gb} GB free (RAM + swap)"
+    echo ""
+
+    local ZAYA_SWAPFILE=""
+    local total_usable=$((mem_avail_gb + swap_total_gb))
+
+    if [[ ${total_usable} -lt ${need_gb} ]]; then
+        local deficit=$(( need_gb - total_usable ))
+        local swap_add=$(( deficit + 8 ))  # add 8GB extra padding
+        echo -e " ${YELLOW}⚠ Low memory! ${mem_avail_gb}GB RAM + ${swap_total_gb}GB swap = ${total_usable}GB (need ${need_gb}GB)${RESET}"
+        echo -e " ${YELLOW}  Without intervention, the build WILL likely OOM and may hard-lock the machine.${RESET}"
+        echo ""
+        echo " Options:"
+        echo "  [1] Auto-create ${swap_add}GB swap file (recommended, cleaned up after build)"
+        echo "  [2] Continue anyway (DANGEROUS — may crash)"
+        echo "  [3] Abort"
+        echo ""
+        read -p "  Choose [1/2/3]: " mem_choice
+        case "$mem_choice" in
+            1)
+                # Find a place for swap file
+                ZAYA_SWAPFILE="/zaya_swap.tmp"
+                if [[ ! -w / ]]; then
+                    ZAYA_SWAPFILE="/tmp/zaya_swap.tmp"
+                fi
+                echo ""
+                echo " Creating ${swap_add}GB swap file at ${ZAYA_SWAPFILE}..."
+                dd if=/dev/zero of="${ZAYA_SWAPFILE}" bs=1M count=$((swap_add * 1024)) status=progress 2>&1 | tail -3
+                chmod 600 "${ZAYA_SWAPFILE}"
+                mkswap "${ZAYA_SWAPFILE}" 2>&1 | tail -1
+                swapon "${ZAYA_SWAPFILE}" 2>&1 | tail -1
+                local new_swap_gb
+                new_swap_gb=$(awk '/SwapTotal/ {printf "%.0f", $2/1024/1024}' /proc/meminfo)
+                echo -e " ${GREEN}Swap active: ${new_swap_gb} GB total swap now available.${RESET}"
+                echo ""
+                ;;
+            2)
+                echo -e " ${YELLOW}Continuing at your own risk...${RESET}"
+                ;;
+            *)
+                echo " Aborted."
+                sleep 1
+                return
+                ;;
+        esac
+    else
+        echo -e " ${GREEN}Memory OK — ${total_usable}GB usable (RAM + swap).${RESET}"
+        echo ""
+    fi
+
+    # --- Limit MAX_JOBS to reduce peak RAM ---
+    # Default ninja uses all CPU cores, each ~2-4GB RAM.
+    # Cap at half the available cores, max 4.
+    local nproc_total
+    nproc_total=$(nproc 2>/dev/null || echo 4)
+    local max_jobs=$(( nproc_total / 2 ))
+    if [[ ${max_jobs} -gt 4 ]]; then max_jobs=4; fi
+    if [[ ${max_jobs} -lt 1 ]]; then max_jobs=1; fi
+    export MAX_JOBS=${max_jobs}
+    echo " Build parallelism: MAX_JOBS=${MAX_JOBS} (${nproc_total} CPUs detected, capped for RAM safety)"
+    echo ""
+
     python3 -m pip install -U "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" 2>&1 | tee "${SCRIPT_DIR}/zaya_build.log" | tail -30
     local rc=${PIPESTATUS[0]}
+
+    # --- Cleanup temporary swap ---
+    if [[ -n "${ZAYA_SWAPFILE}" && -f "${ZAYA_SWAPFILE}" ]]; then
+        echo ""
+        echo " Cleaning up temporary swap file..."
+        swapoff "${ZAYA_SWAPFILE}" 2>/dev/null
+        rm -f "${ZAYA_SWAPFILE}"
+        echo -e " ${GREEN}Swap file removed.${RESET}"
+    fi
 
     if [[ "$rc" -eq 0 ]]; then
         echo ""
