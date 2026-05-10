@@ -445,9 +445,9 @@ download_model() {
         rm -rf "${LOCAL_MODEL_DIR}"
     fi
 
-    # Install huggingface-cli if needed
-    if ! command -v huggingface-cli > /dev/null 2>&1; then
-        echo " Installing huggingface-cli..."
+    # Install huggingface hub tools if needed
+    if ! command -v hf > /dev/null 2>&1 && ! command -v huggingface-cli > /dev/null 2>&1; then
+        echo " Installing huggingface_hub..."
         python3 -m pip install -U huggingface_hub 2>&1 | tail -3
     fi
 
@@ -456,7 +456,12 @@ download_model() {
     echo " Downloading... (this will take a while for 16.5 GB)"
     echo ""
 
-    huggingface-cli download "${MODEL_ID}" --local-dir "${LOCAL_MODEL_DIR}"
+    # Use new 'hf' CLI if available, fall back to deprecated huggingface-cli
+    if command -v hf > /dev/null 2>&1; then
+        hf download "${MODEL_ID}" --local-dir "${LOCAL_MODEL_DIR}"
+    else
+        huggingface-cli download "${MODEL_ID}" --local-dir "${LOCAL_MODEL_DIR}"
+    fi
 
     if [[ $? -eq 0 ]]; then
         echo ""
