@@ -1007,6 +1007,20 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         USE_DFLASH=true
     fi
 
+    # -- Template setup -----------------------------------------------
+    BUNDLED_TEMPLATE="chat_templates/qwen3.6-chat_template-v9.jinja"
+    TEMPLATE_FLAGS=()
+    if [[ -f "$BUNDLED_TEMPLATE" ]]; then
+        if arg_probe_valid "$server_bin" --chat-template-file "$BUNDLED_TEMPLATE"; then
+            TEMPLATE_FLAGS=(--chat-template-file "$BUNDLED_TEMPLATE")
+            echo -e " ${GREEN}Template:${RESET} Using bundled Qwen 3.6 v9 (fixed jinja)"
+        else
+            echo -e " ${YELLOW}Template:${RESET} --chat-template-file not supported, using built-in"
+        fi
+    else
+        echo -e " ${YELLOW}Template:${RESET} Bundled template not found, using built-in"
+    fi
+
     if [[ "$USE_DFLASH" == true ]]; then
         launch_cmd=("$server_bin"
             -m "${MODELS_DIR}/${QS_TARGET}"
@@ -1025,6 +1039,7 @@ if [[ "${1:-}" == "--quickstart" ]]; then
             --log-timestamps --log-prefix --log-colors off
             --reasoning on
             --temp 0.6 --top-k 20 --min-p 0.0
+            ${TEMPLATE_FLAGS[@]:-}
             --mmproj "${MODELS_DIR}/${QS_MMPROJ}"
             --no-mmproj-offload
             --chat-template-kwargs '{"preserve_thinking":true}'
@@ -1045,6 +1060,7 @@ if [[ "${1:-}" == "--quickstart" ]]; then
             --log-timestamps --log-prefix --log-colors off
             --reasoning on
             --temp 0.6 --top-k 20 --min-p 0.0
+            ${TEMPLATE_FLAGS[@]:-}
             --mmproj "${MODELS_DIR}/${QS_MMPROJ}"
             --no-mmproj-offload
             --chat-template-kwargs '{"preserve_thinking":true}'
