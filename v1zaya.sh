@@ -592,6 +592,17 @@ start_server() {
     cmd+=" --port ${PORT}"
     cmd+=" --mamba-cache-dtype float32"
     cmd+=" --dtype bfloat16"
+
+    # ZAYA advertises 131K context, but that does not fit on a 24GB GPU after
+    # weights + CUDA graphs. vLLM will fail during KV-cache init unless max length
+    # is reduced. 32K is a safe default for RTX 3090/4090-class single GPUs.
+    local max_model_len="32768"
+    if [[ "$gpu_count" -ge 2 ]]; then
+        max_model_len="65536"
+    fi
+    cmd+=" --max-model-len ${max_model_len}"
+    cmd+=" --gpu-memory-utilization 0.95"
+
     cmd+=" --reasoning-parser qwen3"
     cmd+=" --enable-auto-tool-choice"
     cmd+=" --tool-call-parser zaya_xml"
