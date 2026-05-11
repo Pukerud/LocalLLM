@@ -413,6 +413,12 @@ install_update() {
     python3 -m pip install --force-reinstall "torch==${vllm_torch_ver}" --index-url "https://download.pytorch.org/whl/${vllm_torch_index}" 2>&1 | tail -5
     echo ""
 
+    # torchvision must match torch's CUDA wheel. If a CPU or older torchvision remains,
+    # importing vLLM can fail with: RuntimeError: operator torchvision::nms does not exist
+    echo " Installing matching torchvision==0.26.0 from ${vllm_torch_index} index..."
+    python3 -m pip install --force-reinstall --no-deps "torchvision==0.26.0" --index-url "https://download.pytorch.org/whl/${vllm_torch_index}" 2>&1 | tail -5
+    echo ""
+
     echo " Installing Zyphra vLLM fork (no torch constraint — let it use the pre-installed torch)"
     python3 -m pip install -U "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" 2>&1 | tee "${SCRIPT_DIR}/zaya_build.log" | tail -30
     local rc=${PIPESTATUS[0]}
