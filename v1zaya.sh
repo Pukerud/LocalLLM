@@ -377,21 +377,34 @@ install_update() {
     echo " Build parallelism: MAX_JOBS=${MAX_JOBS} (${nproc_total} CPUs detected, capped for RAM safety)"
     echo ""
 
-    # Pin torch version so vLLM's deps don't pull a newer CUDA build
-    local torch_ver
-    torch_ver=$(python3 -c 'import torch; print(torch.__version__.split("+")[0])' 2>/dev/null || echo "")
-    local torch_constraint=""
-    if [[ -n "$torch_ver" ]]; then
-        torch_constraint="torch==${torch_ver}"
-        echo " Pinning torch==${torch_ver} to prevent CUDA version mismatch during vLLM install"
+    # vLLM (Zyphra fork) requires torch==2.11.0, which is only on cu126+.
+    # Pre-install the correct torch so pip doesn't try to pull a conflicting version.
+    local vllm_torch_ver="2.11.0"
+    # Map driver CUDA to the best torch wheel index for the required version
+    local vllm_torch_index
+    case "$driver_cuda" in
+        13.*) vllm_torch_index="cu130" ;;
+        12.8|12.9) vllm_torch_index="cu126" ;;
+        12.6|12.7) vllm_torch_index="cu126" ;;
+        12.4|12.5) vllm_torch_index="cu124" ;;
+        12.*) vllm_torch_index="cu121" ;;
+        *) vllm_torch_index="cu126" ;;
+    esac
+
+    # Check if cu124 has the required torch version; if not, fall back to cu126
+    local has_torch_ver
+    has_torch_ver=$(pip install --dry-run "torch==${vllm_torch_ver}" --index-url "https://download.pytorch.org/whl/${vllm_torch_index}" 2>&1)
+    if echo "$has_torch_ver" | grep -q "Could not find a version"; then
+        echo " torch==${vllm_torch_ver} not available on ${vllm_torch_index}, trying cu126..."
+        vllm_torch_index="cu126"
     fi
+
+    echo " Pre-installing torch==${vllm_torch_ver} from ${vllm_torch_index} index (required by Zyphra vLLM)..."
+    python3 -m pip install --force-reinstall "torch==${vllm_torch_ver}" --index-url "https://download.pytorch.org/whl/${vllm_torch_index}" 2>&1 | tail -5
     echo ""
 
-    if [[ -n "$torch_constraint" ]]; then
-        python3 -m pip install -U "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" --constraint <(echo "$torch_constraint") 2>&1 | tee "${SCRIPT_DIR}/zaya_build.log" | tail -30
-    else
-        python3 -m pip install -U "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" 2>&1 | tee "${SCRIPT_DIR}/zaya_build.log" | tail -30
-    fi
+    echo " Installing Zyphra vLLM fork (no torch constraint — let it use the pre-installed torch)"
+    python3 -m pip install -U "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr" 2>&1 | tee "${SCRIPT_DIR}/zaya_build.log" | tail -30
     local rc=${PIPESTATUS[0]}
 
     # --- Cleanup temporary swap ---
