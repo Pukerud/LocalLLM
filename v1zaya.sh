@@ -149,9 +149,14 @@ setup_scroll_region() {
 
 # --- Server management ---
 
+zaya_process_pids() {
+    # Match both the vLLM API parent and spawned EngineCore child.
+    # Local model mode may use a filesystem path instead of Zyphra/ZAYA in argv.
+    pgrep -f "vllm serve.*zaya_models/ZAYA1-8B\|vllm serve.*ZAYA1-8B\|vllm.*Zyphra\|VLLM::EngineCore" 2>/dev/null || true
+}
+
 is_server_running() {
-    # Check for vllm process serving ZAYA
-    pgrep -f "vllm.*ZAYA1-8B\|vllm.*Zyphra" > /dev/null 2>&1
+    [[ -n "$(zaya_process_pids)" ]]
 }
 
 is_llamacpp_running() {
@@ -699,16 +704,16 @@ stop_server() {
     echo -e " ${CYAN}>>> STOPPING ZAYA1-8B SERVER <<<${RESET}"
 
     if is_server_running; then
-        # Find and kill the vllm process serving ZAYA
+        # Find and kill the vLLM API parent plus EngineCore child.
         local pids
-        pids=$(pgrep -f "vllm.*ZAYA1-8B\|vllm.*Zyphra" 2>/dev/null)
+        pids=$(zaya_process_pids)
         if [[ -n "$pids" ]]; then
             for pid in $pids; do
                 kill "$pid" 2>/dev/null
             done
-            sleep 2
-            # Force kill if still running
-            pids=$(pgrep -f "vllm.*ZAYA1-8B\|vllm.*Zyphra" 2>/dev/null)
+            sleep 3
+            # Force kill if still running / orphaned.
+            pids=$(zaya_process_pids)
             if [[ -n "$pids" ]]; then
                 for pid in $pids; do
                     kill -9 "$pid" 2>/dev/null
