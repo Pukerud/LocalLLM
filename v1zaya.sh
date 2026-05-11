@@ -605,8 +605,11 @@ start_server() {
     cmd+=" --gpu-memory-utilization 0.92"
 
     cmd+=" --reasoning-parser qwen3"
-    cmd+=" --enable-auto-tool-choice"
-    cmd+=" --tool-call-parser zaya_xml"
+
+    # Disabled by default: current Zyphra fork's zaya_xml parser is incompatible
+    # with this vLLM parser API and can fail with:
+    #   ZayaXMLToolParser.__init__() takes 2 positional arguments but 3 were given
+    # Basic OpenAI-compatible chat works without auto tool choice.
 
     # Multi-GPU: recommend DP+EP for 2+ GPUs
     if [[ "$gpu_count" -ge 2 ]]; then
