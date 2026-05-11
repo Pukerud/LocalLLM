@@ -601,7 +601,7 @@ start_server() {
         max_model_len="65536"
     fi
     cmd+=" --max-model-len ${max_model_len}"
-    cmd+=" --gpu-memory-utilization 0.95"
+    cmd+=" --gpu-memory-utilization 0.92"
 
     cmd+=" --reasoning-parser qwen3"
     cmd+=" --enable-auto-tool-choice"
