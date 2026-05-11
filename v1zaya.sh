@@ -589,6 +589,7 @@ start_server() {
 
     # Build the vllm command
     local cmd="vllm serve ${model_path}"
+    cmd+=" --served-model-name ZAYA1-8B"
     cmd+=" --port ${PORT}"
     cmd+=" --mamba-cache-dtype float32"
     cmd+=" --dtype bfloat16"
