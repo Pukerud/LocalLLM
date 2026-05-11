@@ -391,12 +391,22 @@ install_update() {
         *) vllm_torch_index="cu126" ;;
     esac
 
-    # Check if cu124 has the required torch version; if not, fall back to cu126
+    # Check if the mapped index has the required torch version; if not, fall back to cu126
     local has_torch_ver
     has_torch_ver=$(pip install --dry-run "torch==${vllm_torch_ver}" --index-url "https://download.pytorch.org/whl/${vllm_torch_index}" 2>&1)
     if echo "$has_torch_ver" | grep -q "Could not find a version"; then
         echo " torch==${vllm_torch_ver} not available on ${vllm_torch_index}, trying cu126..."
         vllm_torch_index="cu126"
+        # Verify cu126 also has it (it should, but double-check)
+        has_torch_ver=$(pip install --dry-run "torch==${vllm_torch_ver}" --index-url "https://download.pytorch.org/whl/${vllm_torch_index}" 2>&1)
+        if echo "$has_torch_ver" | grep -q "Could not find a version"; then
+            echo -e " ${RED}torch==${vllm_torch_ver} is not available for your CUDA version.${RESET}"
+            echo -e " ${RED}Zyphra vLLM requires torch ${vllm_torch_ver}, which needs CUDA driver >= 12.6.${RESET}"
+            echo -e " ${RED}Your driver CUDA: ${driver_cuda}. Cannot proceed.${RESET}"
+            echo ""
+            read -p " Press Enter to return to menu..."
+            return
+        fi
     fi
 
     echo " Pre-installing torch==${vllm_torch_ver} from ${vllm_torch_index} index (required by Zyphra vLLM)..."
