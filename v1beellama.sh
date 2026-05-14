@@ -758,6 +758,13 @@ start_beellama_server() {
         --no-host --metrics
         --log-timestamps --log-prefix --log-colors off
         --reasoning "$reasoning"
+        --reasoning-loop-guard force-close
+        --reasoning-loop-min-tokens 256
+        --reasoning-loop-window 512
+        --reasoning-loop-max-period 128
+        --reasoning-loop-min-coverage 64
+        --reasoning-loop-check-interval 16
+        --reasoning-loop-interventions 3
         --temp 0.6 --top-k 20 --min-p 0.0
         --host 0.0.0.0
         --port 8080
@@ -1095,6 +1102,13 @@ if [[ "${1:-}" == "--quickstart" ]]; then
             --no-host --metrics
             --log-timestamps --log-prefix --log-colors off
             --reasoning on
+            --reasoning-loop-guard force-close
+            --reasoning-loop-min-tokens 256
+            --reasoning-loop-window 512
+            --reasoning-loop-max-period 128
+            --reasoning-loop-min-coverage 64
+            --reasoning-loop-check-interval 16
+            --reasoning-loop-interventions 3
             --temp 0.6 --top-k 20 --min-p 0.0
             ${TEMPLATE_FLAGS[@]:-}
             --mmproj "${MODELS_DIR}/${QS_MMPROJ}"
@@ -1116,6 +1130,13 @@ if [[ "${1:-}" == "--quickstart" ]]; then
             --no-host --metrics
             --log-timestamps --log-prefix --log-colors off
             --reasoning on
+            --reasoning-loop-guard force-close
+            --reasoning-loop-min-tokens 256
+            --reasoning-loop-window 512
+            --reasoning-loop-max-period 128
+            --reasoning-loop-min-coverage 64
+            --reasoning-loop-check-interval 16
+            --reasoning-loop-interventions 3
             --temp 0.6 --top-k 20 --min-p 0.0
             ${TEMPLATE_FLAGS[@]:-}
             --mmproj "${MODELS_DIR}/${QS_MMPROJ}"
