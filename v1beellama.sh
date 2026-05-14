@@ -818,42 +818,45 @@ if [[ "${1:-}" == "--quickstart" ]]; then
     echo ""
 
     # -- Step 0: Pick model ---------------------------------------------
+    # Model catalog: name|file|size_gb|min_vram|cache_k|cache_v|ctx_per_gb|description
+    QS_MODELS=(
+        "NEO-CODE IQ4_XS|Qwen3.6-27B-NEO-CODE-HERE-2T-OT-IQ4_XS.gguf|https://huggingface.co/DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/resolve/main/Qwen3.6-27B-NEO-CODE-HERE-2T-OT-IQ4_XS.gguf|15|16|turbo3_tcq|turbo3_tcq|38000|⚡ Speed king — 262K ctx, up to 105 tok/s"
+        "NEO-CODE Q5_K_M|Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q5_K_M.gguf|https://huggingface.co/DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/resolve/main/Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q5_K_M.gguf|19|20|turbo4|turbo3_tcq|71000|✨ Best quality — 200K ctx, up to 95 tok/s"
+        "Qwen3.6 Q4_K_M|Qwen3.6-27B-Q4_K_M.gguf|https://huggingface.co/bartowski/Qwen3.6-27B-GGUF/resolve/main/Qwen3.6-27B-Q4_K_M.gguf|16|17|turbo3_tcq|turbo3_tcq|42000|⚖️ Balanced — 240K ctx, up to 100 tok/s"
+        "Heretic v2 MTP Q4_K_S|Qwen3.6-27B-uncensored-heretic-v2-Native-MTP-Preserved-Q4_K_S.gguf|https://huggingface.co/llmfan46/Qwen3.6-27B-uncensored-heretic-v2-Native-MTP-Preserved-GGUF/resolve/main/Qwen3.6-27B-uncensored-heretic-v2-Native-MTP-Preserved-Q4_K_S.gguf|16|17|turbo3_tcq|turbo3_tcq|40000|🔥 Uncensored heretic — 240K ctx, MTP preserved"
+        "HauhauCS Aggressive IQ4_XS|Qwen3.6-27B-Uncensored-HauhauCS-Aggressive-IQ4_XS.gguf|https://huggingface.co/spiritbuun/Qwen3.6-27B-Uncensored-HauhauCS-Aggressive-GGUF/resolve/main/Qwen3.6-27B-Uncensored-HauhauCS-Aggressive-IQ4_XS.gguf|15|16|turbo3_tcq|turbo3_tcq|38000|💀 Uncensored aggressive — 262K ctx, up to 105 tok/s"
+    )
+
     echo -e " Pick your model:"
     echo ""
-    echo -e "  ${BOLD}[1]${RESET} IQ4_XS  — Speed king   (~15 GB)  → 262K context, up to 105 tok/s"
-    echo -e "  ${BOLD}[2]${RESET} Q5_K_M  — Best quality (~19 GB)  → 200K context, up to 95 tok/s"
+    for i in "${!QS_MODELS[@]}"; do
+        IFS='|' read -r name file url size_gb min_vram ck cv ctx_pg desc <<< "${QS_MODELS[$i]}"
+        local_marker=""
+        if [[ -f "${MODELS_DIR}/${file}" ]]; then
+            local_marker=" ${GREEN}[cached]${RESET}"
+        fi
+        echo -e "  ${BOLD}[$((i+1))]${RESET} ${desc}  (~${size_gb} GB)${local_marker}"
+    done
     echo ""
-    read -p " Select [1/2]: " model_pick
+    read -p " Select [1-${#QS_MODELS[@]}] (default=1): " model_pick
     model_pick=$(echo "$model_pick" | tr -d '[:space:]')
+    [[ -z "$model_pick" ]] && model_pick=1
+
+    # Validate selection
+    if ! [[ "$model_pick" =~ ^[0-9]+$ ]] || [[ "$model_pick" -lt 1 ]] || [[ "$model_pick" -gt ${#QS_MODELS[@]} ]]; then
+        echo -e " ${RED}Invalid selection. Using model 1.${RESET}"
+        model_pick=1
+    fi
+
+    model_idx=$((model_pick - 1))
+    IFS='|' read -r QS_TARGET_LABEL QS_TARGET QS_TARGET_URL QS_MODEL_GB QS_MIN_VRAM QS_CACHE_K QS_CACHE_V QS_CTX_PER_GB QS_DESC <<< "${QS_MODELS[$model_idx]}"
 
     QS_DRAFT="Qwen3.6-27B-DFlash-Q5_K_M.gguf"
     QS_DRAFT_URL="https://huggingface.co/Ardenzard/Qwen3.6-27B-DFlash-GGUF/resolve/main/Qwen3.6-27B-DFlash-Q5_K_M.gguf"
     QS_MMPROJ="mmproj-BF16.gguf"
     QS_MMPROJ_URL="https://huggingface.co/DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/resolve/main/mmproj-BF16.gguf"
 
-    if [[ "$model_pick" == "2" ]]; then
-        QS_TARGET="Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q5_K_M.gguf"
-        QS_TARGET_URL="https://huggingface.co/DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/resolve/main/Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q5_K_M.gguf"
-        QS_TARGET_LABEL="Q5_K_M (~19 GB)"
-        QS_MODEL_GB=19
-        QS_MIN_VRAM=20
-        QS_CACHE_K="turbo4"
-        QS_CACHE_V="turbo3_tcq"
-        # Calibrated: 24GB GPU, 19GB model + 2GB draft = 2.8GB free → 200K ctx
-        # = ~71K ctx per GB
-        QS_CTX_PER_GB=71000
-    else
-        QS_TARGET="Qwen3.6-27B-NEO-CODE-HERE-2T-OT-IQ4_XS.gguf"
-        QS_TARGET_URL="https://huggingface.co/DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/resolve/main/Qwen3.6-27B-NEO-CODE-HERE-2T-OT-IQ4_XS.gguf"
-        QS_TARGET_LABEL="IQ4_XS (~15 GB)"
-        QS_MODEL_GB=15
-        QS_MIN_VRAM=16
-        QS_CACHE_K="turbo3_tcq"
-        QS_CACHE_V="turbo3_tcq"
-        # Calibrated: 24GB GPU, 15GB model + 2GB draft = 6.8GB free → 262K ctx
-        # = ~38K ctx per GB
-        QS_CTX_PER_GB=38000
-    fi
+    echo -e " Selected: ${GREEN}${QS_TARGET_LABEL}${RESET} (~${QS_MODEL_GB} GB)"
     echo ""
 
     # -- Step 1: Build binary if missing ----------------------------------
@@ -881,7 +884,7 @@ if [[ "${1:-}" == "--quickstart" ]]; then
         echo ""
         echo -e " ${YELLOW}[2/4]${RESET} Downloading ${missing} model(s)..."
         total_dl_gb=0
-        [[ ! -f "${MODELS_DIR}/${QS_TARGET}" ]] && total_dl_gb=$((total_dl_gb + 15))
+        [[ ! -f "${MODELS_DIR}/${QS_TARGET}" ]] && total_dl_gb=$((total_dl_gb + QS_MODEL_GB))
         [[ ! -f "${MODELS_DIR}/${QS_DRAFT}" ]]  && total_dl_gb=$((total_dl_gb + 2))
         [[ ! -f "${MODELS_DIR}/${QS_MMPROJ}" ]] && total_dl_gb=$((total_dl_gb + 1))
         echo "   Total download: ~${total_dl_gb} GB (${QS_TARGET_LABEL})"

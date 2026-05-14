@@ -168,7 +168,7 @@ while true; do
     echo "  Quick Start (one-click):"
     echo "  ─────────────────────────"
     echo -e "  ${BOLD}[0]${RESET} BeeLlama DFlash  ⚡ up to 105 tok/s │ vision │ reasoning"
-    echo -e "      Best on single GPU │ dual GPU runs without draft (Tested on 3090)"
+    echo -e "      5 models to pick from │ single GPU │ dual GPU runs without draft (Tested on 3090)"
     echo ""
     echo -e "  ${BOLD}[1]${RESET} MTP (Legacy)      ⚡ up to 100 tok/s │ no vision"
     echo -e "      Best on dual GPU │ also works on single GPU (Tested on 4090)"
