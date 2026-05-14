@@ -246,10 +246,24 @@ install_beellama() {
         git clone https://github.com/Anbeeld/beellama.cpp.git "$BEELLAMA_DIR"
     else
         echo " Pulling latest beellama.cpp..."
-        cd "$BEELLAMA_DIR" && git pull && cd ..
+        cd "$BEELLAMA_DIR"
+        git stash --include-untracked 2>/dev/null || true
+        git checkout main 2>/dev/null || true
+        git reset --hard origin/main 2>/dev/null || git pull --ff-only
+        OLD_HASH=$(git rev-parse HEAD)
+        cd ..
     fi
 
     local gpu_arch=$(detect_gpu_arch)
+
+    # Verify we got the latest code
+    NEW_HASH=$(cd "$BEELLAMA_DIR" && git rev-parse HEAD)
+    if [[ -n "$OLD_HASH" && "$OLD_HASH" != "$NEW_HASH" ]]; then
+        echo -e " ${GREEN}Updated: ${OLD_HASH:0:9} → ${NEW_HASH:0:9}${RESET}"
+    elif [[ -n "$OLD_HASH" ]]; then
+        echo -e " ${YELLOW}Already up to date (${NEW_HASH:0:9})${RESET}"
+    fi
+
     echo ""
     echo " Compiling for sm_${gpu_arch} with CUDA + Flash Attention + TurboQuant/TCQ..."
     echo "   -DGGML_CUDA=ON -DGGML_CUDA_FA=ON -DGGML_CUDA_FA_ALL_QUANTS=ON"
