@@ -52,7 +52,8 @@ check_build() {
         export PATH="/usr/local/cuda/bin:$PATH"
         cd "${SCRIPT_DIR}/${LUCE_DIR}" || { echo "  Error: ${LUCE_DIR} not found. Did you clone the repo?"; sleep 3; return 1; }
         cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=89 -DCMAKE_CXX_FLAGS="-I/usr/local/cuda/include" 2>&1 | tail -3
-        cmake --build build --target test_dflash test_generate -j$(nproc) 2>&1 | tail -5
+        local build_jobs=$(get_safe_build_jobs)
+        cmake --build build --target test_dflash test_generate -j"$build_jobs" 2>&1 | tail -5
         if [[ ! -x "build/test_dflash" ]]; then
             echo "  Build failed. Check compile errors above."
             sleep 3
@@ -117,6 +118,25 @@ cleanup() {
     exit $exit_code
 }
 trap cleanup INT TERM EXIT
+
+get_safe_build_jobs() {
+    if [[ -n "${BEELLAMA_BUILD_JOBS:-}" && "${BEELLAMA_BUILD_JOBS}" =~ ^[0-9]+$ && "${BEELLAMA_BUILD_JOBS}" -gt 0 ]]; then
+        echo "$BEELLAMA_BUILD_JOBS"
+        return
+    fi
+    local cpus mem_kb jobs_by_mem jobs
+    cpus=$(nproc 2>/dev/null || echo 2)
+    mem_kb=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo 2>/dev/null)
+    [[ -z "$mem_kb" || "$mem_kb" -le 0 ]] && mem_kb=$(awk '/MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null)
+    local half_cpus=$(( cpus / 2 ))
+    [[ "$half_cpus" -lt 1 ]] && half_cpus=1
+    jobs_by_mem=$(( mem_kb / 2621440 ))
+    [[ "$jobs_by_mem" -lt 1 ]] && jobs_by_mem=1
+    jobs="$half_cpus"
+    [[ "$jobs" -gt "$jobs_by_mem" ]] && jobs="$jobs_by_mem"
+    [[ "$jobs" -lt 1 ]] && jobs=1
+    echo "$jobs"
+}
 
 update_dashboard() {
     local info_file="${SCRIPT_DIR}/.server_info_lucebox"
@@ -513,7 +533,8 @@ while true; do
             export PATH="/usr/local/cuda/bin:$PATH"
             cd "${SCRIPT_DIR}/${LUCE_DIR}"
             cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=89 -DCMAKE_CXX_FLAGS="-I/usr/local/cuda/include" 2>&1 | tail -3
-            cmake --build build --target test_dflash test_generate -j$(nproc) 2>&1 | tail -5
+            local build_jobs=$(get_safe_build_jobs)
+            cmake --build build --target test_dflash test_generate -j"$build_jobs" 2>&1 | tail -5
             cd "${SCRIPT_DIR}"
             echo ""
             read -p "  Press Enter to continue..."

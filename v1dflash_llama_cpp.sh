@@ -37,6 +37,25 @@ cleanup() {
 }
 trap cleanup INT TERM EXIT
 
+get_safe_build_jobs() {
+    if [[ -n "${BEELLAMA_BUILD_JOBS:-}" && "${BEELLAMA_BUILD_JOBS}" =~ ^[0-9]+$ && "${BEELLAMA_BUILD_JOBS}" -gt 0 ]]; then
+        echo "$BEELLAMA_BUILD_JOBS"
+        return
+    fi
+    local cpus mem_kb jobs_by_mem jobs
+    cpus=$(nproc 2>/dev/null || echo 2)
+    mem_kb=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo 2>/dev/null)
+    [[ -z "$mem_kb" || "$mem_kb" -le 0 ]] && mem_kb=$(awk '/MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null)
+    local half_cpus=$(( cpus / 2 ))
+    [[ "$half_cpus" -lt 1 ]] && half_cpus=1
+    jobs_by_mem=$(( mem_kb / 2621440 ))
+    [[ "$jobs_by_mem" -lt 1 ]] && jobs_by_mem=1
+    jobs="$half_cpus"
+    [[ "$jobs" -gt "$jobs_by_mem" ]] && jobs="$jobs_by_mem"
+    [[ "$jobs" -lt 1 ]] && jobs=1
+    echo "$jobs"
+}
+
 # ── Dashboard monitoring ─────────────────────────────────────────────────
 
 get_cpu_usage() {
@@ -170,7 +189,8 @@ install_dflash() {
         2>&1 | tee -a "../$DEBUG_LOG"
 
     echo "--- CMAKE BUILD ---" >> "../$DEBUG_LOG"
-    cmake --build build --config Release -j$(nproc) 2>&1 | tee -a "../$DEBUG_LOG"
+    local build_jobs=$(get_safe_build_jobs)
+    cmake --build build --config Release -j"$build_jobs" 2>&1 | tee -a "../$DEBUG_LOG"
     BUILD_STATUS=${PIPESTATUS[0]}
     cd ..
 
