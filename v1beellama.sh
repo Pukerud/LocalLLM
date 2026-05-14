@@ -221,6 +221,30 @@ detect_gpu_arch() {
     echo "${arch_str:-86}"
 }
 
+get_safe_build_jobs() {
+    # CUDA/C++ builds can hard-freeze the desktop when all cores are used.
+    # Default to a conservative, memory-aware job count; allow manual override.
+    if [[ -n "${BEELLAMA_BUILD_JOBS:-}" && "${BEELLAMA_BUILD_JOBS}" =~ ^[0-9]+$ && "${BEELLAMA_BUILD_JOBS}" -gt 0 ]]; then
+        echo "$BEELLAMA_BUILD_JOBS"
+        return
+    fi
+
+    local cpus mem_kb jobs_by_mem jobs
+    cpus=$(nproc 2>/dev/null || echo 2)
+    mem_kb=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo 2>/dev/null)
+    [[ -z "$mem_kb" || "$mem_kb" -le 0 ]] && mem_kb=$(awk '/MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null)
+
+    # Approx. 4 GiB available RAM per compiler job for nvcc-heavy builds.
+    jobs_by_mem=$(( mem_kb / 4194304 ))
+    [[ "$jobs_by_mem" -lt 1 ]] && jobs_by_mem=1
+
+    jobs="$cpus"
+    [[ "$jobs" -gt "$jobs_by_mem" ]] && jobs="$jobs_by_mem"
+    [[ "$jobs" -gt 2 ]] && jobs=2
+    [[ "$jobs" -lt 1 ]] && jobs=1
+    echo "$jobs"
+}
+
 # ── Model helpers ────────────────────────────────────────────────────────
 
 get_dflash_drafts() {
@@ -247,14 +271,26 @@ install_beellama() {
     else
         echo " Pulling latest beellama.cpp..."
         cd "$BEELLAMA_DIR"
+        OLD_HASH=$(git rev-parse HEAD 2>/dev/null || true)
         git stash --include-untracked 2>/dev/null || true
         git checkout main 2>/dev/null || true
-        git reset --hard origin/main 2>/dev/null || git pull --ff-only
-        OLD_HASH=$(git rev-parse HEAD)
+        if ! git fetch --prune origin main:refs/remotes/origin/main; then
+            echo -e " ${RED}[!] Failed to fetch latest beellama.cpp. Aborting build.${RESET}"
+            cd ..
+            read -p " Press Enter to return to menu..."
+            return
+        fi
+        if ! git reset --hard origin/main; then
+            echo -e " ${RED}[!] Failed to reset beellama.cpp to origin/main. Aborting build.${RESET}"
+            cd ..
+            read -p " Press Enter to return to menu..."
+            return
+        fi
         cd ..
     fi
 
     local gpu_arch=$(detect_gpu_arch)
+    local build_jobs=$(get_safe_build_jobs)
 
     # Verify we got the latest code
     NEW_HASH=$(cd "$BEELLAMA_DIR" && git rev-parse HEAD)
@@ -267,6 +303,7 @@ install_beellama() {
     echo ""
     echo " Compiling for sm_${gpu_arch} with CUDA + Flash Attention + TurboQuant/TCQ..."
     echo "   -DGGML_CUDA=ON -DGGML_CUDA_FA=ON -DGGML_CUDA_FA_ALL_QUANTS=ON"
+    echo "   Build jobs: ${build_jobs} (override with BEELLAMA_BUILD_JOBS=N)"
     echo ""
 
     export CC=gcc
@@ -312,7 +349,7 @@ install_beellama() {
     fi
 
     echo "--- CMAKE BUILD (llama-server only) ---" >> "../$DEBUG_LOG"
-    cmake --build build --config Release -j$(nproc) --target llama-server 2>&1 | tee -a "../$DEBUG_LOG"
+    cmake --build build --config Release -j"$build_jobs" --target llama-server 2>&1 | tee -a "../$DEBUG_LOG"
     BUILD_STATUS=${PIPESTATUS[0]}
     cd ..
 
