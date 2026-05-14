@@ -274,7 +274,7 @@ install_beellama() {
         OLD_HASH=$(git rev-parse HEAD 2>/dev/null || true)
         git stash --include-untracked 2>/dev/null || true
         git checkout main 2>/dev/null || true
-        if ! git fetch --prune origin main:refs/remotes/origin/main; then
+        if ! git fetch origin; then
             echo -e " ${RED}[!] Failed to fetch latest beellama.cpp. Aborting build.${RESET}"
             cd ..
             read -p " Press Enter to return to menu..."
