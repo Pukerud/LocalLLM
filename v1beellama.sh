@@ -234,13 +234,16 @@ get_safe_build_jobs() {
     mem_kb=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo 2>/dev/null)
     [[ -z "$mem_kb" || "$mem_kb" -le 0 ]] && mem_kb=$(awk '/MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null)
 
-    # Approx. 4 GiB available RAM per compiler job for nvcc-heavy builds.
-    jobs_by_mem=$(( mem_kb / 4194304 ))
+    # Use half the cores so desktop stays responsive
+    local half_cpus=$(( cpus / 2 ))
+    [[ "$half_cpus" -lt 1 ]] && half_cpus=1
+
+    # Approx. 2.5 GiB available RAM per compiler job for nvcc-heavy builds.
+    jobs_by_mem=$(( mem_kb / 2621440 ))
     [[ "$jobs_by_mem" -lt 1 ]] && jobs_by_mem=1
 
-    jobs="$cpus"
+    jobs="$half_cpus"
     [[ "$jobs" -gt "$jobs_by_mem" ]] && jobs="$jobs_by_mem"
-    [[ "$jobs" -gt 2 ]] && jobs=2
     [[ "$jobs" -lt 1 ]] && jobs=1
     echo "$jobs"
 }
