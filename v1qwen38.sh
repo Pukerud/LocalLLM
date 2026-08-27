@@ -68,6 +68,7 @@ SPEC_MODE="none"
 RUNTIME_DIR=""
 
 mkdir -p "$DATA_ROOT" "$STATE_ROOT" "$RUNTIME_ROOT" "$MODEL_ROOT" "$LOG_ROOT"
+SPEED_CACHE="${STATE_ROOT}/speed-results.tsv"
 
 say() { printf '%s\n' "$*"; }
 warn() { printf 'WARNING: %s\n' "$*" >&2; }
@@ -78,14 +79,17 @@ usage() {
 Usage:
   v1qwen38.sh --quickstart [--profile PROFILE]
   v1qwen38.sh --smoke [--profile PROFILE] [--no-spec|--spec MODE]
+  v1qwen38.sh --speed-test [--profile PROFILE]
+  v1qwen38.sh --speed-test-all
   v1qwen38.sh --download [--profile PROFILE]
   v1qwen38.sh --build [--profile PROFILE]
-  v1qwen38.sh --status
+  v1qwen38.sh --status [--profile PROFILE]
+  v1qwen38.sh --dashboard [--profile PROFILE]
   v1qwen38.sh --stop
 
 Profiles:
   hauhau-q8          HauhauCS Q8_K_P + BF16 vision, native 262K, embedded MTP
-  hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, model-card FastMTP sidecar
+  hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, 262K on 3x3090
   flash-iq3          Flash-Next UD-IQ3_XXS + F16 vision, experimental PR #27742
   flash-iq4          Flash-Next UD-IQ4_XS + F16 vision, experimental PR #27742
 
@@ -104,6 +108,17 @@ parse_args() {
             --smoke)
                 MODE="smoke"
                 SMOKE=1
+                ;;
+            --speed-test)
+                MODE="speed"
+                SMOKE=1
+                ;;
+            --speed-test-all)
+                MODE="speed-all"
+                SMOKE=1
+                ;;
+            --dashboard)
+                MODE="dashboard"
                 ;;
             --download|--install)
                 MODE="download"
@@ -219,7 +234,52 @@ configure_profile() {
 }
 
 sha256_file() {
-    sha256sum "$1" | awk '{print $1}'
+    # Keep large-file verification visibly alive. The digest remains the only
+    # stdout value so callers can safely use command substitution.
+    python3 - "$1" <<'PY'
+import hashlib
+import os
+import sys
+import time
+
+path = sys.argv[1]
+size = os.path.getsize(path)
+show_progress = size >= 64 * 1024 * 1024
+chunk_size = 64 * 1024 * 1024
+hasher = hashlib.sha256()
+read = 0
+started = time.monotonic()
+last_report = started - 1.0
+
+if show_progress:
+    print(f"\rVerifying checksum: {os.path.basename(path)} 0.00%", end="", file=sys.stderr, flush=True)
+
+with open(path, "rb") as handle:
+    while True:
+        chunk = handle.read(chunk_size)
+        if not chunk:
+            break
+        hasher.update(chunk)
+        read += len(chunk)
+        now = time.monotonic()
+        if show_progress and (now - last_report >= 0.5 or read == size):
+            elapsed = max(now - started, 0.001)
+            rate = read / elapsed / (1024 * 1024)
+            percent = 100.0 * read / size if size else 100.0
+            eta = (size - read) / (rate * 1024 * 1024) if rate > 0 else 0.0
+            print(
+                f"\rVerifying checksum: {os.path.basename(path)} "
+                f"{percent:6.2f}% {rate:7.1f} MiB/s ETA {eta:5.1f}s",
+                end="",
+                file=sys.stderr,
+                flush=True,
+            )
+            last_report = now
+
+if show_progress:
+    print(file=sys.stderr)
+print(hasher.hexdigest())
+PY
 }
 
 verify_asset() {
@@ -314,6 +374,7 @@ ensure_flash_assets() {
 }
 
 ensure_assets() {
+    say "Checking model assets for ${PROFILE} (checksum progress will be shown)..."
     case "$RUNTIME_KIND" in
         hauhau) ensure_hauhau_assets ;;
         flash)
@@ -325,6 +386,7 @@ ensure_assets() {
             ;;
         *) die "internal error: unknown runtime kind '$RUNTIME_KIND'" ;;
     esac
+    say "Model assets ready for ${PROFILE}."
 }
 
 need_command() {
@@ -548,7 +610,7 @@ make_server_args() {
 }
 
 wait_for_health() {
-    local timeout="${QWEN38_HEALTH_TIMEOUT:-300}" response
+    local timeout="${QWEN38_HEALTH_TIMEOUT:-300}" response elapsed=0
     say "Waiting for server health (up to ${timeout}s; no long-context request will be sent)"
     for _ in $(seq 1 "$timeout"); do
         if ! kill -0 "$SERVER_PID" 2>/dev/null; then
@@ -559,6 +621,10 @@ wait_for_health() {
         if response="$(curl -fsS --max-time 5 "http://127.0.0.1:${PORT}/health" 2>/dev/null)"; then
             say "Health OK: $response"
             return 0
+        fi
+        elapsed=$((elapsed + 1))
+        if (( elapsed % 10 == 0 )); then
+            say "  Still loading... ${elapsed}s elapsed (model log: $(basename -- "$SERVER_LOG"))"
         fi
         sleep 1
     done
@@ -711,6 +777,160 @@ run_smoke() {
     return "$rc"
 }
 
+speed_cache_row() {
+    local wanted="$1"
+    [[ -r "$SPEED_CACHE" ]] || return 1
+    awk -F'|' -v wanted="$wanted" '$1 == wanted { row = $0 } END { if (row != "") print row }' "$SPEED_CACHE"
+}
+
+speed_display() {
+    local row date context coding story average
+    row="$(speed_cache_row "$1" || true)"
+    if [[ -z "$row" ]]; then
+        printf 'not tested'
+        return 0
+    fi
+    IFS='|' read -r _ date context coding story average <<< "$row"
+    if [[ "$date" == "$(date +%Y-%m-%d)" ]]; then
+        printf '%s tok/s' "$average"
+    else
+        printf '%s tok/s (%s)' "$average" "$date"
+    fi
+}
+
+speed_detail() {
+    local row date context coding story average
+    row="$(speed_cache_row "$1" || true)"
+    if [[ -z "$row" ]]; then
+        printf 'not tested'
+        return 0
+    fi
+    IFS='|' read -r _ date context coding story average <<< "$row"
+    printf 'avg %s tok/s | coding %s | story %s | %s' "$average" "$coding" "$story" "$date"
+}
+
+record_speed_result() {
+    local coding="$1" story="$2" average="$3" tmp
+    tmp="${SPEED_CACHE}.tmp.$$"
+    umask 022
+    if [[ -f "$SPEED_CACHE" ]]; then
+        awk -F'|' -v profile="$PROFILE" '$1 != profile' "$SPEED_CACHE" > "$tmp"
+    else
+        : > "$tmp"
+    fi
+    printf '%s|%s|4096|%s|%s|%s\n' \
+        "$PROFILE" "$(date +%Y-%m-%d)" "$coding" "$story" "$average" >> "$tmp"
+    mv -f -- "$tmp" "$SPEED_CACHE"
+}
+
+speed_request() {
+    local kind="$1" prompt="$2" max_tokens="$3" payload out
+    payload="${STATE_ROOT}/speed-${PROFILE}-${kind}.request.json"
+    out="${STATE_ROOT}/speed-${PROFILE}-${kind}.response.json"
+    python3 - "$prompt" "$max_tokens" "$payload" <<'PY'
+import json
+import sys
+
+prompt, max_tokens, path = sys.argv[1:]
+body = {
+    "model": "qwen38",
+    "messages": [{"role": "user", "content": prompt}],
+    "max_tokens": int(max_tokens),
+    "temperature": 0.2,
+    "stream": False,
+}
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(body, handle)
+PY
+    if ! curl -fsS --max-time 180 "http://127.0.0.1:${PORT}/v1/chat/completions" \
+        -H 'Content-Type: application/json' \
+        --data-binary "@$payload" -o "$out"; then
+        warn "${kind} speed request failed"
+        return 1
+    fi
+    python3 - "$out" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+data = json.load(open(path, encoding="utf-8"))
+if data.get("error"):
+    raise SystemExit(json.dumps(data["error"], ensure_ascii=False))
+timings = data.get("timings", {})
+tps = timings.get("predicted_per_second")
+if tps is None:
+    tokens = timings.get("predicted_n", 0)
+    millis = timings.get("predicted_ms", 0)
+    tps = tokens * 1000.0 / millis if millis else 0.0
+if not tps or tps <= 0:
+    raise SystemExit("response did not include a valid generation speed")
+print(f"{tps:.2f}")
+PY
+}
+
+run_speed_test() {
+    local coding_tps story_tps average warmup_prompt
+    if SERVER_PID="$(running_pid)"; then
+        warn "stop the running Qwen3.8 server before starting a speed test (PID $SERVER_PID)"
+        return 1
+    fi
+
+    SMOKE=1
+    say "Speed test: ${PROFILE} (4096-token context; two short prompts)"
+    ensure_assets
+    build_runtime
+    start_server || return 1
+
+    warmup_prompt='Reply with one word: ready.'
+    say "  Warm-up request..."
+    if ! speed_request warmup "$warmup_prompt" 16 >/dev/null; then
+        stop_server
+        return 1
+    fi
+
+    say "  Coding prompt..."
+    if ! coding_tps="$(speed_request coding 'Write a concise Python function that merges overlapping intervals. Include type hints, one example, and a brief time-complexity note. Keep the answer under 120 words.' 192)"; then
+        stop_server
+        return 1
+    fi
+    say "    coding: ${coding_tps} tok/s"
+
+    say "  Story prompt..."
+    if ! story_tps="$(speed_request story 'Write a short story in around 100 words about a night-shift engineer who receives a radio message from tomorrow. Give it a clear ending.' 192)"; then
+        stop_server
+        return 1
+    fi
+    say "    story: ${story_tps} tok/s"
+
+    average="$(python3 - "$coding_tps" "$story_tps" <<'PY'
+import sys
+values = [float(value) for value in sys.argv[1:]]
+print(f"{sum(values) / len(values):.2f}")
+PY
+)"
+    record_speed_result "$coding_tps" "$story_tps" "$average"
+    stop_server
+    say "  Speed result: avg ${average} tok/s (cached for the menu)"
+}
+
+run_speed_test_all() {
+    local original_profile="$PROFILE" original_smoke="$SMOKE" rc=0 profile
+    for profile in hauhau-q8 hauhau-q8-fastmtp flash-iq3 flash-iq4; do
+        PROFILE="$profile"
+        SPEC_OVERRIDE=""
+        SMOKE=1
+        configure_profile
+        if ! run_speed_test; then
+            warn "speed test failed for ${PROFILE}"
+            rc=1
+        fi
+    done
+    PROFILE="$original_profile"
+    SMOKE="$original_smoke"
+    configure_profile
+    return "$rc"
+}
+
 show_status() {
     configure_profile
     say "Profile: $PROFILE_LABEL"
@@ -731,13 +951,105 @@ show_status() {
     nvidia-smi --query-gpu=index,name,compute_cap,memory.used,memory.total,temperature.gpu --format=csv 2>/dev/null || true
 }
 
+load_server_profile() {
+    local saved_profile=""
+    if [[ -r "${STATE_ROOT}/server.info" ]]; then
+        saved_profile="$(awk -F= '$1 == "profile" { print substr($0, index($0, "=") + 1); exit }' "${STATE_ROOT}/server.info")"
+    fi
+    if [[ "$saved_profile" =~ ^[a-z0-9-]+$ ]]; then
+        PROFILE="$saved_profile"
+    fi
+}
+
+display_ip() {
+    local ip="${QWEN38_DISPLAY_IP:-}"
+    if [[ -z "$ip" ]]; then
+        ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    fi
+    printf '%s' "${ip:-127.0.0.1}"
+}
+
+show_dashboard() {
+    local choice ip health spec_label
+    load_server_profile
+    configure_profile
+    if ! SERVER_PID="$(running_pid)"; then
+        warn "Qwen3.8 server is not running"
+        return 1
+    fi
+
+    while true; do
+        clear 2>/dev/null || true
+        ip="$(display_ip)"
+        if health="$(curl -fsS --max-time 3 "http://127.0.0.1:${PORT}/health" 2>/dev/null)"; then
+            :
+        else
+            health="not responding"
+        fi
+        case "$SPEC_MODE" in
+            native) spec_label="native MTP" ;;
+            fast) spec_label="FastMTP (3-token draft)" ;;
+            ngram) spec_label="n-gram speculation" ;;
+            *) spec_label="off" ;;
+        esac
+
+        echo "=================================================================="
+        echo "  QWEN3.8 SERVER RUNNING"
+        echo "=================================================================="
+        printf '  Profile:  %s\n' "$PROFILE_LABEL"
+        printf '  Model:    %s\n' "$(basename -- "$MODEL_PATH")"
+        printf '  Context:  %s  |  KV: F16  |  Speculation: %s\n' "$FULL_CTX" "$spec_label"
+        if [[ "$RUNTIME_KIND" == "hauhau" ]]; then
+            printf '  Vision:   ON (BF16 projector)\n'
+        else
+            printf '  Vision:   ON (F16 projector)\n'
+        fi
+        echo "  GPUs:     3x RTX 3090 (24 GB each)"
+        echo ""
+        echo "  Connect from any device on your network:"
+        echo ""
+        printf '  Chat UI:  http://%s:%s\n' "$ip" "$PORT"
+        printf '  API Base: http://%s:%s/v1\n' "$ip" "$PORT"
+        printf '  Anthropic: http://%s:%s/v1/messages\n' "$ip" "$PORT"
+        echo ""
+        echo "  API Key:  not required"
+        echo ""
+        printf '  OpenWebUI:       OpenAI base URL → http://%s:%s/v1\n' "$ip" "$PORT"
+        printf '  Pi / Codex:      OPENAI_API_BASE=http://%s:%s/v1\n' "$ip" "$PORT"
+        printf '  Cline / Continue: OpenAI compatible → http://%s:%s/v1\n' "$ip" "$PORT"
+        echo "=================================================================="
+        echo ""
+        printf '  Health: %s\n' "$health"
+        printf '  Speed:  %s\n' "$(speed_detail "$PROFILE")"
+        nvidia-smi --query-gpu=index,name,memory.used,memory.total,temperature.gpu --format=csv,noheader 2>/dev/null || true
+        echo ""
+        echo "  [1] Stop server and return to menu"
+        echo "  [2] Return to menu (keep server running)"
+        echo "  [r] Refresh"
+        echo ""
+        read -r -p "  Select [1/2/r]: " choice
+        case "$choice" in
+            1)
+                stop_server
+                echo "  Server stopped."
+                sleep 1
+                return 0
+                ;;
+            2) return 0 ;;
+            r|R) ;;
+            *) ;;
+        esac
+    done
+}
+
 choose_profile() {
     say ""
     say "Qwen3.8 Quick Start"
-    say "  [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K"
-    say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 262K (3x3090 profile)"
-    say "  [3] Flash-Next UD-IQ3_XXS + F16 vision + PR #27742 (experimental)"
-    say "  [4] Flash-Next UD-IQ4_XS + F16 vision + PR #27742 (experimental, larger)"
+    say "  [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K  |  speed: $(speed_display hauhau-q8)"
+    say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 262K (3x3090 profile)  |  speed: $(speed_display hauhau-q8-fastmtp)"
+    say "  [3] Flash-Next UD-IQ3_XXS + F16 vision + PR #27742 (experimental)  |  speed: $(speed_display flash-iq3)"
+    say "  [4] Flash-Next UD-IQ4_XS + F16 vision + PR #27742 (experimental, larger)  |  speed: $(speed_display flash-iq4)"
+    say "  [s] Run short speed tests for all profiles"
     say "  [q] Cancel"
     read -r -p "Select: " choice
     case "$choice" in
@@ -745,6 +1057,11 @@ choose_profile() {
         2) PROFILE="hauhau-q8-fastmtp" ;;
         3) PROFILE="flash-iq3" ;;
         4) PROFILE="flash-iq4" ;;
+        s|S)
+            PROFILE="hauhau-q8"
+            MODE="speed-all"
+            SMOKE=1
+            ;;
         *) say "Cancelled."; exit 0 ;;
     esac
 }
@@ -760,7 +1077,13 @@ main() {
         show_status
         exit 0
     fi
-    if [[ "$MODE" == "menu" || ( "$MODE" == "start" && "$PROFILE_EXPLICIT" -eq 0 ) ]]; then
+    if [[ "$MODE" == "dashboard" ]]; then
+        load_server_profile
+        configure_profile
+        show_dashboard
+        exit $?
+    fi
+    if [[ "$MODE" == "menu" || ( "$MODE" == "start" && "$PROFILE_EXPLICIT" -eq 0 ) || ( "$MODE" == "speed" && "$PROFILE_EXPLICIT" -eq 0 ) ]]; then
         choose_profile
     fi
     configure_profile
@@ -777,11 +1100,20 @@ main() {
             build_runtime
             start_server
             say "Server is running. State: ${STATE_ROOT}/server.info"
+            if [[ -t 0 && -t 1 ]]; then
+                show_dashboard
+            fi
             ;;
         smoke)
             ensure_assets
             build_runtime
             run_smoke
+            ;;
+        speed)
+            run_speed_test
+            ;;
+        speed-all)
+            run_speed_test_all
             ;;
         *)
             usage

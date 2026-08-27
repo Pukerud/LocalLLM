@@ -34,7 +34,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 
 - Build a separate pinned PR #27742 (`qwen4exp`) runtime at head `af1ffaf37f1e44edb62e87ab8ddb9bb6840849bc` (recorded 2026-08-27).
 - Use mmap/host handling for the large PLE/n-gram tables and F16 KV.
-- Initial candidate: Unsloth `UD-IQ3_XXS`; try `UD-IQ4_XS` only after the smaller candidate starts successfully.
+- Initial candidate: Unsloth `UD-IQ3_XXS`; `UD-IQ4_XS` is permitted only after the smaller candidate starts successfully.
 - Use `ngram-mod` only after a non-speculative short text/vision smoke test.
 - Do not assume an MTP head exists in the Unsloth GGUF; inspect metadata before enabling `draft-mtp`.
 
@@ -54,7 +54,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 3. Add scripts/documentation and run static checks.
 4. Build/download only the stable Hauhau Q8 target and projector first.
 5. Run short text and image smoke tests, with no long-context prompt.
-6. If stable, build/download the Flash-Next candidate and run the same short smoke tests. Flash download is approximately 82 GB for IQ3_XXS and is intentionally lazy.
+6. If stable, build/download the Flash-Next candidate and run the same short smoke tests. Flash downloads are lazy because the IQ3/IQ4 shard sets are large.
 7. Commit changes with model/runtime provenance and push to the appropriate repository only after validation.
 
 ## Success criteria
@@ -86,5 +86,7 @@ Completed 2026-08-27:
 - Short Hauhau baseline, native MTP, and FastMTP smoke tests passed for text plus vision.
 - Short Flash-Next UD-IQ3_XXS baseline and `ngram-mod` smoke tests passed for text plus vision.
 - Health-only native-context startup checks passed for Hauhau Q8 at 262144 and Flash UD-IQ3_XXS at 262144. No full-context prompt was sent.
-- UD-IQ4_XS was catalogued but intentionally not downloaded or tested; it remains a lazy experimental option.
-- Final checks showed no miner process, no running LLM server, all GPUs idle, `MINER=`/`MINER2=` empty, `WD_ENABLED=0`, and `REBOOT_ON_ERROR=` empty.
+- Added visible checksum/launch progress, cached short speed tests, and a post-launch dashboard with connection URLs, health, GPU state, and tok/s.
+- Downloaded and SHA-256 verified Flash-Next UD-IQ4_XS (~88 GiB) after IQ3 passed; its short 4096-context speed test measured 43.49 tok/s coding, 43.22 tok/s story, 43.36 tok/s average.
+- Short 4096-context speed results: Hauhau native 48.74 tok/s, Hauhau FastMTP 60.39 tok/s, Flash IQ3 45.19 tok/s, Flash IQ4 43.36 tok/s. These are cached in `speed-results.tsv`, not full-context benchmarks.
+- Final checks showed the FastMTP server healthy at context 262144, no miner process, all three GPUs visible, `MINER=`/`MINER2=` empty, `WD_ENABLED=0`, and `REBOOT_ON_ERROR=` empty.

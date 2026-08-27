@@ -236,8 +236,7 @@ while true; do
         q|Q)
             if [[ "$active" == "qwen38" ]]; then
                 cd "${SCRIPT_DIR}"
-                ./v1qwen38.sh --status
-                read -r -p "  Press Enter to return to menu..." _
+                ./v1qwen38.sh --dashboard
             elif [[ "$active" != "none" ]]; then
                 echo ""
                 echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
