@@ -36,14 +36,14 @@ No full-context generation is used by the speed tests. The server may still star
 
 ## Tested Qwen3.8 profiles
 
-Measured on 2026-08-27 using a 4096-token context, one short coding prompt, and one short story prompt. These are lightweight single-request generation measurements, not full-context benchmarks.
+Measured on 2026-08-27–28 using a 4096-token context, one short coding prompt, and one short story prompt. These are lightweight single-request generation measurements, not full-context benchmarks.
 
 | Profile | Coding | Story | Average | Notes |
 |---|---:|---:|---:|---|
 | Hauhau Q8 native MTP | 56.87 tok/s | 40.62 tok/s | **48.74 tok/s** | BF16 vision projector |
 | Hauhau Q8 FastMTP | 73.47 tok/s | 47.31 tok/s | **60.39 tok/s** | current recommended profile |
 | Flash IQ3 | 45.24 tok/s | 45.13 tok/s | **45.19 tok/s** | experimental PR #27742 |
-| Flash IQ4 | 43.49 tok/s | 43.22 tok/s | **43.36 tok/s** | experimental PR #27742; native 262K uses Q8 K/V and automatic layer fitting |
+| Flash IQ4 | 48.08 tok/s | 48.25 tok/s | **48.16 tok/s** | experimental PR #27742; Q8 K/V and automatic layer fitting, remeasured 2026-08-28 |
 
 Results are cached in:
 
