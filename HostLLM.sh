@@ -10,9 +10,18 @@ GREEN=$(tput setaf 2); YELLOW=$(tput setaf 3); CYAN=$(tput setaf 6)
 RED=$(tput setaf 1); BOLD=$(tput bold); RESET=$(tput sgr0)
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+QWEN38_STATE_ROOT="${QWEN38_STATE_ROOT:-${XDG_STATE_HOME:-${HOME}/.local/state}/locallm-qwen38}"
 
 detect_engine() {
-    if pgrep -f "llama-server" > /dev/null 2>&1; then
+    local qwen_pid=""
+    if [[ -s "${QWEN38_STATE_ROOT}/server.pid" ]]; then
+        qwen_pid=$(cat "${QWEN38_STATE_ROOT}/server.pid" 2>/dev/null || true)
+    fi
+    if [[ "$qwen_pid" =~ ^[0-9]+$ ]] && kill -0 "$qwen_pid" 2>/dev/null \
+        && [[ -r "/proc/${qwen_pid}/cmdline" ]] \
+        && [[ "$(tr '\0' ' ' < "/proc/${qwen_pid}/cmdline")" == *llama-server* ]]; then
+        echo "qwen38"
+    elif pgrep -f "llama-server" > /dev/null 2>&1; then
         if [[ -f "${SCRIPT_DIR}/.server_info_mtp" ]]; then
             echo "mtp"
         elif [[ -f "${SCRIPT_DIR}/.server_info_beellama" ]]; then
@@ -32,7 +41,9 @@ detect_engine() {
 }
 
 get_server_info() {
-    if [[ -f "${SCRIPT_DIR}/.server_info_mtp" ]]; then
+    if [[ -f "${QWEN38_STATE_ROOT}/server.info" ]]; then
+        cat "${QWEN38_STATE_ROOT}/server.info"
+    elif [[ -f "${SCRIPT_DIR}/.server_info_mtp" ]]; then
         cat "${SCRIPT_DIR}/.server_info_mtp"
     elif [[ -f "${SCRIPT_DIR}/.server_info_beellama" ]]; then
         cat "${SCRIPT_DIR}/.server_info_beellama"
@@ -102,6 +113,9 @@ check_update() {
 
 stop_all() {
     echo ""
+    if [[ -x "${SCRIPT_DIR}/v1qwen38.sh" ]]; then
+        "${SCRIPT_DIR}/v1qwen38.sh" --stop >/dev/null 2>&1 || true
+    fi
     echo " Stopping llama-server..."
     pkill -f "llama-server" 2>/dev/null && echo "   llama-server killed." || echo "   (not running)"
     echo " Stopping vLLM container..."
@@ -142,7 +156,10 @@ while true; do
     echo "=========================================================="
     echo ""
 
-    if [[ "$active" == "llamacpp" ]]; then
+    if [[ "$active" == "qwen38" ]]; then
+        echo -e "  Status:  ${GREEN}Qwen3.8 server RUNNING${RESET}"
+        if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
+    elif [[ "$active" == "llamacpp" ]]; then
         echo -e "  Status:  ${GREEN}llama.cpp RUNNING${RESET}"
         if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
     elif [[ "$active" == "dflash" ]]; then
@@ -167,6 +184,9 @@ while true; do
     echo ""
     echo "  Quick Start (one-click):"
     echo "  ─────────────────────────"
+    echo -e "  ${BOLD}[Q]${RESET} Qwen3.8-27B Q8  ⚡ full vision │ native 262K │ native MTP"
+    echo -e "      HauhauCS Q8_K_P profile; Flash-Next profiles are experimental"
+    echo ""
     echo -e "  ${BOLD}[0]${RESET} BeeLlama DFlash  ⚡ up to 105 tok/s │ vision │ reasoning"
     echo -e "      5 models to pick from │ single GPU │ dual GPU runs without draft (Tested on 3090)"
     echo ""
@@ -191,6 +211,28 @@ while true; do
     choice=$(echo "$choice" | tr -d '[:space:]')
 
     case $choice in
+        q|Q)
+            if [[ "$active" == "qwen38" ]]; then
+                cd "${SCRIPT_DIR}"
+                ./v1qwen38.sh --status
+                read -r -p "  Press Enter to return to menu..." _
+            elif [[ "$active" != "none" ]]; then
+                echo ""
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
+                sleep 2
+                continue
+            else
+                if [[ ! -x "${SCRIPT_DIR}/v1qwen38.sh" ]]; then
+                    echo ""
+                    echo -e "  ${RED}v1qwen38.sh not found or not executable.${RESET}"
+                    sleep 2
+                    continue
+                fi
+                cd "${SCRIPT_DIR}"
+                ./v1qwen38.sh --quickstart
+                [[ $? -eq 42 ]] && exit 0
+            fi
+            ;;
         0)
             if [[ "$active" == "beellama" ]]; then
                 # Already running — re-enter full dashboard
