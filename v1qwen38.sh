@@ -91,7 +91,7 @@ Profiles:
   hauhau-q8          HauhauCS Q8_K_P + BF16 vision, native 262K, embedded MTP
   hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, 262K on 3x3090
   flash-iq3          Flash-Next UD-IQ3_XXS + F16 vision, experimental PR #27742
-  flash-iq4          Flash-Next UD-IQ4_XS + F16 vision, experimental PR #27742
+  flash-iq4          Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit, experimental PR #27742
 
 --smoke uses a 4096-token context, one short text request, and one small PNG
 request. It never sends a long-context prompt. --quickstart uses the profile's
@@ -211,7 +211,7 @@ configure_profile() {
             ;;
         flash-iq4)
             qdir="UD-IQ4_XS"
-            PROFILE_LABEL="Qwen3.8-Flash-Next ${qdir} / vision / PR #27742"
+            PROFILE_LABEL="Qwen3.8-Flash-Next ${qdir} / vision / Q8 KV / auto-fit / PR #27742"
             RUNTIME_KIND="flash"
             RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen4exp-pr27742"
             MODEL_PATH="${MODEL_ROOT}/flash/${qdir}/Qwen3.8-Flash-Next-${qdir}-00001-of-00003.gguf"
@@ -542,10 +542,7 @@ make_server_args() {
         --ctx-size "$ctx"
         --n-gpu-layers "$([[ "$RUNTIME_KIND" == "flash" ]] && echo auto || echo all)"
         --split-mode layer
-        --tensor-split 1,1,1
         --flash-attn on
-        --cache-type-k f16
-        --cache-type-v f16
         --batch-size "$batch"
         --ubatch-size "$ubatch"
         --parallel 1
@@ -560,6 +557,14 @@ make_server_args() {
         --host "$BIND_HOST"
         --port "$PORT"
     )
+
+    if [[ "$PROFILE" == "flash-iq4" ]]; then
+        # The larger IQ4 model needs quantized KV plus llama.cpp's automatic
+        # layer fitting to leave enough room for native 262K context on 3x24GB.
+        SERVER_ARGS+=(--cache-type-k q8_0 --cache-type-v q8_0)
+    else
+        SERVER_ARGS+=(--tensor-split 1,1,1 --cache-type-k f16 --cache-type-v f16)
+    fi
 
     if (( SMOKE )); then
         # Keep the verification request short and deterministic enough to finish quickly.
@@ -653,7 +658,11 @@ start_server() {
     SERVER_LOG="${LOG_ROOT}/${PROFILE}-$(date +%Y%m%d-%H%M%S).log"
     say "Starting: $PROFILE_LABEL"
     say "  context: $FULL_CTX (smoke context: $([[ $SMOKE -eq 1 ]] && echo 4096 || echo no))"
-    say "  GPUs: 3x RTX 3090, layer split 1,1,1, F16 KV"
+    if [[ "$PROFILE" == "flash-iq4" ]]; then
+        say "  GPUs: 3x RTX 3090, layer split auto-fit, Q8 KV"
+    else
+        say "  GPUs: 3x RTX 3090, layer split 1,1,1, F16 KV"
+    fi
     say "  log: $SERVER_LOG"
     printf 'Command:' > "$SERVER_LOG"
     printf ' %q' "$bin" "${SERVER_ARGS[@]}" >> "$SERVER_LOG"
@@ -1064,7 +1073,11 @@ show_dashboard() {
         echo "=================================================================="
         printf '  Profile:  %s\n' "$PROFILE_LABEL"
         printf '  Model:    %s\n' "$(basename -- "$MODEL_PATH")"
-        printf '  Context:  %s  |  KV: F16  |  Speculation: %s\n' "$FULL_CTX" "$spec_label"
+        if [[ "$PROFILE" == "flash-iq4" ]]; then
+            printf '  Context:  %s  |  KV: Q8  |  Speculation: %s\n' "$FULL_CTX" "$spec_label"
+        else
+            printf '  Context:  %s  |  KV: F16  |  Speculation: %s\n' "$FULL_CTX" "$spec_label"
+        fi
         if [[ "$RUNTIME_KIND" == "hauhau" ]]; then
             printf '  Vision:   ON (BF16 projector)\n'
         else
@@ -1117,7 +1130,7 @@ choose_profile() {
     say "  [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K  |  speed: $(speed_display hauhau-q8)"
     say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 262K (3x3090 profile)  |  speed: $(speed_display hauhau-q8-fastmtp)"
     say "  [3] Flash-Next UD-IQ3_XXS + F16 vision + PR #27742 (experimental)  |  speed: $(speed_display flash-iq3)"
-    say "  [4] Flash-Next UD-IQ4_XS + F16 vision + PR #27742 (experimental, larger)  |  speed: $(speed_display flash-iq4)"
+    say "  [4] Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit + PR #27742 (experimental, larger)  |  speed: $(speed_display flash-iq4)"
     say "  [s] Run short speed tests for all profiles"
     say "  [q] Cancel"
     read -r -p "Select: " choice

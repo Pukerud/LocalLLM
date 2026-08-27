@@ -15,7 +15,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 ## Baseline
 
 - Three RTX 3090 GPUs, 24 GiB each, compute capability 8.6.
-- GPUs are connected through PHB and report no usable P2P; initial multi-GPU mode is `--split-mode layer` with equal `--tensor-split 1,1,1`.
+- GPUs are connected through PHB and report no usable P2P; Hauhau and Flash IQ3 use `--split-mode layer` with equal `--tensor-split 1,1,1`, while Flash IQ4 uses layer split with automatic fitting.
 - Host has approximately 125 GiB RAM and no swap.
 - Current NVIDIA driver is 595.91.07; use a CUDA 12.9 build/runtime path if a toolkit is required.
 
@@ -33,7 +33,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 ### Experimental Qwen3.8-Flash-Next
 
 - Build a separate pinned PR #27742 (`qwen4exp`) runtime at head `af1ffaf37f1e44edb62e87ab8ddb9bb6840849bc` (recorded 2026-08-27).
-- Use mmap/host handling for the large PLE/n-gram tables and F16 KV.
+- Use mmap/host handling for the large PLE/n-gram tables; Flash IQ3 uses F16 K/V, while Flash IQ4 uses `q8_0` K/V and automatic layer fitting at native context.
 - Initial candidate: Unsloth `UD-IQ3_XXS`; `UD-IQ4_XS` is permitted only after the smaller candidate starts successfully.
 - Use `ngram-mod` only after a non-speculative short text/vision smoke test.
 - Do not assume an MTP head exists in the Unsloth GGUF; inspect metadata before enabling `draft-mtp`.
@@ -91,3 +91,9 @@ Completed 2026-08-27:
 - Short 4096-context speed results: Hauhau native 48.74 tok/s, Hauhau FastMTP 60.39 tok/s, Flash IQ3 45.19 tok/s, Flash IQ4 43.36 tok/s. These are cached in `speed-results.tsv`, not full-context benchmarks.
 - Final checks showed the FastMTP server healthy at context 262144, no miner process, all three GPUs visible, `MINER=`/`MINER2=` empty, `WD_ENABLED=0`, and `REBOOT_ON_ERROR=` empty.
 - Cleaned the active HostLLM menu and removed obsolete Qwen3.6-era launcher, benchmark, chat-template, and vLLM metadata files; the README now preserves their history and test results.
+
+Completed 2026-08-28:
+
+- Diagnosed Flash IQ4 native-context startup failure as CUDA OOM during KV/compute-buffer allocation; IQ3 remained healthy.
+- Verified Flash IQ4 at native 262144 with `q8_0` K/V, automatic layer fitting (no explicit tensor split), original batch/ubatch 512/128, all three GPUs, and F16 vision.
+- Short text and 64x64 image requests passed; the temporary server was stopped after testing. No full-context generation was run and no Hive/miner settings changed.
