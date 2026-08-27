@@ -20,7 +20,7 @@ From the main `HostLLM.sh` menu, press **[Q]** for the isolated Qwen3.8 launcher
 - **HauhauCS FastMTP**: optional model-card sidecar profile, extended to 262K on the 3x RTX 3090 host.
 - **Flash-Next UD-IQ3_XXS / UD-IQ4_XS**: experimental PR #27742 runtime, F16 vision projector, mmap-backed large PLE tables.
 
-The new launcher uses the RTX 3090's `sm_86`, layer-splits across three non-P2P GPUs, verifies downloaded model hashes, and stores new models/runtimes under `$HOME/.local/share/localllm-qwen38`. Its `--smoke` mode sends only one short text request and one small image request; it does not run a full-context benchmark. Flash-Next downloads are lazy because the shards are tens of gigabytes.
+The new launcher uses the RTX 3090's `sm_86`, layer-splits across three non-P2P GPUs, verifies downloaded model hashes, and stores new models/runtimes under `$HOME/.local/share/localllm-qwen38`. When launched from HiveOS's automatic `sudo -s` shell, it resolves the original login user's shared model and state paths. Its `--smoke` mode sends only one short text request and one small image request; it does not run a full-context benchmark. Flash-Next downloads are lazy because the shards are tens of gigabytes.
 
 The old Quick Start below remains the Qwen3.6 BeeLlama profile.
 

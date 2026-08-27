@@ -10,16 +10,35 @@ GREEN=$(tput setaf 2); YELLOW=$(tput setaf 3); CYAN=$(tput setaf 6)
 RED=$(tput setaf 1); BOLD=$(tput bold); RESET=$(tput sgr0)
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-QWEN38_STATE_ROOT="${QWEN38_STATE_ROOT:-${XDG_STATE_HOME:-${HOME}/.local/state}/locallm-qwen38}"
+
+# HiveOS may enter a root shell automatically via `sudo -s`. Share the
+# Qwen3.8 state with the original login user so both shells see one server.
+qwen38_home="${HOME}"
+if [[ "${EUID}" -eq 0 ]]; then
+    qwen38_owner="${QWEN38_OWNER_USER:-${SUDO_USER:-user}}"
+    qwen38_resolved_home="$(getent passwd "$qwen38_owner" 2>/dev/null | awk -F: 'NR == 1 {print $6}')"
+    if [[ -n "$qwen38_resolved_home" && "$qwen38_resolved_home" != "/root" ]]; then
+        qwen38_home="$qwen38_resolved_home"
+    elif [[ -d /home/user ]]; then
+        qwen38_home="/home/user"
+    fi
+fi
+QWEN38_STATE_ROOT="${QWEN38_STATE_ROOT:-${qwen38_home}/.local/state/locallm-qwen38}"
+
+qwen_server_pid_running() {
+    local pid="$1" cmdline=""
+    # kill -0 fails when Qwen is running under the other shared-shell user.
+    [[ -r "/proc/${pid}/cmdline" ]] || return 1
+    cmdline="$(tr '\0' ' ' < "/proc/${pid}/cmdline")"
+    [[ "$cmdline" == *llama-server* ]]
+}
 
 detect_engine() {
     local qwen_pid=""
     if [[ -s "${QWEN38_STATE_ROOT}/server.pid" ]]; then
         qwen_pid=$(cat "${QWEN38_STATE_ROOT}/server.pid" 2>/dev/null || true)
     fi
-    if [[ "$qwen_pid" =~ ^[0-9]+$ ]] && kill -0 "$qwen_pid" 2>/dev/null \
-        && [[ -r "/proc/${qwen_pid}/cmdline" ]] \
-        && [[ "$(tr '\0' ' ' < "/proc/${qwen_pid}/cmdline")" == *llama-server* ]]; then
+    if [[ "$qwen_pid" =~ ^[0-9]+$ ]] && qwen_server_pid_running "$qwen_pid"; then
         echo "qwen38"
     elif pgrep -f "llama-server" > /dev/null 2>&1; then
         if [[ -f "${SCRIPT_DIR}/.server_info_mtp" ]]; then
@@ -63,23 +82,27 @@ check_update() {
     echo "  Checking for updates..."
     cd "${SCRIPT_DIR}"
 
-    if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+    local -a GIT_CMD=(git -c "safe.directory=${SCRIPT_DIR}")
+    if [[ "${EUID}" -ne 0 && ! -w "${SCRIPT_DIR}/.git" ]]; then
+        GIT_CMD=(sudo git -c "safe.directory=${SCRIPT_DIR}")
+    fi
+
+    if ! "${GIT_CMD[@]}" rev-parse --is-inside-work-tree > /dev/null 2>&1; then
         echo -e "  ${RED}Not a git repository. Cannot check for updates.${RESET}"
         sleep 2
         return
     fi
 
-    LOCAL_HASH=$(git rev-parse HEAD)
-    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    LOCAL_HASH=$("${GIT_CMD[@]}" rev-parse HEAD)
+    BRANCH=$("${GIT_CMD[@]}" rev-parse --abbrev-ref HEAD)
 
-    git fetch origin 2>/dev/null
-    if [[ $? -ne 0 ]]; then
+    if ! "${GIT_CMD[@]}" fetch origin; then
         echo -e "  ${RED}Failed to fetch from remote.${RESET}"
         sleep 2
         return
     fi
 
-    REMOTE_HASH=$(git rev-parse "origin/${BRANCH}" 2>/dev/null)
+    REMOTE_HASH=$("${GIT_CMD[@]}" rev-parse "origin/${BRANCH}" 2>/dev/null)
     if [[ -z "$REMOTE_HASH" ]]; then
         echo -e "  ${RED}Could not determine remote branch.${RESET}"
         sleep 2
@@ -94,13 +117,12 @@ check_update() {
 
     echo -e "  ${YELLOW}New commits found on origin/${BRANCH}:${RESET}"
     echo ""
-    git log --oneline "${LOCAL_HASH}..${REMOTE_HASH}"
+    "${GIT_CMD[@]}" log --oneline "${LOCAL_HASH}..${REMOTE_HASH}"
     echo ""
     read -p "  Update now? (y/N): " upd
     upd=$(echo "$upd" | tr -d '[:space:]')
     if [[ "$upd" == "y" || "$upd" == "Y" ]]; then
-        git pull origin "$BRANCH"
-        if [[ $? -eq 0 ]]; then
+        if "${GIT_CMD[@]}" pull origin "$BRANCH"; then
             echo -e "  ${GREEN}Updated. Restarting...${RESET}"
             sleep 1
             exec "$0"

@@ -6,8 +6,22 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-DATA_ROOT="${QWEN38_DATA_ROOT:-${HOME}/.local/share/localllm-qwen38}"
-STATE_ROOT="${QWEN38_STATE_ROOT:-${XDG_STATE_HOME:-${HOME}/.local/state}/locallm-qwen38}"
+
+# A HiveOS login shell may automatically enter `sudo -s`. Keep Qwen3.8's
+# models, runtimes, logs, and state in the invoking user's home in that case.
+qwen38_home="${HOME}"
+if [[ "${EUID}" -eq 0 ]]; then
+    qwen38_owner="${QWEN38_OWNER_USER:-${SUDO_USER:-user}}"
+    qwen38_resolved_home="$(getent passwd "$qwen38_owner" 2>/dev/null | awk -F: 'NR == 1 {print $6}')"
+    if [[ -n "$qwen38_resolved_home" && "$qwen38_resolved_home" != "/root" ]]; then
+        qwen38_home="$qwen38_resolved_home"
+    elif [[ -d /home/user ]]; then
+        qwen38_home="/home/user"
+    fi
+fi
+
+DATA_ROOT="${QWEN38_DATA_ROOT:-${qwen38_home}/.local/share/localllm-qwen38}"
+STATE_ROOT="${QWEN38_STATE_ROOT:-${qwen38_home}/.local/state/locallm-qwen38}"
 RUNTIME_ROOT="${DATA_ROOT}/runtimes"
 MODEL_ROOT="${DATA_ROOT}/models"
 LOG_ROOT="${DATA_ROOT}/logs"
@@ -381,7 +395,9 @@ build_runtime() {
 }
 
 write_server_info() {
-    umask 077
+    # State is shared with the original HiveOS login user when this launcher
+    # is started from the automatic root shell; it contains no secrets.
+    umask 022
     cat > "${STATE_ROOT}/server.info" <<EOF
 profile=$PROFILE
 label=$PROFILE_LABEL
@@ -402,8 +418,8 @@ running_pid() {
     [[ -s "${STATE_ROOT}/server.pid" ]] || return 1
     pid="$(cat "${STATE_ROOT}/server.pid" 2>/dev/null || true)"
     [[ "$pid" =~ ^[0-9]+$ ]] || return 1
-    kill -0 "$pid" 2>/dev/null || return 1
-    # Never trust a stale PID after reboot; only recognize our llama-server.
+    # kill -0 fails when the server belongs to the other shared-shell user;
+    # /proc plus the command line still lets us reject stale/reused PIDs.
     [[ -r "/proc/${pid}/cmdline" ]] || return 1
     local cmdline
     cmdline="$(tr '\0' ' ' < "/proc/${pid}/cmdline")"
@@ -411,18 +427,34 @@ running_pid() {
     printf '%s\n' "$pid"
 }
 
+pid_exists() {
+    [[ -r "/proc/$1/cmdline" ]]
+}
+
+signal_pid() {
+    local signal="$1" pid="$2"
+    if kill "-$signal" "$pid" 2>/dev/null; then
+        return 0
+    fi
+    if [[ "${EUID}" -ne 0 ]]; then
+        sudo kill "-$signal" "$pid" 2>/dev/null
+    else
+        return 1
+    fi
+}
+
 stop_server() {
     local pid=""
     if pid="$(running_pid)"; then
         say "Stopping Qwen3.8 server PID $pid"
-        kill "$pid" 2>/dev/null || true
+        signal_pid TERM "$pid" || true
         for _ in $(seq 1 20); do
-            kill -0 "$pid" 2>/dev/null || break
+            pid_exists "$pid" || break
             sleep 1
         done
-        if kill -0 "$pid" 2>/dev/null; then
+        if pid_exists "$pid"; then
             warn "server did not stop gracefully; sending SIGKILL to PID $pid"
-            kill -9 "$pid" 2>/dev/null || true
+            signal_pid KILL "$pid" || true
         fi
     fi
     rm -f "${STATE_ROOT}/server.pid" "${STATE_ROOT}/server.info"
