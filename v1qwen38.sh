@@ -160,13 +160,13 @@ configure_profile() {
             SPEC_MODE="native"
             ;;
         hauhau-q8-fastmtp)
-            PROFILE_LABEL="Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP"
+            PROFILE_LABEL="Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP / 262K"
             RUNTIME_KIND="hauhau"
             RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen38-hauhau"
             MODEL_PATH="${MODEL_ROOT}/hauhau/${HAUHAU_MODEL}"
             MMPROJ_PATH="${MODEL_ROOT}/hauhau/${HAUHAU_MMPROJ}"
             DRAFT_PATH="${MODEL_ROOT}/hauhau/${HAUHAU_DRAFT}"
-            FULL_CTX=204800
+            FULL_CTX=262144
             SPEC_MODE="fast"
             ;;
         flash-iq3)
@@ -703,7 +703,7 @@ choose_profile() {
     say ""
     say "Qwen3.8 Quick Start"
     say "  [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K"
-    say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP (204.8K card profile)"
+    say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 262K (3x3090 profile)"
     say "  [3] Flash-Next UD-IQ3_XXS + F16 vision + PR #27742 (experimental)"
     say "  [4] Flash-Next UD-IQ4_XS + F16 vision + PR #27742 (experimental, larger)"
     say "  [q] Cancel"
