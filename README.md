@@ -1,30 +1,8 @@
-# LocalLLM — Multi-Engine LLM Dashboard
+# LocalLLM — Qwen3.8 Inference
 
-https://github.com/user-attachments/assets/daa56313-deff-4664-a614-f2472aac92f6
+Local NVIDIA-GPU launchers for the current Qwen3.8 profiles, with a general llama.cpp fallback. Only one server should use port `8080` at a time.
 
-> **Qwen3.6-27B at ~100 tok/s with MTP speculative decoding** using [ggml-org/llama.cpp PR #22673](https://github.com/ggml-org/llama.cpp/pull/22673)
-
----
-
-A collection of launch scripts to run LLMs locally on NVIDIA GPUs. Multiple inference engines share one port (8080).
-
-**🟢 NVIDIA GPUs only** — all engines require CUDA.
-
----
-
-## Qwen3.8 Quick Start (new)
-
-From the main `HostLLM.sh` menu, press **[Q]** for the isolated Qwen3.8 launcher.
-
-- **HauhauCS Q8_K_P**: native 262K context, BF16 vision projector, native MTP.
-- **HauhauCS FastMTP**: optional model-card sidecar profile, extended to 262K on the 3x RTX 3090 host.
-- **Flash-Next UD-IQ3_XXS / UD-IQ4_XS**: experimental PR #27742 runtime, F16 vision projector, mmap-backed large PLE tables.
-
-The new launcher uses the RTX 3090's `sm_86`, layer-splits across three non-P2P GPUs, verifies downloaded model hashes with visible progress, and stores new models/runtimes under `$HOME/.local/share/localllm-qwen38`. When launched from HiveOS's automatic `sudo -s` shell, it resolves the original login user's shared model and state paths. Its `--smoke` mode sends only one short text request and one small image request; it does not run a full-context benchmark. `--speed-test-all` uses a 4096-token context and two short prompts (coding plus a roughly 100-word story); results are cached beside the Qwen menu entries. A server dashboard appears after Quick Start with connection URLs, health, GPU memory, and cached speed. Flash-Next downloads are lazy because the shards are tens of gigabytes.
-
-The old Quick Start below remains the Qwen3.6 BeeLlama profile.
-
----
+> **Current primary:** Qwen3.8-27B HauhauCS Q8 + vision + FastMTP, configured for native 262K context on three RTX 3090 GPUs.
 
 ## Quick Start
 
@@ -35,435 +13,222 @@ chmod +x HostLLM.sh v1*.sh
 ./HostLLM.sh
 ```
 
-Press **[0]** from the main menu for the **one-click Quick Start** — it auto-installs everything, downloads models, and starts the server. No technical knowledge needed.
+From the HostLLM menu, press **[Q]**. The Qwen3.8 profile menu offers:
 
-### What Quick Start does automatically
-
-1. **Installs CUDA Toolkit** if missing (12.4 or 12.8 for Blackwell GPUs)
-2. **Builds BeeLlama.cpp** with DFlash, TurboQuant/TCQ, Flash Attention
-3. **Downloads 3 models**: target (~15 GB IQ4_XS), draft (~1.2 GB Q5_K_M), mmproj (~0.9 GB)
-4. **Detects your GPU(s)** and auto-calculates the optimal context size
-5. **Starts the server** with vision, reasoning, and DFlash enabled
-6. **Shows connection info** with all API endpoints
-
-### Quick Start final display
-
+```text
+Qwen3.8 Quick Start
+  [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K       | speed: cached result
+  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 262K           | speed: cached result
+  [3] Flash-Next UD-IQ3_XXS + F16 vision + PR #27742          | speed: cached result
+  [4] Flash-Next UD-IQ4_XS + F16 vision + PR #27742           | speed: cached result
+  [s] Run short speed tests for installed profiles
+  [q] Cancel
 ```
-==================================================================
-  BEELLAMA DFLASH SERVER RUNNING
-==================================================================
 
-  Model:   Qwen3.6-27B-NEO-CODE-HERE-2T-OT-IQ4_XS
-  Draft:   Qwen3.6-27B-DFlash-Q5_K_M
-  Context: 262144  |  KV: turbo3_tcq  |  DFlash: cross-ctx 1024
-  Vision:  ON (CPU offload)  |  Reasoning: ON
-  GPUs:    1x RTX 3090 (24 GB)
+The launcher visibly reports:
+
+- model/projector/sidecar checksum progress, rate, and ETA;
+- downloads and already-present assets;
+- runtime/build status;
+- a health-wait heartbeat every ten seconds while the model loads.
+
+No full-context generation is used by the speed tests. The server may still start with its configured native context after the test context has been selected.
+
+## Tested Qwen3.8 profiles
+
+Measured on 2026-08-27 using a 4096-token context, one short coding prompt, and one short story prompt. These are lightweight single-request generation measurements, not full-context benchmarks.
+
+| Profile | Coding | Story | Average | Notes |
+|---|---:|---:|---:|---|
+| Hauhau Q8 native MTP | 56.87 tok/s | 40.62 tok/s | **48.74 tok/s** | BF16 vision projector |
+| Hauhau Q8 FastMTP | 73.47 tok/s | 47.31 tok/s | **60.39 tok/s** | current recommended profile |
+| Flash IQ3 | 45.24 tok/s | 45.13 tok/s | **45.19 tok/s** | experimental PR #27742 |
+| Flash IQ4 | 43.49 tok/s | 43.22 tok/s | **43.36 tok/s** | experimental PR #27742 |
+
+Results are cached in:
+
+```text
+~/.local/state/locallm-qwen38/speed-results.tsv
+```
+
+The menu reads that cache and displays the average beside each profile. Run a profile-specific test with:
+
+```bash
+./v1qwen38.sh --speed-test --profile hauhau-q8-fastmtp
+./v1qwen38.sh --speed-test-all
+```
+
+## Qwen3.8 runtime details
+
+- HauhauCS Q8_K_P GGUF with matching BF16 vision projector.
+- Flash-Next UD-IQ3_XXS and UD-IQ4_XS GGUFs use the isolated PR #27742 runtime.
+- RTX 3090 builds use CUDA architecture `sm_86`.
+- Three GPUs use layer split and `--tensor-split 1,1,1` because this host reports PHB topology and no usable peer-to-peer link.
+- F16 KV cache is used for the native 262144-token context configuration.
+- FastMTP uses the publisher sidecar and its pinned qwen35-compatible patch.
+- All Qwen3.8 data, runtimes, logs, and state live below:
+
+```text
+/home/user/.local/share/localllm-qwen38
+/home/user/.local/state/locallm-qwen38
+```
+
+When HiveOS enters an automatic `sudo -s` shell, the launcher resolves the original `/home/user` owner so root and user shells share the same assets and server state.
+
+## Qwen3.8 server dashboard
+
+After Quick Start finishes, the launcher shows a live dashboard. Press **[2]** to return to the HostLLM menu while keeping the server running, **[1]** to stop it, or **[r]** to refresh.
+
+```text
+==================================================================
+  QWEN3.8 SERVER RUNNING
+==================================================================
+  Profile:  Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP / 262K
+  Model:    Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-Q8_K_P.gguf
+  Context:  262144  |  KV: F16  |  Speculation: FastMTP (3-token draft)
+  Vision:   ON (BF16 projector)
+  GPUs:     3x RTX 3090 (24 GB each)
+  Reasoning: ON
 
   Connect from any device on your network:
 
-  Chat UI:       http://192.168.1.45:8080
-  API Base:      http://192.168.1.45:8080/v1
-  Anthropic:     http://192.168.1.45:8080/v1/messages
+  Chat UI:       http://192.168.1.69:8080
+  API Base:      http://192.168.1.69:8080/v1
+  Anthropic:     http://192.168.1.69:8080/v1/messages
 
-  API Key: any string (e.g. sk-1234) or leave blank
+  API Key: any string or blank (not required)
 
-  OpenWebUI:    OpenAI base URL → http://192.168.1.45:8080/v1
-  Pi / Codex:   OPENAI_API_BASE=http://192.168.1.45:8080/v1
-  Cline / Continue: OpenAI compatible → http://192.168.1.45:8080/v1
-  Anthropic SDK:  base_url → http://192.168.1.45:8080/v1
+  OpenWebUI:       OpenAI base URL → http://192.168.1.69:8080/v1
+  Pi / Codex:      OPENAI_API_BASE=http://192.168.1.69:8080/v1
+  Cline / Continue: OpenAI compatible → http://192.168.1.69:8080/v1
+  Anthropic SDK:   base_url → http://192.168.1.69:8080/v1
 ==================================================================
 
-  CPU: 1%
-  GPU 0:  45%   |   VRAM: 8.8 GB / 12 GB (72%)   |   Temp: 52 degC
-  GPU 1:  38%   |   VRAM: 9.1 GB / 12 GB (75%)   |   Temp: 49 degC
-  TOTAL: VRAM: 17.9 GB / 24 GB (74%)   |   GPUs: 2
+  Health: {"status":"ok"}
+  Speed:  avg 60.39 tok/s | coding 73.47 | story 47.31
+  CPU: 0%
+  GPU 0 :   0% | VRAM: 15.5 GB / 24.0 GB (64%) | Temp: 48 degC
+  GPU 1 :   0% | VRAM: 15.5 GB / 24.0 GB (64%) | Temp: 50 degC
+  GPU 2 :   0% | VRAM: 18.2 GB / 24.0 GB (75%) | Temp: 46 degC
+  TOTAL: VRAM: 49.1 GB / 72.0 GB (68%) | GPUs: 3
 
   [1] Stop server and return to menu
   [2] Return to menu (keep server running)
-
-  Select [1/2]:
+  [r] Refresh
 ```
 
-Stats update live. The server stays running when you press **[2]** — access it from any device on your network.
-
----
-
-## Main Menu
-
-```
-==========================================================
-  HostLLM — Engine Picker
-==========================================================
-
-  Status:  No engine running
-
-  Quick Start:
-  ------------
-  [0] Quick Start           BeeLlama DFlash — up to 105 tok/s, vision, reasoning, dual GPU (no draft) (Tested on 3090)
-  [1] Quick Start (Legacy)  MTP — up to 100 tok/s, no vision, dual GPU (Tested on 4090)
-
-  Engines:
-  -------
-  [2] llama.cpp       ik_llama.cpp — max context (262K), all GGUF models
-  [3] DFlash llama.cpp buun-llama-cpp — DFlash speculative decoding
-  [4] vLLM            Docker — max throughput (50-127 TPS), tool calls
-  [5] Lucebox DFlash  lucebox-hub — DDTree (~104 t/s on 4090)
-  [6] llama.cpp MTP   ggml-org/llama.cpp — native MTP speculative decoding
-  [7] BeeLlama DFlash Anbeeld/beellama.cpp — full dashboard (manual control)
-  [8] ZAYA1-8B        ⚠️ EXPERIMENTAL — Zyphra vLLM, 8B MoE, 760M active, reasoning
-
-  Controls:
-  ---------
-  [9] Kill All    Stop whatever is running
-  [10] Update      Check git repo for newer version
-  [11] Exit
-
-  Select:
-```
-
-All engine sub-menus have:
-- **[99] Back to Main Menu** — returns to this screen
-- **[98] Exit** — quits the whole app
-
----
-
-## Prerequisites
-
-- **GPU:** NVIDIA only (RTX 3060+, 3090, 4070, 4090, 5080, etc.)
-  - Minimum 16 GB total VRAM (single or multi-GPU)
-  - Multi-GPU supported — model and KV cache are split automatically
-- **OS:** Linux (tested Ubuntu 22.04)
-- **Disk:** ~80 GB for models + builds
-- **Docker:** Required for vLLM (engine 3) only
-- **CUDA:** Auto-installed by Quick Start if missing
-
----
-
-## Supported GPUs
-
-Quick Start auto-detects your GPU(s) and adjusts:
-
-| Setup | Total VRAM | Context | Notes |
-|-------|-----------|---------|-------|
-| 1× RTX 4090 | 24 GB | ~131K | Recommended |
-| 1× RTX 3090 | 24 GB | ~131K | Same VRAM, works great |
-| 2× RTX 3090 | 48 GB | ~262K | Max context |
-| 2× RTX 3060 | 24 GB | ~50K | Tight but works |
-| 2× RTX 4090 | 48 GB | ~262K | Max context |
-| RTX 5080/5090 | 16/32 GB | varies | Auto-installs CUDA 12.8 |
-
----
-
-## Engines
-
-| # | Engine | Script | Speed | Status | Best for |
-|---|--------|--------|------:|--------|----------|
-| **0** | **Quick Start** | `v1beellama.sh --quickstart` | **up to 105 tok/s** | ✅ | BeeLlama DFlash, vision, reasoning, dual GPU (no draft) |
-| **1** | **Quick Start (Legacy)** | `v1llama_mtp.sh --quickstart` | **up to 100 tok/s** | ✅ | MTP, dual GPU, no vision |
-| **2** | **llama.cpp** (ik_llama.cpp) | `v1llama_cpp.sh` | ~35-40 tok/s | ✅ Stable | Vision, max context (262K) |
-| **3** | **DFlash** (buun fork) | `v1dflash_llama_cpp.sh` | — | ❌ | Under development |
-| **4** | **vLLM** (Docker) | `v1_vllm.sh` | ~70 tok/s* | ✅ Working | Production API, tool use |
-| **5** | **Lucebox DFlash** | `v1lucebox.sh` | **~104 tok/s** | ⚠️ Unstable | Fastest when stable |
-| **6** | **llama.cpp MTP** (PR #22673) | `v1llama_mtp.sh` | **up to 100 tok/s** | ✅ Working | Fast text, native MTP |
-| **7** | **BeeLlama DFlash** (Anbeeld) | `v1beellama.sh` | **~100+ tok/s** | ✅ Working | Full dashboard, manual control |
-| **8** | **ZAYA1-8B** (Zyphra vLLM) | `v1zaya.sh` | TBD | ⚠️ **EXPERIMENTAL** | 8B MoE / 760M active, reasoning, tools |
-
-All share port 8080. Only one runs at a time.
-
-**Recommended:** Engine **0** (Quick Start) for best speed + quality + vision, or **7** (BeeLlama full dashboard) for manual control.
-
-\* *vLLM speed varies by preset: 20K ctx ~110 tok/s, 48K ctx ~70 tok/s, 128K ctx ~55 tok/s.*
-
----
-
-## API Endpoints
-
-The server exposes OpenAI and Anthropic-compatible endpoints:
-
-| Endpoint | Purpose |
-|----------|---------|
-| `http://IP:8080/v1/chat/completions` | OpenAI Chat (main) |
-| `http://IP:8080/v1/completions` | Text completions |
-| `http://IP:8080/v1/models` | List models |
-| `http://IP:8080/v1/responses` | OpenAI Responses API |
-| `http://IP:8080/v1/messages` | Anthropic Messages API |
-| `http://IP:8080/v1/embeddings` | Embeddings |
-| `http://IP:8080/health` | Health check |
-
-### Connecting from clients
-
-| Client | How to connect |
-|--------|---------------|
-| **OpenWebUI** | OpenAI base URL → `http://IP:8080/v1` |
-| **Pi (coding agent)** | `OPENAI_API_BASE=http://IP:8080/v1` |
-| **Codex CLI** | `OPENAI_API_BASE=http://IP:8080/v1` |
-| **Cline / Continue** | OpenAI compatible → `http://IP:8080/v1` |
-| **Cursor** | Set OpenAI base URL → `http://IP:8080/v1` |
-| **Anthropic SDK** | `base_url="http://IP:8080/v1"` |
-
-**API Key:** Any string (e.g. `sk-1234`) or leave blank. The server doesn't require authentication.
-
----
-
-## Engine 5 — llama.cpp MTP (Full Dashboard)
-
-For users who want full control over settings. Uses [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) with [PR #22673](https://github.com/ggml-org/llama.cpp/pull/22673) — native Multi-Token Prediction.
-
-### Dashboard menu
-
-```
- --- SETUP ---
- [0] Install / Update llama.cpp (MTP PR #22673)
- [1] Convert HF Model -> GGUF (preserve MTP layers + quantize)
- [2] Download Fixed Chat Template (froggeric)
-
- --- MTP SERVER ---
- [3] Start MTP Server (configure context, KV, MTP tokens)
- [7] Quick Start MTP   (Reddit PR params -- just pick model)
- [4] Stop Server
-
- --- MANAGEMENT ---
- [5] Download Model (.gguf URL)
- [6] Delete Model
-
- [99] Back to Main Menu
- [98] Exit
-```
-
-### Recommended defaults (RTX 4090)
-
-| Setting | Value | Why |
-|---------|-------|-----|
-| Quantization | **Q5_K_M** (~19 GB) | Best quality/size for 24GB |
-| Context | **262144 (256K)** | Max with q4_0 KV |
-| KV cache | **q4_0** | Fits 256K in 24GB |
-| MTP tokens | **5** | Speculative lookahead |
-| Template | **Fixed jinja v9** | Bundled, fixes 7 bugs |
-
----
-
-## Engine 8 — ZAYA1-8B (Zyphra vLLM) ⚠️ EXPERIMENTAL
-
-> **⚠️ WARNING — EXPERIMENTAL:** Installing Zyphra's vLLM fork has been known to **crash/hard-lock the machine** during installation. Use at your own risk. Not recommended for production use. Consider using a disposable VM or container.
-
-Runs [Zyphra/ZAYA1-8B](https://huggingface.co/Zyphra/ZAYA1-8B) — a novel MoE architecture with **8B total / 760M active parameters** (16 experts, top-1 routing). Competitive with models 10× its size on math and coding benchmarks.
-
-Uses [Zyphra's vLLM fork](https://github.com/Zyphra/vllm/tree/zaya1-pr) — the architecture (MoE + Mamba cache + CCA + EDA + MOD) is not supported by llama.cpp or any GGUF-based engine.
-
-### Quickstart
+Direct dashboard/status commands:
 
 ```bash
-# 1. Install Zyphra's vLLM fork (builds from source, ~10-20 min)
-pip install "vllm @ git+https://github.com/Zyphra/vllm.git@zaya1-pr"
-
-# 2. Start the server
-vllm serve Zyphra/ZAYA1-8B --port 8080 \
-   --mamba-cache-dtype float32 --dtype bfloat16 \
-   --reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser zaya_xml
+./v1qwen38.sh --status
+./v1qwen38.sh --dashboard
+./v1qwen38.sh --stop
 ```
 
-Or use the dashboard: `./HostLLM.sh` → press **[8]**.
+## Current HostLLM menu
 
-### Dashboard menu
+The active menu intentionally stays small:
 
-```
- [0] Install / Update Zyphra vLLM fork
- [1] Start Server (local model)
- [2] Start Server (from HuggingFace Hub)
- [5] Download Model (~16.5 GB)
- [D] Delete Model
- [6] Stop Server
- [7] Quick Benchmark
- [8] View Server Logs
- [s] Setup Status
+```text
+  [Q] Qwen3.8-27B       vision │ native 262K │ FastMTP
+  [2] llama.cpp          general GGUF fallback
+  [9] Kill All
+  [10] Update
+  [11] Exit
 ```
 
-### Key specs
+`v1llama_cpp.sh` remains available for manually running other current GGUF models. The removed Qwen3.6-era launchers and tests are recorded below and are no longer offered by HostLLM.
 
-| Property | Value |
-|----------|-------|
-| Total parameters | 8.4B |
-| Active per token | 760M |
-| Architecture | MoE (16 experts, top-1) + Mamba cache + CCA |
-| Disk size (bf16) | 16.5 GB |
-| VRAM needed | ~18 GB (fits 3090/4090) |
-| Context window | 131K |
-| Reasoning | Yes (qwen3 parser) |
-| Tool calls | Yes (zaya_xml parser) |
+## API connections
 
-### Recommended sampling
+The Qwen3.8 server exposes:
 
-| Use case | Temperature | top-p | top-k |
-|----------|------------|-------|-------|
-| General / math | 1.0 | 0.95 | -1 |
-| Code / agent | 0.6 | 0.95 | -1 |
+| Endpoint | Purpose |
+|---|---|
+| `http://IP:8080/health` | health check |
+| `http://IP:8080/v1/models` | model list |
+| `http://IP:8080/v1/chat/completions` | OpenAI-compatible chat |
+| `http://IP:8080/v1/completions` | text completions |
+| `http://IP:8080/v1/messages` | Anthropic-compatible messages |
 
----
+No API key is required by the local server. Clients may still send any placeholder key such as `sk-local`.
 
-## Engine 6 — BeeLlama DFlash (TurboQuant + Vision + Reasoning)
+## Hardware and safety
 
-Uses [Anbeeld/beellama.cpp](https://github.com/Anbeeld/beellama.cpp) — a fork with DFlash speculative decoding, TurboQuant/TCQ KV cache compression, working vision, and reasoning support. Follows the [official quickstart guide](https://github.com/Anbeeld/beellama.cpp/blob/main/docs/quickstart-qwen36-dflash.md).
+Validated host:
 
-### Advantages over other engines
+- 3× NVIDIA RTX 3090, 24 GiB each, compute capability 8.6;
+- NVIDIA driver `595.91.07`;
+- PHB topology with no usable P2P;
+- approximately 125 GiB system RAM and no swap.
 
-- **TurboQuant + TCQ KV cache** — `turbo4` (4.125 bpv) and `turbo3_tcq` (3.25 bpv) compress KV cache up to ~5× vs FP16, fitting 120K+ context in 24 GB VRAM with better precision than `q4_0`
-- **DFlash speculative decoding** — a small draft model reads hidden states from the target model via cross-attention, predicting multiple tokens ahead for verification in a single forward pass
-- **Vision works** — `--mmproj` + `--no-mmproj-offload` runs the multimodal projector on CPU, freeing GPU VRAM
-- **Reasoning ON** — thinking tokens give the drafter richer context for better predictions (`--reasoning on` + `preserve_thinking`)
-- **Adaptive draft depth** — automatically adjusts draft depth based on real-time acceptance rates
+The Qwen3.8 launcher does not modify HiveOS, watchdog, miner, or driver configuration. The custom miner remains disabled; `WD_ENABLED=0`, `REBOOT_ON_ERROR=`, `MINER=`, and `MINER2=` remain unchanged in the active rig configuration.
 
-### Dashboard menu
+## Future high-throughput candidates
 
-```
- --- SETUP ---
- [0] Install / Update beellama.cpp (Anbeeld/beellama.cpp)
+Qwen publishes serving examples for vLLM, SGLang, and TokenSpeed. A future isolated test could use the official `Qwen/Qwen3.8-27B-FP8` safetensors checkpoint with a packaged serving engine. It must be tested on this exact 3×3090 PHB host before replacing the current profile.
 
- --- BEELLAMA DFLASH SERVER ---
- [1] Start DFlash Server (Precision preset — Q5_K_S + turbo4 + reasoning ON)
- [2] Start DFlash Server (Speed preset — Q4_K_M + turbo3_tcq)
- [3] Start DFlash Server (Custom — pick everything)
- [4] Stop Server
+BeeLlama Docker images are packaging for BeeLlama's `llama-server`, not a special Qwen3.8 accelerator. Its preview release is rolling and does not contain the custom Hauhau FastMTP or Flash-Next runtime used here.
 
- --- MANAGEMENT ---
- [5] Download Target Model
- [6] Download DFlash Draft Model
- [7] Download mmproj (vision projector)
- [8] Delete Model
+## Legacy engines and tests
 
- [99] Back to Main Menu
- [98] Exit
-```
+This section preserves the history of the removed Qwen3.6-era entries. Their source files, old model metadata, and menu routes were removed from the active checkout; Git history retains the previous implementation.
 
-### Config presets
+### Why Qwen3.6 was removed
 
-| Preset | Target | Draft | K cache | V cache | Context | Reasoning |
-|--------|--------|-------|---------|---------|---------|----------|
-| **Precision** | Q5_K_S | Q4_K_M | turbo4 | turbo3_tcq | 122800 | ON |
-| **Speed/VRAM** | Q4_K_M | Q4_K_M | turbo3_tcq | turbo3_tcq | 131072 | ON |
-| **Custom** | manual | manual | manual | manual | manual | manual |
+The old launchers were built around Qwen3.6 model files, Qwen3.6 draft models, Qwen3.6 chat templates, or Qwen3.6-specific Docker/Genesis configurations. They did not provide a tested Qwen3.8 vision/FastMTP path on this three-3090 host. Keeping them in the main menu made their old 4090 speed claims look current, so Qwen3.8 is now the primary supported model family.
 
-### Required models
+### Removed engines
 
-**Target model** — from [unsloth/Qwen3.6-27B-GGUF](https://huggingface.co/unsloth/Qwen3.6-27B-GGUF):
-- `Qwen3.6-27B-Q5_K_S.gguf` (precision preset)
-- `Qwen3.6-27B-Q4_K_M.gguf` (speed/VRAM preset)
+| Removed entry | Historical purpose | Reason removed |
+|---|---|---|
+| Legacy MTP Quick Start | Qwen3.6 native MTP, no vision; advertised up to 100 tok/s on a 4090 | Superseded by the tested Qwen3.8 profiles |
+| buun-llama-cpp DFlash | Qwen3.6 DFlash speculative decoding | Qwen3.6-only workflow, no vision, and the script used an `sm_89` build assumption |
+| Old vLLM Docker profile | Qwen3.6 AutoRound INT4 plus Genesis patches | The stored compose/model setup was Qwen3.6-specific; future vLLM work should use an isolated Qwen3.8 FP8 profile |
+| Lucebox DFlash | Qwen3.6 DFlash safetensors draft and DDTree | Unstable, Qwen3.6-only, and compiled with an `sm_89` assumption |
+| Upstream llama.cpp MTP dashboard | Qwen3.6 model conversion with PR #22673 MTP layers | Redundant after the Qwen3.8 runtime became the supported path |
+| BeeLlama DFlash dashboard | Qwen3.6 DFlash, TurboQuant/TCQ KV cache, vision, and reasoning | Useful historical fork, but not the Hauhau FastMTP or Flash-Next runtime |
+| ZAYA1-8B | 8B total / approximately 760M active parameters using Zyphra's experimental vLLM fork | Small-model detour with no value for the current 27B target; installation could hard-lock the host |
 
-**DFlash draft model** — from [spiritbuun/Qwen3.6-27B-DFlash-GGUF](https://huggingface.co/spiritbuun/Qwen3.6-27B-DFlash-GGUF) or [Ardenzard/Qwen3.6-27B-DFlash-GGUF](https://huggingface.co/Ardenzard/Qwen3.6-27B-DFlash-GGUF):
-- `Qwen3.6-27B-DFlash-Q4_K_M.gguf` (recommended, ~2.7 GB)
-- `Qwen3.6-27B-DFlash-Q5_K_M.gguf` (more precision, ~3.1 GB)
-- `Qwen3.6-27B-DFlash-IQ4_XS.gguf` (smallest, ~1.5 GB)
+### Historical tests and claims
 
-**Multimodal projector** (optional, for vision) — from [unsloth/Qwen3.6-27B-GGUF](https://huggingface.co/unsloth/Qwen3.6-27B-GGUF):
-- `mmproj-BF16.gguf`
+- Legacy MTP was reported at up to approximately 100 tok/s on an RTX 4090 with no vision.
+- Lucebox was reported at approximately 104 tok/s on an RTX 4090 under its Qwen3.6/DDTree settings.
+- Old vLLM README figures ranged from approximately 50–127 tok/s depending on context preset.
+- BeeLlama DFlash benchmarks tested Qwen3.6 target/draft combinations at roughly 100K context with TurboQuant/TCQ KV settings.
+- The old benchmark scripts measured different prompts, models, contexts, KV types, and hardware. Their numbers are not directly comparable to the current Qwen3.8 smoke-speed results.
 
-All three can be downloaded from the dashboard menu ([5], [6], [7]).
+The current comparable lightweight measurements are the Qwen3.8 table above: FastMTP averaged **60.39 tok/s**, while native MTP averaged **48.74 tok/s**.
 
-### Recommended settings (RTX 3090/4090, 24 GB)
+### BeeLlama preview history
 
-| Setting | Precision | Speed/VRAM |
-|---------|-----------|------------|
-| Target | Q5_K_S (~19 GB) | Q4_K_M (~16 GB) |
-| Draft | Q4_K_M (~2.7 GB) | Q4_K_M (~2.7 GB) |
-| Context | 122800 | 131072 |
-| K cache | turbo4 (4.125 bpv) | turbo3_tcq (3.25 bpv) |
-| V cache | turbo3_tcq (3.25 bpv) | turbo3_tcq (3.25 bpv) |
-| Cross-ctx | 1024 | 1024 |
-| `-ub` | 256 | 256 |
-| Reasoning | ON | ON |
-| Vision | ON (CPU offload) | ON (CPU offload) |
+BeeLlama `preview-v0.4.4` is a rolling preview based on a moving branch build. The published CUDA images included:
 
-### Benchmarks (RTX 3090, 24 GB, 100K ctx, turbo3_tcq KV, 2025-05-09)
-
-_Prompt: "Write a Python function that finds the longest increasing subsequence..." | 1024 max tokens | temp=0.6 | top-k=20 | reasoning on_
-
-#### Target: Qwen3.6-27B-Q4_K_M (16 GB)
-
-| Draft | Accept Rate | Accepted / Generated | Speed (tok/s) | Prompt (tok/s) |
-|-------|-------------|---------------------|---------------|----------------|
-| Q6_K (1.4 GB) | 47.2% | 860/1822 | **102.9** | 188.4 |
-| Q8_0 (1.8 GB) | 41.8% | 856/2049 | 101.7 | 184.9 |
-| IQ4_XS (892 MB) | **48.0%** | 853/1778 | 98.4 | 187.8 |
-| Q5_K_M (1.2 GB) | 41.5% | 833/2008 | 90.0 | 184.6 |
-
-#### Target: Qwen3.6-27B-NEO-CODE-HERE-2T-OT-IQ4_XS (15 GB)
-
-| Draft | Accept Rate | Accepted / Generated | Speed (tok/s) | Prompt (tok/s) |
-|-------|-------------|---------------------|---------------|----------------|
-| Q5_K_M (1.2 GB) | **49.1%** | 853/1736 | **104.8** | 230.5 |
-| Q8_0 (1.8 GB) | 44.0% | 837/1903 | 95.0 | 212.5 |
-| Q6_K (1.4 GB) | 43.2% | 822/1901 | 87.9 | 227.5 |
-| IQ4_XS (892 MB) | 40.5% | 802/1982 | 83.3 | 242.5 |
-
-#### Target: Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q5_K_M (19 GB)
-
-| Draft | Accept Rate | Accepted / Generated | Speed (tok/s) | Prompt (tok/s) |
-|-------|-------------|---------------------|---------------|----------------|
-| IQ4_XS (892 MB) | **42.0%** | 798/1898 | 74.1 | 261.8 |
-| Q8_0 (1.8 GB) | 39.8% | 817/2054 | **78.5** | 255.0 |
-| Q6_K (1.4 GB) | 38.8% | 814/2099 | 76.6 | 255.9 |
-| Q5_K_M (1.2 GB) | 38.5% | 807/2097 | 73.8 | 258.6 |
-
-**Best overall:** IQ4_XS target + Q5_K_M draft = **104.8 tok/s** at **49.1%** acceptance.
-
-**Best acceptance:** Q4_K_M target + IQ4_XS draft = **48.0%** at 98.4 tok/s.
-
-Run speed benchmarks with `bash benchmarks/speed_beellama.sh`.
-
-### Quality Benchmark (RTX 3090, 24 GB, 100K ctx, turbo3_tcq KV, 2025-05-09)
-
-_Experimental automated quality test — 4 prompt classes scored automatically. Not a replacement for human evaluation. Uses fixed prompts with objective scoring criteria (code runs, answer matches, constraints counted, keywords checked). Run 3× per model due to temperature variance and report best._
-
-_Prompts: merge intervals (10 assertions), Einstein puzzle (15 clues), 8-constraint essay, CAP theorem (12 concepts) | temp=0.6 | reasoning on_
-
-| Model | Code | Reasoning | Instruction | Knowledge | **Best** | Range |
-|-------|------|-----------|-------------|-----------|---------|-------|
-| **NEO-CODE Q5_K_M** (19 GB) | 10/10 | **10/10** | **10/10** | 9/10 | **39/40** 🏆 | 35-39 |
-| NEO-CODE IQ4_XS (15 GB) | 10/10 | 10/10 | 8/10 | 9/10 | 37/40 | 37 |
-| Q4_K_M (16 GB) | 10/10 | 8/10 | 10/10 | 9/10 | 36/40 | 36-37 |
-
-**Q5_K_M is the best model** — highest peak (39/40) with perfect reasoning and instruction scores. IQ4_XS is the value pick (smallest, still 37/40). All models ace code generation.
-
-Run quality benchmarks with `bash benchmarks/quality_test.sh [port] [host]` or test all models with `bash benchmarks/quality_all_targets.sh`.
-
----
-
-## Directory Layout
-
-```
-./
-├── HostLLM.sh              ← Engine picker (start here)
-├── chat_templates/          ← Bundled fixed jinja templates
-├── v1llama_mtp.sh          ← Engine 6 / Legacy Quick Start dashboard
-├── v1llama_cpp.sh          ← Engine 1 dashboard
-├── v1dflash_llama_cpp.sh   ← Engine 2 dashboard
-├── v1_vllm.sh              ← Engine 3 dashboard
-├── v1lucebox.sh            ← Engine 4 dashboard
-├── v1beellama.sh           ← Engine 0/7 — Quick Start + full dashboard
-├── v1zaya.sh               ← Engine 8 — ZAYA1-8B (Zyphra vLLM)
-├── benchmarks/             ← Speed & quality benchmark scripts
-│   ├── BENCHMARK_STANDARD.md  ← Standard format docs
-│   ├── speed_beellama.sh      ← Speed: all target×draft combos
-│   ├── quality_test.sh        ← IQ test: code, reasoning, instruction, knowledge
-│   └── quality_all_targets.sh ← IQ test all models automatically
-├── llama_models/           ← Shared GGUF model pool
-├── llama_cpp_mtp/          ← MTP build (gitignored)
-├── ik_llama.cpp/           ← llama.cpp build (gitignored)
-├── buun-llama-cpp/         ← DFlash build (gitignored)
-├── beellama-cpp/           ← BeeLlama build (gitignored)
-├── lucebox-hub/            ← Lucebox build (gitignored)
-└── vllm_models/            ← vLLM Docker + model weights (gitignored)
-├── zaya_models/            ← ZAYA1-8B model weights (gitignored)
+```text
+ghcr.io/anbeeld/beellama.cpp:server-cuda-preview-v0.4.4
+ghcr.io/anbeeld/beellama.cpp:server-cuda12-preview-v0.4.4
+ghcr.io/anbeeld/beellama.cpp:server-cuda13-preview-v0.4.4
 ```
 
-## Notes
+The images are convenient server packages. They do not inherently improve inference speed and were not selected for the current Qwen3.8 path.
 
-- All builds auto-detect GPU architecture (sm_86, sm_89, sm_120, etc.) — no manual config needed.
-- Multi-GPU tensor splitting is automatic — just plug in multiple NVIDIA GPUs.
-- `llama_models/` is gitignored — add `.gguf` files via dashboard menus or manually.
-- MTP GGUF files must be converted with the PR #22673 converter — standard GGUFs don't have MTP layers.
-- Each engine tracks its own state via `.server_info*` files — the main menu auto-detects which is running.
-- Use **[9] Update** from the main menu to pull the latest version from GitHub.
+## Repository layout
 
-## License
+```text
+HostLLM.sh                 current top-level menu
+v1qwen38.sh                Qwen3.8 profiles, tests, and dashboard
+v1llama_cpp.sh             general llama.cpp fallback
+QWEN38_EXECUTION_PLAN.md   provenance and validation record
+```
 
-Scripts are MIT. Engine repos have their own licenses.
+Generated Qwen3.8 models, runtimes, logs, and state are stored outside the repository under `/home/user/.local/`.
+
+## Validation
+
+Static checks:
+
+```bash
+bash -n HostLLM.sh v1qwen38.sh
+```
+
+The tested Qwen3.8 path uses short text/vision smoke tests and short speed tests only. No full 262K-context generation or long benchmark is part of the normal launcher workflow.

@@ -8,7 +8,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 - Do not start, modify, or enable the custom miner.
 - Keep `WD_ENABLED=0` and `REBOOT_ON_ERROR=` unchanged.
 - Do not change the NVIDIA driver or Hive watchdog configuration.
-- Keep existing engines intact; add isolated Qwen3.8 runtimes/profiles.
+- Keep the general llama.cpp fallback; archive obsolete Qwen3.6-specific engines and tests after Qwen3.8 validation.
 - Do not run a full 262K-context benchmark or long generation. Smoke tests use short text and one small image only.
 - Stop every test server before the next test and record logs/VRAM.
 
@@ -44,8 +44,8 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 2. Add explicit model metadata: repository, shard/include pattern, projector, checksum/manifest, context, KV type, split mode, and speculation mode.
 3. Add safe dependency/build capability checks, including `sm_86`; remove the old `sm_89` assumption for this host.
 4. Add short smoke-test helper using `/health`, one short text request, and one small image request.
-5. Add Quick Start entries only for profiles that pass the smoke test; leave old engines available but label them Qwen3.6-only.
-6. Update README with the model/runtime requirements and the short-test policy.
+5. Add Quick Start entries only for profiles that pass the smoke test; do not expose obsolete Qwen3.6-only engines in the active menu.
+6. Update README with the model/runtime requirements, short-test policy, and legacy engine history.
 
 ## Execution/test order
 
@@ -90,3 +90,4 @@ Completed 2026-08-27:
 - Downloaded and SHA-256 verified Flash-Next UD-IQ4_XS (~88 GiB) after IQ3 passed; its short 4096-context speed test measured 43.49 tok/s coding, 43.22 tok/s story, 43.36 tok/s average.
 - Short 4096-context speed results: Hauhau native 48.74 tok/s, Hauhau FastMTP 60.39 tok/s, Flash IQ3 45.19 tok/s, Flash IQ4 43.36 tok/s. These are cached in `speed-results.tsv`, not full-context benchmarks.
 - Final checks showed the FastMTP server healthy at context 262144, no miner process, all three GPUs visible, `MINER=`/`MINER2=` empty, `WD_ENABLED=0`, and `REBOOT_ON_ERROR=` empty.
+- Cleaned the active HostLLM menu and removed obsolete Qwen3.6-era launcher, benchmark, chat-template, and vLLM metadata files; the README now preserves their history and test results.

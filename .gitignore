@@ -1,47 +1,17 @@
-# Compiled builds
+# General llama.cpp build and local model assets
 ik_llama.cpp/
-buun-llama-cpp/
-beellama-cpp/
-llama_cpp_mtp/
-
-# Model files (GGUF — large binary)
 llama_models/
-zaya_models/
-# vllm_models/  — un-ignored: compose files and genesis patches tracked
-# large model weights (.safetensors) still excluded below
 
-# Runtime / state
+# Qwen3.8 generated assets live outside the repository
+.local/
+
+# Runtime/state files
 .server_info
-.server_info_dflash
-.server_info_mtp
-.server_info_beellama
-.server_info_zaya
 .server_compose
 server.log
-server_dflash.log
-cowork_env.sh
 *.log
 
-# Build artifacts
-compile_debug.log
-dflash_compile_debug.log
-mtp_compile_debug.log
-beellama_compile_debug.log
+# Build probes and generated outputs
 .llama_arg_probe_*
-.dflash_arg_probe*
-.mtp_arg_probe*
-.beellama_arg_probe*
-
-# Large model weight files
-*.safetensors
-*.safetensors.index.json
-*.gguf
-*.bin
-
-# Benchmark outputs (scripts are tracked, results are not)
 bench_logs/
 bench_results*.txt
-bench_quality/
-benchmarks/bench_logs/
-benchmarks/bench_quality/
-benchmarks/bench_results*.txt
