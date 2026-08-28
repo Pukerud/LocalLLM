@@ -139,6 +139,10 @@ The active menu intentionally stays small:
 
 `v1llama_cpp.sh` remains available for manually running other current GGUF models. The removed Qwen3.6-era launchers and tests are recorded below and are no longer offered by HostLLM.
 
+### OctaSpace coexistence
+
+If the OctaSpace `osn.service` exists and is active, HostLLM pauses it before launching Qwen3.8 or the general llama.cpp engine so both workloads do not compete for the same GPUs. When the engine stops, HostLLM starts OctaSpace again. If a launcher returns while its server is still running, OctaSpace remains paused until **[9] Kill All** stops the engine. A small state marker preserves this behavior if HostLLM is reopened.
+
 ## API connections
 
 The Qwen3.8 server exposes:

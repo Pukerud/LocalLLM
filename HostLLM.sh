@@ -25,6 +25,105 @@ if [[ "${EUID}" -eq 0 ]]; then
 fi
 QWEN38_STATE_ROOT="${QWEN38_STATE_ROOT:-${qwen38_home}/.local/state/locallm-qwen38}"
 
+# OctaSpace uses the osn.service unit and shares the same three GPUs. HostLLM
+# temporarily pauses it while an inference engine is being started, then
+# resumes it after that engine has stopped. The marker survives leaving this
+# menu so [9] can restore OctaSpace even after HostLLM is reopened.
+OCTA_SERVICE="osn.service"
+OCTA_STOP_MARKER="${qwen38_home}/.local/state/hostllm/octaspace-stopped"
+OCTA_WAS_PAUSED=0
+mkdir -p "$(dirname -- "$OCTA_STOP_MARKER")" 2>/dev/null || true
+
+systemctl_hostllm() {
+    if [[ "${EUID}" -eq 0 ]]; then
+        systemctl "$@"
+    else
+        sudo systemctl "$@"
+    fi
+}
+
+octaspace_exists() {
+    command -v systemctl >/dev/null 2>&1 || return 1
+    [[ -f "/etc/systemd/system/${OCTA_SERVICE}" || -f "/lib/systemd/system/${OCTA_SERVICE}" ]]
+}
+
+octaspace_active() {
+    octaspace_exists || return 1
+    systemctl_hostllm is-active --quiet "$OCTA_SERVICE" >/dev/null 2>&1
+}
+
+pause_octaspace() {
+    if ! octaspace_exists; then
+        rm -f "$OCTA_STOP_MARKER"
+        return 0
+    fi
+    if ! octaspace_active; then
+        return 0
+    fi
+
+    echo " Stopping OctaSpace (${OCTA_SERVICE}) before starting HostLLM..."
+    if ! systemctl_hostllm stop "$OCTA_SERVICE" || octaspace_active; then
+        echo -e "  ${RED}Could not stop OctaSpace safely; engine start cancelled.${RESET}"
+        return 1
+    fi
+    if ! : > "$OCTA_STOP_MARKER"; then
+        echo -e "  ${RED}Could not record OctaSpace pause state; restarting it now.${RESET}"
+        systemctl_hostllm start "$OCTA_SERVICE" >/dev/null 2>&1 || true
+        return 1
+    fi
+    OCTA_WAS_PAUSED=1
+    echo -e "  ${GREEN}OctaSpace paused.${RESET}"
+}
+
+resume_octaspace() {
+    if ! octaspace_exists; then
+        rm -f "$OCTA_STOP_MARKER"
+        OCTA_WAS_PAUSED=0
+        return 0
+    fi
+    if [[ ! -f "$OCTA_STOP_MARKER" && "$OCTA_WAS_PAUSED" -ne 1 ]]; then
+        return 0
+    fi
+    if octaspace_active; then
+        rm -f "$OCTA_STOP_MARKER"
+        OCTA_WAS_PAUSED=0
+        echo -e "  ${GREEN}OctaSpace is already running.${RESET}"
+        return 0
+    fi
+
+    echo " Starting OctaSpace (${OCTA_SERVICE})..."
+    if systemctl_hostllm start "$OCTA_SERVICE" && octaspace_active; then
+        rm -f "$OCTA_STOP_MARKER"
+        OCTA_WAS_PAUSED=0
+        echo -e "  ${GREEN}OctaSpace resumed.${RESET}"
+        return 0
+    fi
+    echo -e "  ${RED}OctaSpace failed to start; check: systemctl status ${OCTA_SERVICE}${RESET}"
+    return 1
+}
+
+run_engine_with_octaspace() {
+    local rc=0
+    if ! pause_octaspace; then
+        sleep 2
+        return 1
+    fi
+
+    "$@" || rc=$?
+
+    # A launcher may return to this menu while deliberately leaving its
+    # server running. Keep OctaSpace paused in that case; [9] resumes it
+    # after the server is actually stopped.
+    if [[ "$(detect_engine)" == "none" ]]; then
+        if ! resume_octaspace && [[ "$rc" -eq 0 ]]; then
+            rc=1
+        fi
+    else
+        echo " OctaSpace remains paused while a HostLLM engine is running."
+    fi
+    return "$rc"
+}
+
 qwen_server_pid_running() {
     local pid="$1" cmdline=""
     # kill -0 fails when Qwen is running under the other shared-shell user.
@@ -116,6 +215,7 @@ check_update() {
 }
 
 stop_all() {
+    local rc=0
     echo ""
     if [[ -x "${SCRIPT_DIR}/v1qwen38.sh" ]]; then
         "${SCRIPT_DIR}/v1qwen38.sh" --stop >/dev/null 2>&1 || true
@@ -126,9 +226,13 @@ stop_all() {
     docker rm -f vllm-hostllm 2>/dev/null || true
     echo "   vLLM cleanup complete."
     rm -f "${SCRIPT_DIR}/.server_info" "${SCRIPT_DIR}/.server_compose"
+    if [[ "$(detect_engine)" == "none" ]]; then
+        resume_octaspace || rc=1
+    fi
     echo ""
     echo -e " ${GREEN}All engines stopped.${RESET}"
     sleep 1
+    return "$rc"
 }
 
 while true; do
@@ -191,8 +295,9 @@ while true; do
                     continue
                 fi
                 cd "${SCRIPT_DIR}"
-                ./v1qwen38.sh --quickstart
-                [[ $? -eq 42 ]] && exit 0
+                run_engine_with_octaspace "${SCRIPT_DIR}/v1qwen38.sh" --quickstart
+                qwen_rc=$?
+                [[ "$qwen_rc" -eq 42 ]] && exit 0
             fi
             ;;
         2)
@@ -209,8 +314,9 @@ while true; do
                 continue
             fi
             cd "${SCRIPT_DIR}"
-            ./v1llama_cpp.sh
-            [[ $? -eq 42 ]] && exit 0
+            run_engine_with_octaspace "${SCRIPT_DIR}/v1llama_cpp.sh"
+            llama_rc=$?
+            [[ "$llama_rc" -eq 42 ]] && exit 0
             ;;
         9)
             stop_all
