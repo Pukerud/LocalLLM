@@ -42,6 +42,7 @@ SPEC_OVERRIDE=""
 SMOKE=0
 SERVER_PID=""
 SERVER_LOG=""
+DFLASH_N_MAX="${QWEN38_DFLASH_N_MAX:-5}"
 
 # Pinned/provenance data. Re-check PR head before intentionally updating it.
 readonly HAUHAU_REPO="HauhauCS/Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-MTP-GGUF"
@@ -56,6 +57,10 @@ readonly QWEN4EXP_COMMIT="af1ffaf37f1e44edb62e87ab8ddb9bb6840849bc"
 readonly FLASH_REPO="unsloth/Qwen3.8-Flash-Next-GGUF"
 readonly FLASH_MMPROJ="mmproj-F16.gguf"
 readonly FLASH_MMPROJ_SHA="1f7b7f0b984cf065c604360c29c8098362ed61b290db0ff12c6f360bb1a8a980"
+readonly UPSTREAM_COMMIT="4e97ac86ebe2c4cb8212d98d2641ad6768810896"
+readonly DFLASH_REPO="incoai/Qwen3.8-27B-DFlash2-GGUF"
+readonly DFLASH_MODEL="Qwen3.8-27B-DFlash2-Q4_K_M.gguf"
+readonly DFLASH_MODEL_SHA="18a380efc9b7ed8d88677fc895f5c11ae170653434ee378f7348f715c14d0594"
 
 # Set by configure_profile.
 PROFILE_LABEL=""
@@ -92,6 +97,7 @@ Profiles:
   hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, 262K on 3x3090
   flash-iq3          Flash-Next UD-IQ3_XXS + F16 vision, experimental PR #27742
   flash-iq4          Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit, experimental PR #27742
+  hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K
 
 --smoke uses a 4096-token context, one short text request, and one small PNG
 request. It never sends a long-context prompt. --quickstart uses the profile's
@@ -146,7 +152,7 @@ parse_args() {
                 SPEC_OVERRIDE="none"
                 ;;
             --spec)
-                [[ $# -ge 2 ]] || die "--spec requires none, native, fast, or ngram"
+                [[ $# -ge 2 ]] || die "--spec requires none, native, fast, ngram, or dflash2"
                 SPEC_OVERRIDE="$2"
                 shift
                 ;;
@@ -198,6 +204,17 @@ configure_profile() {
             FULL_CTX=262144
             SPEC_MODE="fast"
             ;;
+        hauhau-q8-dflash2)
+            [[ "${DFLASH_N_MAX}" =~ ^[1-7]$ ]] || die "QWEN38_DFLASH_N_MAX must be an integer from 1 to 7"
+            PROFILE_LABEL="Qwen3.8-27B HauhauCS Q8_K_P / DFlash2 Q4 / text-only / n=${DFLASH_N_MAX} / native 262K"
+            RUNTIME_KIND="upstream"
+            RUNTIME_DIR="${RUNTIME_ROOT}/llama-upstream-master-4e97ac86"
+            MODEL_PATH="${MODEL_ROOT}/hauhau/${HAUHAU_MODEL}"
+            MMPROJ_PATH=""
+            DRAFT_PATH="${MODEL_ROOT}/dflash2/${DFLASH_MODEL}"
+            FULL_CTX=262144
+            SPEC_MODE="dflash2"
+            ;;
         flash-iq3)
             qdir="UD-IQ3_XXS"
             PROFILE_LABEL="Qwen3.8-Flash-Next ${qdir} / vision / PR #27742"
@@ -227,7 +244,7 @@ configure_profile() {
 
     if [[ -n "$SPEC_OVERRIDE" ]]; then
         case "$SPEC_OVERRIDE" in
-            none|native|fast|ngram) SPEC_MODE="$SPEC_OVERRIDE" ;;
+            none|native|fast|ngram|dflash2) SPEC_MODE="$SPEC_OVERRIDE" ;;
             *) die "invalid --spec '$SPEC_OVERRIDE'" ;;
         esac
     fi
@@ -337,6 +354,18 @@ ensure_hauhau_assets() {
     fi
 }
 
+ensure_dflash_assets() {
+    local target_dir="${MODEL_ROOT}/hauhau"
+    local draft_dir="${MODEL_ROOT}/dflash2"
+    local target_base="https://huggingface.co/${HAUHAU_REPO}/resolve/main"
+    local draft_base="https://huggingface.co/${DFLASH_REPO}/resolve/main"
+    # Deliberately fetch only the existing Hauhau target and the small Q4
+    # DFlash2 drafter. The DFlash2 profile is text-only because this draft
+    # context cannot decode multimodal embedding chunks on this build.
+    download_file "$target_base/$HAUHAU_MODEL" "$target_dir/$HAUHAU_MODEL" "$HAUHAU_MODEL_SHA"
+    download_file "$draft_base/$DFLASH_MODEL" "$draft_dir/$DFLASH_MODEL" "$DFLASH_MODEL_SHA"
+}
+
 flash_quant_files() {
     local quant="$1"
     case "$quant" in
@@ -377,6 +406,7 @@ ensure_assets() {
     say "Checking model assets for ${PROFILE} (checksum progress will be shown)..."
     case "$RUNTIME_KIND" in
         hauhau) ensure_hauhau_assets ;;
+        upstream) ensure_dflash_assets ;;
         flash)
             if [[ "$PROFILE" == "flash-iq3" ]]; then
                 ensure_flash_assets UD-IQ3_XXS
@@ -432,21 +462,34 @@ build_runtime() {
         git apply --check "$patch_file"
         git apply "$patch_file"
         say "Applied HauhauCS FastMTP patch to pinned qwen35 runtime"
-    else
+    elif [[ "$RUNTIME_KIND" == "flash" ]]; then
         git fetch --quiet origin "pull/27742/head:refs/remotes/origin/pr-27742"
         git reset --hard --quiet "$QWEN4EXP_COMMIT"
         git clean -fdx >/dev/null
         say "Using qwen4exp PR #27742 commit $QWEN4EXP_COMMIT"
+    else
+        git fetch --quiet origin master
+        if ! git cat-file -e "${UPSTREAM_COMMIT}^{commit}" 2>/dev/null; then
+            git fetch --quiet origin "$UPSTREAM_COMMIT"
+        fi
+        git reset --hard --quiet "$UPSTREAM_COMMIT"
+        git clean -fdx >/dev/null
+        say "Using upstream llama.cpp master commit $UPSTREAM_COMMIT"
     fi
 
-    cmake -S . -B build \
-        -DGGML_CUDA=ON \
-        -DGGML_NATIVE=OFF \
-        -DLLAMA_BUILD_SERVER=ON \
-        -DLLAMA_BUILD_TESTS=OFF \
-        -DLLAMA_BUILD_EXAMPLES=OFF \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_CUDA_ARCHITECTURES=86 \
+    local -a cmake_args=(
+        -DGGML_CUDA=ON
+        -DGGML_NATIVE=OFF
+        -DLLAMA_BUILD_SERVER=ON
+        -DLLAMA_BUILD_TESTS=OFF
+        -DLLAMA_BUILD_EXAMPLES=OFF
+        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_CUDA_ARCHITECTURES=86
+    )
+    if [[ "$RUNTIME_KIND" == "upstream" && -x /usr/local/cuda-12.9/bin/nvcc ]]; then
+        cmake_args+=( -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.9/bin/nvcc )
+    fi
+    cmake -S . -B build "${cmake_args[@]}" \
         2>&1 | tee "${LOG_ROOT}/build-${RUNTIME_KIND}.log"
     cmake --build build --config Release --target llama-server -j"$build_jobs" \
         2>&1 | tee -a "${LOG_ROOT}/build-${RUNTIME_KIND}.log"
@@ -538,7 +581,11 @@ make_server_args() {
 
     SERVER_ARGS=(
         --model "$MODEL_PATH"
-        --mmproj "$MMPROJ_PATH"
+    )
+    if [[ -n "$MMPROJ_PATH" ]]; then
+        SERVER_ARGS+=(--mmproj "$MMPROJ_PATH")
+    fi
+    SERVER_ARGS+=(
         --ctx-size "$ctx"
         --n-gpu-layers "$([[ "$RUNTIME_KIND" == "flash" ]] && echo auto || echo all)"
         --split-mode layer
@@ -566,6 +613,13 @@ make_server_args() {
         SERVER_ARGS+=(--tensor-split 1,1,1 --cache-type-k f16 --cache-type-v f16)
     fi
 
+    if [[ "$PROFILE" == "hauhau-q8-dflash2" ]]; then
+        # DFlash reuses the target output projection. Reverse the target
+        # device order so that the target output and the one-device draft
+        # both use CUDA0; this avoids an unsupported cross-device buffer.
+        SERVER_ARGS+=(--device CUDA2,CUDA1,CUDA0)
+    fi
+
     if (( SMOKE )); then
         # Keep the verification request short and deterministic enough to finish quickly.
         SERVER_ARGS+=(--reasoning off)
@@ -581,7 +635,7 @@ make_server_args() {
     # The dense model card uses no-mmap for its FastMTP reference. Flash-Next
     # must remain mmap-backed because its PLE/n-gram tables are much larger.
     # Use the non-deprecated spelling supported by both pinned runtimes.
-    if [[ "$SPEC_MODE" == "fast" ]]; then
+    if [[ "$SPEC_MODE" == "fast" || "$SPEC_MODE" == "dflash2" ]]; then
         SERVER_ARGS+=(--load-mode none)
     else
         SERVER_ARGS+=(--load-mode mmap)
@@ -609,6 +663,17 @@ make_server_args() {
             ;;
         ngram)
             SERVER_ARGS+=(--spec-type ngram-mod)
+            ;;
+        dflash2)
+            [[ -n "$DRAFT_PATH" ]] || die "DFlash2 profile has no draft path"
+            SERVER_ARGS+=(
+                --spec-draft-model "$DRAFT_PATH"
+                --spec-draft-device CUDA0
+                --spec-draft-ngl all
+                --spec-type draft-dflash
+                --spec-draft-n-max "$DFLASH_N_MAX"
+                --spec-draft-p-min 0
+            )
             ;;
         *) die "internal error: unsupported speculation mode '$SPEC_MODE'" ;;
     esac
@@ -642,9 +707,11 @@ start_server() {
     local bin="$RUNTIME_DIR/source/build/bin/llama-server"
     [[ -x "$bin" ]] || die "runtime is not built: $bin"
     [[ -f "$MODEL_PATH" ]] || die "model is missing: $MODEL_PATH"
-    [[ -f "$MMPROJ_PATH" ]] || die "vision projector is missing: $MMPROJ_PATH"
-    if [[ "$SPEC_MODE" == "fast" && ! -f "$DRAFT_PATH" ]]; then
-        die "FastMTP sidecar is missing: $DRAFT_PATH"
+    if [[ -n "$MMPROJ_PATH" && ! -f "$MMPROJ_PATH" ]]; then
+        die "vision projector is missing: $MMPROJ_PATH"
+    fi
+    if [[ ( "$SPEC_MODE" == "fast" || "$SPEC_MODE" == "dflash2" ) && ! -f "$DRAFT_PATH" ]]; then
+        die "speculative draft model is missing: $DRAFT_PATH"
     fi
 
     if SERVER_PID="$(running_pid)"; then
@@ -660,6 +727,9 @@ start_server() {
     say "  context: $FULL_CTX (smoke context: $([[ $SMOKE -eq 1 ]] && echo 4096 || echo no))"
     if [[ "$PROFILE" == "flash-iq4" ]]; then
         say "  GPUs: 3x RTX 3090, layer split auto-fit, Q8 KV"
+    elif [[ "$PROFILE" == "hauhau-q8-dflash2" ]]; then
+        say "  GPUs: 3x RTX 3090, reversed layer split CUDA2,CUDA1,CUDA0, F16 KV"
+        say "  Vision: OFF (DFlash2 text-only profile)"
     else
         say "  GPUs: 3x RTX 3090, layer split 1,1,1, F16 KV"
     fi
@@ -774,12 +844,20 @@ run_smoke() {
     local rc=0
     start_server || return 1
     run_text_smoke || rc=1
-    run_vision_smoke || rc=1
+    if [[ -n "$MMPROJ_PATH" ]]; then
+        run_vision_smoke || rc=1
+    else
+        say "Vision smoke skipped: this is an intentional text-only DFlash2 profile."
+    fi
     say "GPU snapshot after smoke:"
     nvidia-smi --query-gpu=index,name,memory.used,memory.total,temperature.gpu --format=csv,noheader 2>/dev/null || true
     stop_server
     if (( rc == 0 )); then
-        say "SHORT SMOKE PASSED: text + vision"
+        if [[ -n "$MMPROJ_PATH" ]]; then
+            say "SHORT SMOKE PASSED: text + vision"
+        else
+            say "SHORT SMOKE PASSED: text (vision intentionally disabled)"
+        fi
     else
         warn "SHORT SMOKE FAILED; server log retained at $SERVER_LOG"
     fi
@@ -946,7 +1024,11 @@ show_status() {
     say "Data root: $DATA_ROOT"
     say "Runtime: $RUNTIME_DIR/source/build/bin/llama-server"
     say "Model: $MODEL_PATH"
-    say "Projector: $MMPROJ_PATH"
+    if [[ -n "$MMPROJ_PATH" ]]; then
+        say "Projector: $MMPROJ_PATH"
+    else
+        say "Projector: disabled (text-only profile)"
+    fi
     [[ -n "$DRAFT_PATH" ]] && say "Draft: $DRAFT_PATH"
     for f in "$MODEL_PATH" "$MMPROJ_PATH" "$DRAFT_PATH" "$RUNTIME_DIR/source/build/bin/llama-server"; do
         [[ -n "$f" && -e "$f" ]] && ls -lh "$f"
@@ -1065,6 +1147,7 @@ show_dashboard() {
             native) spec_label="native MTP" ;;
             fast) spec_label="FastMTP (3-token draft)" ;;
             ngram) spec_label="n-gram speculation" ;;
+            dflash2) spec_label="DFlash2 Q4 (n=${DFLASH_N_MAX})" ;;
             *) spec_label="off" ;;
         esac
 
@@ -1078,7 +1161,9 @@ show_dashboard() {
         else
             printf '  Context:  %s  |  KV: F16  |  Speculation: %s\n' "$FULL_CTX" "$spec_label"
         fi
-        if [[ "$RUNTIME_KIND" == "hauhau" ]]; then
+        if [[ -z "$MMPROJ_PATH" ]]; then
+            printf '  Vision:   OFF (DFlash2 text-only profile)\n'
+        elif [[ "$RUNTIME_KIND" == "hauhau" ]]; then
             printf '  Vision:   ON (BF16 projector)\n'
         else
             printf '  Vision:   ON (F16 projector)\n'
@@ -1131,7 +1216,10 @@ choose_profile() {
     say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 262K (3x3090 profile)  |  speed: $(speed_display hauhau-q8-fastmtp)"
     say "  [3] Flash-Next UD-IQ3_XXS + F16 vision + PR #27742 (experimental)  |  speed: $(speed_display flash-iq3)"
     say "  [4] Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit + PR #27742 (experimental, larger)  |  speed: $(speed_display flash-iq4)"
-    say "  [s] Run short speed tests for all profiles"
+    say "  [5] HauhauCS Q8_K_P + DFlash2 Q4 n=5 (text-only, experimental)  |  speed: $(speed_display hauhau-q8-dflash2)"
+    say "  [s] Run short speed tests for all standard profiles"
+    say "      DFlash2 is opt-in and text-only on this host; use --speed-test --profile hauhau-q8-dflash2"
+
     say "  [q] Cancel"
     read -r -p "Select: " choice
     case "$choice" in
@@ -1139,6 +1227,7 @@ choose_profile() {
         2) PROFILE="hauhau-q8-fastmtp" ;;
         3) PROFILE="flash-iq3" ;;
         4) PROFILE="flash-iq4" ;;
+        5) PROFILE="hauhau-q8-dflash2" ;;
         s|S)
             PROFILE="hauhau-q8"
             MODE="speed-all"

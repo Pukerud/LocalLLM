@@ -21,6 +21,7 @@ Qwen3.8 Quick Start
   [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 262K           | speed: cached result
   [3] Flash-Next UD-IQ3_XXS + F16 vision + PR #27742          | speed: cached result
   [4] Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit + PR #27742 | speed: cached result
+  [5] HauhauCS Q8_K_P + DFlash2 Q4 n=5 (text-only, experimental) | speed: cached result
   [s] Run short speed tests for installed profiles
   [q] Cancel
 ```
@@ -44,6 +45,11 @@ Measured on 2026-08-27–28 using a 4096-token context, one short coding prompt,
 | Hauhau Q8 FastMTP | 73.47 tok/s | 47.31 tok/s | **60.39 tok/s** | current recommended profile |
 | Flash IQ3 | 45.24 tok/s | 45.13 tok/s | **45.19 tok/s** | experimental PR #27742 |
 | Flash IQ4 | 48.08 tok/s | 48.25 tok/s | **48.16 tok/s** | experimental PR #27742; Q8 K/V and automatic layer fitting, remeasured 2026-08-28 |
+| Hauhau Q8 + DFlash2 Q4 n=5 | 84.76 tok/s | 49.79 tok/s | **67.28 tok/s** | upstream master `4e97ac86`; text-only; reversed layer-device order; opt-in candidate |
+
+The DFlash2 row is not a replacement for the vision-capable FastMTP profile. The Q4
+DFlash2 drafter currently fails to process multimodal embedding chunks in this
+llama.cpp build, so the opt-in profile deliberately does not load a projector.
 
 Results are cached in:
 
@@ -57,6 +63,57 @@ The menu reads that cache and displays the average beside each profile. Run a pr
 ./v1qwen38.sh --speed-test --profile hauhau-q8-fastmtp
 ./v1qwen38.sh --speed-test-all
 ```
+
+## Upstream master and DFlash2 validation
+
+On 2026-08-28, upstream llama.cpp master `4e97ac86ebe2c4cb8212d98d2641ad6768810896`
+was built side-by-side with CUDA Toolkit 12.9.86 and `CMAKE_CUDA_ARCHITECTURES=86`.
+The existing pinned runtimes were not modified or replaced. No experimental
+`top-k.cu` changes were applied.
+
+Short 4096-token A/B checks using the same two prompts measured:
+
+| Profile | Pinned runtime | Upstream master | Result |
+|---|---:|---:|---|
+| Hauhau FastMTP | 60.36 tok/s | 62.84 tok/s | +4.1%; short vision check passed |
+| Flash IQ4 | 46.95 tok/s | 55.56 tok/s | +18.3%; short vision check passed |
+
+These are lightweight single-request measurements, not full-context benchmarks.
+The current production FastMTP runtime remains pinned and its historical 60.39
+tok/s result remains the production baseline.
+
+The official Q4 DFlash2 draft was downloaded from
+`incoai/Qwen3.8-27B-DFlash2-GGUF` and verified with SHA-256:
+
+```text
+Qwen3.8-27B-DFlash2-Q4_K_M.gguf
+18a380efc9b7ed8d88677fc895f5c11ae170653434ee378f7348f715c14d0594
+```
+
+DFlash2 was tested against the existing Hauhau Q8 target at `n_max=3` and `n_max=5`.
+The working three-GPU layout uses target devices `CUDA2,CUDA1,CUDA0` and places
+the draft on `CUDA0`; the target output projection must be visible to the draft
+scheduler. The n=3 run averaged 58.47 tok/s. The n=5 runs averaged about 64.0
+tok/s with the projector loaded and 67.28 tok/s in the final text-only profile.
+Acceptance was workload-dependent: coding was about 0.78–0.91 draft-token
+acceptance, while the story prompt was about 0.26–0.44. Three short greedy
+parity prompts matched the non-speculative target exactly. Native-262144 health
+checks passed for both n=3 and n=5 without sending a long-context request.
+
+The DFlash2 candidate is exposed only as the explicit
+`hauhau-q8-dflash2` profile. It defaults to `n=5`, is text-only, and does not
+participate in the normal `--speed-test-all` set. Use:
+
+```bash
+./v1qwen38.sh --smoke --profile hauhau-q8-dflash2
+./v1qwen38.sh --speed-test --profile hauhau-q8-dflash2
+./v1qwen38.sh --quickstart --profile hauhau-q8-dflash2
+```
+
+The current Hauhau FastMTP and Flash IQ4 profiles remain unchanged and remain the
+vision-capable production choices. DFlash2 startup logs and the short A/B results
+are retained under the host's `~/.local/share/localllm-qwen38/logs/` and
+`~/.local/state/locallm-qwen38-upstream-test/` directories.
 
 ## Qwen3.8 runtime details
 

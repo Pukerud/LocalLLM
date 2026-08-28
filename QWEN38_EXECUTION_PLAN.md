@@ -98,3 +98,16 @@ Completed 2026-08-28:
 - Verified Flash IQ4 at native 262144 with `q8_0` K/V, automatic layer fitting (no explicit tensor split), original batch/ubatch 512/128, all three GPUs, and F16 vision.
 - Short text and 64x64 image requests passed; the temporary server was stopped after testing. No full-context generation was run and no Hive/miner settings changed.
 - Reran `./v1qwen38.sh --speed-test --profile flash-iq4`: coding 48.08 tok/s, story 48.25 tok/s, average 48.16 tok/s; the launcher stopped the test server cleanly.
+
+Completed 2026-08-28 — upstream master / DFlash2 evaluation:
+
+- Preserved the production runtimes at `/home/user/.local/share/localllm-qwen38/runtimes/llama-qwen38-hauhau` and `llama-qwen4exp-pr27742` unchanged.
+- Built upstream llama.cpp master `4e97ac86ebe2c4cb8212d98d2641ad6768810896` side-by-side at `runtimes/llama-upstream-master-4e97ac86`, explicitly using CUDA Toolkit 12.9.86 and `CMAKE_CUDA_ARCHITECTURES=86`. The binary SHA-256 is `b70d9b8cd76e34f0b57b8f9a74621695bd1187b2e3b2a9058423dee520462d3f`.
+- Applied only the existing additive Hauhau FastMTP compatibility patch to the side-by-side source; no experimental reverted `top-k.cu` patch was applied.
+- Repeated short A/B checks at context 4096: pinned Hauhau FastMTP 60.36 tok/s versus upstream 62.84 tok/s; pinned Flash IQ4 46.95 tok/s versus upstream 55.56 tok/s. Upstream short vision checks passed for both.
+- Downloaded only `incoai/Qwen3.8-27B-DFlash2-GGUF/Qwen3.8-27B-DFlash2-Q4_K_M.gguf` (1,143,006,752 bytes) and verified SHA-256 `18a380efc9b7ed8d88677fc895f5c11ae170653434ee378f7348f715c14d0594`.
+- Tested DFlash2 Q4 against the existing Hauhau Q8 target at `n_max=3` and `n_max=5`. The working layout reverses target devices to `CUDA2,CUDA1,CUDA0` and places the draft on `CUDA0`, so the shared target output projection is schedulable. n=3 averaged 58.47 tok/s; n=5 averaged approximately 64.0 tok/s with the projector loaded and 67.28 tok/s in the final text-only run.
+- DFlash2 acceptance was workload-dependent: coding was approximately 0.78–0.91 and story approximately 0.26–0.44 by accepted/generated draft tokens. Three short greedy parity prompts matched the non-speculative target exactly.
+- Native-context health-only startup passed at 262144 for both n=3 and n=5. No full-context generation was sent.
+- DFlash2 vision-first tests failed in the draft context with `failed to initialize batch` / `failed to decode mtmd chunk`; the opt-in `hauhau-q8-dflash2` profile therefore deliberately omits the projector and is text-only. It is not a replacement for the vision-capable production profiles and is excluded from normal `--speed-test-all`.
+- Added the explicit `hauhau-q8-dflash2` profile with default `n=5`, checksum-verified asset download, reversed device placement, text-only smoke handling, and dashboard/menu labeling. Existing Hauhau FastMTP and Flash IQ4 defaults remain unchanged.
