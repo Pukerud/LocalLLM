@@ -110,7 +110,8 @@ participate in the normal `--speed-test-all` set. Use:
 ./v1qwen38.sh --quickstart --profile hauhau-q8-dflash2
 ```
 
-The current Hauhau FastMTP and Flash IQ4 profiles remain unchanged and remain the
+The profile defaults to `n=5`; set `QWEN38_DFLASH_N_MAX=3` to run the other
+validated draft-length test. The current Hauhau FastMTP and Flash IQ4 profiles remain unchanged and remain the
 vision-capable production choices. DFlash2 startup logs and the short A/B results
 are retained under the host's `~/.local/share/localllm-qwen38/logs/` and
 `~/.local/state/locallm-qwen38-upstream-test/` directories.
