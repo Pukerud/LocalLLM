@@ -19,7 +19,7 @@ press **[Q]** for the Qwen3.8 llama.cpp profile menu.
 ```text
 HostLLM — Engine Picker
   [1] SPEED DEMON — Qwen3.8 AWQ INT4 + DFlash2 | ~144 code / ~97 agent / ~58 prose tok/s
-      native 262K | 2x RTX 3090 | target image input ON; draft text-only; video unvalidated
+      native 262K | 2x RTX 3090 | image input + auto tools ON; draft text-only; video unvalidated
   [Q] Qwen3.8-27B — vision | native 262K | FastMTP
   [2] llama.cpp — general GGUF fallback
 
@@ -70,6 +70,7 @@ target and `z-lab/Qwen3.8-27B-DFlash2` draft model:
 | GPUs | CUDA0 and CUDA1, 2x RTX 3090; CUDA2 remains unused |
 | Context | native `262144` configured context |
 | KV/cache | FP8 KV; no LMCache |
+| Tools | automatic tool choice with vLLM `qwen3_xml` parser |
 | Measured speed | approximately 144 tok/s coding, 97 tok/s agent, 58 tok/s prose |
 | Model ID | `speed-demon` |
 
@@ -78,6 +79,10 @@ DFlash2 drafter receives text only, not image/video embeddings, so image answers
 are still verified by the target but speculative acceptance may be lower. Video
 support has not been validated. The profile is therefore labeled **target vision
 ON; DFlash draft text-only; video unvalidated**, with text/code recommended.
+
+Automatic tool choice is enabled for Qwen Code and Open WebUI using the vLLM
+`qwen3_xml` parser, matching this model's `<tool_call><function=...>` template.
+Clients should send the normal OpenAI `tools` payload with `tool_choice: auto`.
 
 SPEED DEMON starts on the normal HostLLM port `8080` and is mutually exclusive
 with the llama.cpp engines. HostLLM pauses OctaSpace before starting it and

@@ -44,6 +44,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 - Keep target tensor parallelism at 2 on CUDA0/CUDA1; TP=3 is invalid because the model's 32 attention heads are not divisible by 3. CUDA2 remains unused by this profile.
 - Use FP8 KV, no LMCache, DFlash2 with seven speculative tokens, native context `262144`, and the tested FlashInfer full decode graph overlay from vLLM PR #50885.
 - The target accepts image input, but the DFlash2 drafter receives text only. Label the profile as target vision enabled, DFlash draft text-only, and video unvalidated.
+- Enable automatic tool choice with vLLM's `qwen3_xml` parser, matching the target chat template used by Qwen Code and Open WebUI.
 - Treat approximately 144 tok/s coding, 97 tok/s agent, and 58 tok/s prose as short-test reference values, not universal or full-context throughput claims.
 
 ## LocalLLM changes
@@ -128,3 +129,8 @@ Completed 2026-08-28 — SPEED DEMON integration:
 - Added short text/image smoke handling, health/status/dashboard output, persistent container logs, model download support, and separate SPEED DEMON state below `~/.local/share/localllm-speed-demon` and `~/.local/state/locallm-speed-demon`.
 - Added SPEED DEMON as HostLLM top-level option `[1]`; `[Q]` continues to select the llama.cpp Qwen3.8 profiles. HostLLM recognizes and stops the vLLM container and preserves OctaSpace pause/resume behavior.
 - Kept the vision description precise: the target sees image input, DFlash2 drafts text only, and video remains unvalidated. No production Qwen profile or Hive/miner setting was changed.
+
+Completed 2026-08-29 — SPEED DEMON tool calling:
+
+- Enabled vLLM automatic tool choice with `--enable-auto-tool-choice --tool-call-parser qwen3_xml`, fixing the 400 error returned when Qwen Code sends `tool_choice: auto`.
+- The parser matches the AWQ model's XML tool template; a short real tool-call request will be used to verify the restarted container before this change is considered complete.

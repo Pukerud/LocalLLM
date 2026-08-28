@@ -68,7 +68,8 @@ Usage:
 SPEED DEMON uses vLLM 0.28.0, Qwen3.8-27B AWQ INT4, and the Qwen3.8
 DFlash2 drafter on two RTX 3090 GPUs. It is a text/code-first profile.
 The target accepts image input, but DFlash2 drafts from text only; video
-has not been validated. No LMCache is used.
+has not been validated. Automatic tool choice is enabled with vLLM's
+`qwen3_xml` parser for Qwen's XML tool-call format. No LMCache is used.
 EOF
 }
 
@@ -242,6 +243,7 @@ runtime=vLLM 0.28.0 + FlashInfer full decode graph overlay PR #50885
 speculation=DFlash2 n=$DRAFT_TOKENS
 kv=FP8
 cache=none (no LMCache)
+tools=automatic function calling (qwen3_xml parser)
 gpus=CUDA0,CUDA1 (2x RTX 3090); CUDA2 unused
 speed=$SPEED_RESULT
 vision=$VISION_LABEL
@@ -317,6 +319,8 @@ start_server() {
         --max-num-batched-tokens 2048
         --enable-prefix-caching
         --enable-chunked-prefill
+        --enable-auto-tool-choice
+        --tool-call-parser qwen3_xml
         --attention-backend FLASHINFER
         --performance-mode balanced
         --compilation-config '{"cudagraph_mode":"FULL_AND_PIECEWISE"}'
@@ -536,6 +540,7 @@ show_dashboard() {
         say "  Context:  $MAX_CONTEXT | KV: FP8 | LMCache: OFF"
         say "  Speed:    $SPEED_RESULT"
         say "  Vision:   target image input ON; draft text-only; video unvalidated"
+        say "  Tools:    automatic function calling (qwen3_xml parser)"
         say "  GPUs:     CUDA0,CUDA1 (2x RTX 3090); CUDA2 unused"
         echo ""
         say "  API:      http://${BIND_HOST}:${PORT}/v1"
