@@ -13,10 +13,17 @@ chmod +x HostLLM.sh v1*.sh
 ./HostLLM.sh
 ```
 
-From the HostLLM menu, press **[Q]**. The Qwen3.8 profile menu offers:
+From the HostLLM menu, press **[1]** for the direct SPEED DEMON profile, or
+press **[Q]** for the Qwen3.8 llama.cpp profile menu.
 
 ```text
-Qwen3.8 Quick Start
+HostLLM — Engine Picker
+  [1] SPEED DEMON — Qwen3.8 AWQ INT4 + DFlash2 | ~144 code / ~97 agent / ~58 prose tok/s
+      native 262K | 2x RTX 3090 | target image input ON; draft text-only; video unvalidated
+  [Q] Qwen3.8-27B — vision | native 262K | FastMTP
+  [2] llama.cpp — general GGUF fallback
+
+Qwen3.8 Quick Start (inside [Q])
   [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K       | speed: cached result
   [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 262K           | speed: cached result
   [3] Flash-Next UD-IQ3_XXS + F16 vision + PR #27742          | speed: cached result
@@ -50,6 +57,49 @@ Measured on 2026-08-27–28 using a 4096-token context, one short coding prompt,
 The DFlash2 row is not a replacement for the vision-capable FastMTP profile. The Q4
 DFlash2 drafter currently fails to process multimodal embedding chunks in this
 llama.cpp build, so the opt-in profile deliberately does not load a projector.
+
+## SPEED DEMON profile
+
+SPEED DEMON is a separate vLLM Docker profile for fast text and coding work. It
+uses the standard (not Hauhau-abliterated) `cyankiwi/Qwen3.8-27B-AWQ-INT4`
+target and `z-lab/Qwen3.8-27B-DFlash2` draft model:
+
+| Item | Configuration |
+|---|---|
+| Runtime | vLLM `0.28.0` + FlashInfer full decode graph overlay from PR #50885 |
+| GPUs | CUDA0 and CUDA1, 2x RTX 3090; CUDA2 remains unused |
+| Context | native `262144` configured context |
+| KV/cache | FP8 KV; no LMCache |
+| Measured speed | approximately 144 tok/s coding, 97 tok/s agent, 58 tok/s prose |
+| Model ID | `speed-demon` |
+
+The target model supports image input and the short image smoke test passed. The
+DFlash2 drafter receives text only, not image/video embeddings, so image answers
+are still verified by the target but speculative acceptance may be lower. Video
+support has not been validated. The profile is therefore labeled **target vision
+ON; DFlash draft text-only; video unvalidated**, with text/code recommended.
+
+SPEED DEMON starts on the normal HostLLM port `8080` and is mutually exclusive
+with the llama.cpp engines. HostLLM pauses OctaSpace before starting it and
+restores OctaSpace after the engine is stopped. The vLLM image and model assets
+are stored outside the repository under:
+
+```text
+~/.local/share/localllm-speed-demon
+~/.local/state/locallm-speed-demon
+```
+
+The direct launcher commands are:
+
+```bash
+./v1speeddemon.sh --quickstart
+./v1speeddemon.sh --smoke
+./v1speeddemon.sh --status
+./v1speeddemon.sh --stop
+```
+
+The smoke test uses a short text request and one small image only. It does not
+send a long-context generation.
 
 Results are cached in:
 
@@ -188,7 +238,9 @@ Direct dashboard/status commands:
 The active menu intentionally stays small:
 
 ```text
-  [Q] Qwen3.8-27B       vision │ native 262K │ FastMTP
+  [1] SPEED DEMON        Qwen3.8 AWQ INT4 + DFlash2 │ ~144 code / ~97 agent / ~58 prose tok/s
+      target image input ON │ DFlash draft text-only │ video unvalidated │ native 262K │ 2x RTX 3090
+  [Q] Qwen3.8-27B        vision │ native 262K │ FastMTP
   [2] llama.cpp          general GGUF fallback
   [9] Kill All
   [10] Update
@@ -199,7 +251,7 @@ The active menu intentionally stays small:
 
 ### OctaSpace coexistence
 
-If the OctaSpace `osn.service` exists and is active, HostLLM pauses it before launching Qwen3.8 or the general llama.cpp engine so both workloads do not compete for the same GPUs. When the engine stops, HostLLM starts OctaSpace again. If a launcher returns while its server is still running, OctaSpace remains paused until **[9] Kill All** stops the engine. A small state marker preserves this behavior if HostLLM is reopened.
+If the OctaSpace `osn.service` exists and is active, HostLLM pauses it before launching SPEED DEMON, Qwen3.8, or the general llama.cpp engine so both workloads do not compete for the same GPUs. When the engine stops, HostLLM starts OctaSpace again. If a launcher returns while its server is still running, OctaSpace remains paused until **[9] Kill All** stops the engine. A small state marker preserves this behavior if HostLLM is reopened.
 
 ## API connections
 
@@ -278,8 +330,10 @@ The images are convenient server packages. They do not inherently improve infere
 
 ```text
 HostLLM.sh                 current top-level menu
-v1qwen38.sh                Qwen3.8 profiles, tests, and dashboard
+v1speeddemon.sh            SPEED DEMON vLLM/DFlash2 profile
+v1qwen38.sh                Qwen3.8 llama.cpp profiles, tests, and dashboard
 v1llama_cpp.sh             general llama.cpp fallback
+speed-demon/               pinned SPEED DEMON container overlay
 QWEN38_EXECUTION_PLAN.md   provenance and validation record
 ```
 
@@ -290,7 +344,7 @@ Generated Qwen3.8 models, runtimes, logs, and state are stored outside the repos
 Static checks:
 
 ```bash
-bash -n HostLLM.sh v1qwen38.sh
+bash -n HostLLM.sh v1qwen38.sh v1speeddemon.sh
 ```
 
 The tested Qwen3.8 path uses short text/vision smoke tests and short speed tests only. No full 262K-context generation or long benchmark is part of the normal launcher workflow.

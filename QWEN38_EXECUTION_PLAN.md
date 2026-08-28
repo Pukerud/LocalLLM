@@ -38,6 +38,14 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 - Use `ngram-mod` only after a non-speculative short text/vision smoke test.
 - Do not assume an MTP head exists in the Unsloth GGUF; inspect metadata before enabling `draft-mtp`.
 
+### Experimental SPEED DEMON
+
+- Use the packaged vLLM `0.28.0` image with `cyankiwi/Qwen3.8-27B-AWQ-INT4` as the target and `z-lab/Qwen3.8-27B-DFlash2` as the drafter.
+- Keep target tensor parallelism at 2 on CUDA0/CUDA1; TP=3 is invalid because the model's 32 attention heads are not divisible by 3. CUDA2 remains unused by this profile.
+- Use FP8 KV, no LMCache, DFlash2 with seven speculative tokens, native context `262144`, and the tested FlashInfer full decode graph overlay from vLLM PR #50885.
+- The target accepts image input, but the DFlash2 drafter receives text only. Label the profile as target vision enabled, DFlash draft text-only, and video unvalidated.
+- Treat approximately 144 tok/s coding, 97 tok/s agent, and 58 tok/s prose as short-test reference values, not universal or full-context throughput claims.
+
 ## LocalLLM changes
 
 1. Add isolated runtime/profile scripts rather than mutating the old Qwen3.6 DFlash/Lucebox/BeeLlama paths.
@@ -45,7 +53,8 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 3. Add safe dependency/build capability checks, including `sm_86`; remove the old `sm_89` assumption for this host.
 4. Add short smoke-test helper using `/health`, one short text request, and one small image request.
 5. Add Quick Start entries only for profiles that pass the smoke test; do not expose obsolete Qwen3.6-only engines in the active menu.
-6. Update README with the model/runtime requirements, short-test policy, and legacy engine history.
+6. Add the tested SPEED DEMON launcher as a top-level HostLLM `[1]` option rather than placing it inside the Qwen submenu.
+7. Update README with the model/runtime requirements, short-test policy, and legacy engine history.
 
 ## Execution/test order
 
@@ -69,9 +78,9 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 ## Known deferred work
 
 - No full-context throughput/quality benchmark.
-- No long video test.
+- No long video test; SPEED DEMON video behavior remains unvalidated.
 - No DFlash/Lucebox/BeeLlama port for Flash-Next.
-- No vLLM GGUF conversion; vLLM remains a separate future experiment with official safetensors.
+- SPEED DEMON is experimental and does not replace the production llama.cpp profile; no LMCache or third-GPU arrangement has been promoted.
 
 ## Execution record
 
@@ -111,3 +120,11 @@ Completed 2026-08-28 — upstream master / DFlash2 evaluation:
 - Native-context health-only startup passed at 262144 for both n=3 and n=5. No full-context generation was sent.
 - DFlash2 vision-first tests failed in the draft context with `failed to initialize batch` / `failed to decode mtmd chunk`; the opt-in `hauhau-q8-dflash2` profile therefore deliberately omits the projector and is text-only. It is not a replacement for the vision-capable production profiles and is excluded from normal `--speed-test-all`.
 - Added the explicit `hauhau-q8-dflash2` profile with default `n=5`, checksum-verified asset download, reversed device placement, text-only smoke handling, and dashboard/menu labeling. Existing Hauhau FastMTP and Flash IQ4 defaults remain unchanged.
+
+Completed 2026-08-28 — SPEED DEMON integration:
+
+- Added `v1speeddemon.sh`, a side-by-side vLLM launcher using the tested AWQ target, DFlash2 drafter, native 262K context, FP8 KV, and no LMCache.
+- Added a derived packaged Docker image definition containing the tested FlashInfer PR #50885 full-decode graph overlay; the stock vLLM image remains the base.
+- Added short text/image smoke handling, health/status/dashboard output, persistent container logs, model download support, and separate SPEED DEMON state below `~/.local/share/localllm-speed-demon` and `~/.local/state/locallm-speed-demon`.
+- Added SPEED DEMON as HostLLM top-level option `[1]`; `[Q]` continues to select the llama.cpp Qwen3.8 profiles. HostLLM recognizes and stops the vLLM container and preserves OctaSpace pause/resume behavior.
+- Kept the vision description precise: the target sees image input, DFlash2 drafts text only, and video remains unvalidated. No production Qwen profile or Hive/miner setting was changed.

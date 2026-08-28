@@ -24,6 +24,7 @@ if [[ "${EUID}" -eq 0 ]]; then
     fi
 fi
 QWEN38_STATE_ROOT="${QWEN38_STATE_ROOT:-${qwen38_home}/.local/state/locallm-qwen38}"
+SPEED_DEMON_STATE_ROOT="${SPEED_DEMON_STATE_ROOT:-${qwen38_home}/.local/state/locallm-speed-demon}"
 
 # OctaSpace uses the osn.service unit and shares the same three GPUs. HostLLM
 # temporarily pauses it while an inference engine is being started, then
@@ -141,6 +142,8 @@ detect_engine() {
         echo "qwen38"
     elif pgrep -f "llama-server" > /dev/null 2>&1; then
         echo "llamacpp"
+    elif docker ps --filter "name=^/vllm-speed-demon$" --format '{{.Names}}' 2>/dev/null | grep -q "^vllm-speed-demon$"; then
+        echo "speeddemon"
     elif docker ps --filter "name=vllm-hostllm" --format '{{.Names}}' 2>/dev/null | grep -q "vllm-hostllm"; then
         echo "vllm"
     else
@@ -149,13 +152,20 @@ detect_engine() {
 }
 
 get_server_info() {
-    if [[ -f "${QWEN38_STATE_ROOT}/server.info" ]]; then
-        cat "${QWEN38_STATE_ROOT}/server.info"
-    elif [[ -f "${SCRIPT_DIR}/.server_info" ]]; then
-        cat "${SCRIPT_DIR}/.server_info"
-    else
-        echo ""
-    fi
+    case "$(detect_engine)" in
+        qwen38)
+            [[ -f "${QWEN38_STATE_ROOT}/server.info" ]] && cat "${QWEN38_STATE_ROOT}/server.info"
+            ;;
+        speeddemon)
+            [[ -f "${SPEED_DEMON_STATE_ROOT}/server.info" ]] && cat "${SPEED_DEMON_STATE_ROOT}/server.info"
+            ;;
+        llamacpp|vllm)
+            [[ -f "${SCRIPT_DIR}/.server_info" ]] && cat "${SCRIPT_DIR}/.server_info"
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
 }
 
 check_update() {
@@ -217,6 +227,9 @@ check_update() {
 stop_all() {
     local rc=0
     echo ""
+    if [[ -x "${SCRIPT_DIR}/v1speeddemon.sh" ]]; then
+        "${SCRIPT_DIR}/v1speeddemon.sh" --stop >/dev/null 2>&1 || true
+    fi
     if [[ -x "${SCRIPT_DIR}/v1qwen38.sh" ]]; then
         "${SCRIPT_DIR}/v1qwen38.sh" --stop >/dev/null 2>&1 || true
     fi
@@ -251,6 +264,9 @@ while true; do
     elif [[ "$active" == "llamacpp" ]]; then
         echo -e "  Status:  ${GREEN}llama.cpp RUNNING${RESET}"
         if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
+    elif [[ "$active" == "speeddemon" ]]; then
+        echo -e "  Status:  ${GREEN}SPEED DEMON RUNNING${RESET}"
+        if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
     elif [[ "$active" == "vllm" ]]; then
         echo -e "  Status:  ${GREEN}external vLLM container RUNNING${RESET}"
         if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
@@ -261,6 +277,8 @@ while true; do
     echo ""
     echo "  Quick Start:"
     echo "  ────────────"
+    echo -e "  ${BOLD}[1]${RESET} SPEED DEMON  ⚡ Qwen3.8 AWQ INT4 + DFlash2 │ ~144 code / ~97 agent / ~58 prose tok/s"
+    echo -e "      Native 262K │ 2x RTX 3090 │ target image input ON; draft text-only; video unvalidated"
     echo -e "  ${BOLD}[Q]${RESET} Qwen3.8-27B  ⚡ vision │ native 262K │ FastMTP"
     echo -e "      HauhauCS and Flash-Next profiles with cached speed results"
     echo ""
@@ -278,10 +296,38 @@ while true; do
     choice=$(echo "$choice" | tr -d '[:space:]')
 
     case $choice in
+        1)
+            if [[ "$active" == "speeddemon" ]]; then
+                cd "${SCRIPT_DIR}"
+                ./v1speeddemon.sh --dashboard
+                if [[ "$(detect_engine)" == "none" ]]; then
+                    resume_octaspace
+                fi
+            elif [[ "$active" != "none" ]]; then
+                echo ""
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
+                sleep 2
+                continue
+            else
+                if [[ ! -x "${SCRIPT_DIR}/v1speeddemon.sh" ]]; then
+                    echo ""
+                    echo -e "  ${RED}v1speeddemon.sh not found or not executable.${RESET}"
+                    sleep 2
+                    continue
+                fi
+                cd "${SCRIPT_DIR}"
+                run_engine_with_octaspace "${SCRIPT_DIR}/v1speeddemon.sh" --quickstart
+                speed_rc=$?
+                [[ "$speed_rc" -eq 42 ]] && exit 0
+            fi
+            ;;
         q|Q)
             if [[ "$active" == "qwen38" ]]; then
                 cd "${SCRIPT_DIR}"
                 ./v1qwen38.sh --dashboard
+                if [[ "$(detect_engine)" == "none" ]]; then
+                    resume_octaspace
+                fi
             elif [[ "$active" != "none" ]]; then
                 echo ""
                 echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
