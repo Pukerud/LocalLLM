@@ -45,7 +45,7 @@ Measured on 2026-08-27–28 using a 4096-token context, one short coding prompt,
 | Hauhau Q8 FastMTP | 73.47 tok/s | 47.31 tok/s | **60.39 tok/s** | current recommended profile |
 | Flash IQ3 | 45.24 tok/s | 45.13 tok/s | **45.19 tok/s** | experimental PR #27742 |
 | Flash IQ4 | 48.08 tok/s | 48.25 tok/s | **48.16 tok/s** | experimental PR #27742; Q8 K/V and automatic layer fitting, remeasured 2026-08-28 |
-| Hauhau Q8 + DFlash2 Q4 n=5 | 84.76 tok/s | 49.79 tok/s | **67.28 tok/s** | upstream master `4e97ac86`; text-only; reversed layer-device order; opt-in candidate |
+| Hauhau Q8 + DFlash2 Q4 n=5 | 86.52 tok/s | 38.67 tok/s | **62.59 tok/s** | upstream master `4e97ac86`; text-only; reversed layer-device order; opt-in candidate |
 
 The DFlash2 row is not a replacement for the vision-capable FastMTP profile. The Q4
 DFlash2 drafter currently fails to process multimodal embedding chunks in this
@@ -94,7 +94,7 @@ DFlash2 was tested against the existing Hauhau Q8 target at `n_max=3` and `n_max
 The working three-GPU layout uses target devices `CUDA2,CUDA1,CUDA0` and places
 the draft on `CUDA0`; the target output projection must be visible to the draft
 scheduler. The n=3 run averaged 58.47 tok/s. The n=5 runs averaged about 64.0
-tok/s with the projector loaded and 67.28 tok/s in the final text-only profile.
+tok/s with the projector loaded; the final launcher verification of the text-only profile measured 62.59 tok/s.
 Acceptance was workload-dependent: coding was about 0.78–0.91 draft-token
 acceptance, while the story prompt was about 0.26–0.44. Three short greedy
 parity prompts matched the non-speculative target exactly. Native-262144 health
