@@ -2,7 +2,7 @@
 
 # =========================================================================
 # HostLLM.sh — current engine picker
-# Launches the SPEED DEMON, Qwen3.8, ExLlamaV3, or general llama.cpp profile.
+# Launches the Qwen3.8 launcher or the general llama.cpp fallback.
 # Only one engine can run at a time (shared GPU + port 8080).
 # =========================================================================
 
@@ -25,7 +25,6 @@ if [[ "${EUID}" -eq 0 ]]; then
 fi
 QWEN38_STATE_ROOT="${QWEN38_STATE_ROOT:-${qwen38_home}/.local/state/locallm-qwen38}"
 SPEED_DEMON_STATE_ROOT="${SPEED_DEMON_STATE_ROOT:-${qwen38_home}/.local/state/locallm-speed-demon}"
-EXLLAMA_STATE_ROOT="${EXLLAMA_STATE_ROOT:-${qwen38_home}/.local/state/locallm-exllama}"
 
 # OctaSpace uses the osn.service unit and shares the same three GPUs. HostLLM
 # temporarily pauses it while an inference engine is being started, then
@@ -143,33 +142,12 @@ detect_engine() {
         echo "qwen38"
     elif pgrep -f "llama-server" > /dev/null 2>&1; then
         echo "llamacpp"
-    elif docker ps --filter "name=^/tabbyapi-exllama$" --format '{{.Names}}' 2>/dev/null | grep -q "^tabbyapi-exllama$"; then
-        echo "exllama"
     elif docker ps --filter "name=^/vllm-speed-demon$" --format '{{.Names}}' 2>/dev/null | grep -q "^vllm-speed-demon$"; then
         echo "speeddemon"
     elif docker ps --filter "name=vllm-hostllm" --format '{{.Names}}' 2>/dev/null | grep -q "vllm-hostllm"; then
         echo "vllm"
     else
         echo "none"
-    fi
-}
-
-exllama_speed_display() {
-    local cache="${EXLLAMA_STATE_ROOT}/speed-results.tsv" row date context coding story average
-    if [[ ! -r "$cache" ]]; then
-        printf 'speed not tested'
-        return 0
-    fi
-    row="$(awk -F'|' '$1 == "exllama-qwen38-sc6-h6-v6" { row = $0 } END { print row }' "$cache")"
-    if [[ -z "$row" ]]; then
-        printf 'speed not tested'
-        return 0
-    fi
-    IFS='|' read -r _ date context coding story average <<< "$row"
-    if [[ "$date" == "$(date +%Y-%m-%d)" ]]; then
-        printf '~%s tok/s' "$average"
-    else
-        printf '~%s tok/s (%s)' "$average" "$date"
     fi
 }
 
@@ -180,9 +158,6 @@ get_server_info() {
             ;;
         speeddemon)
             [[ -f "${SPEED_DEMON_STATE_ROOT}/server.info" ]] && cat "${SPEED_DEMON_STATE_ROOT}/server.info"
-            ;;
-        exllama)
-            [[ -f "${EXLLAMA_STATE_ROOT}/server.info" ]] && cat "${EXLLAMA_STATE_ROOT}/server.info"
             ;;
         llamacpp|vllm)
             [[ -f "${SCRIPT_DIR}/.server_info" ]] && cat "${SCRIPT_DIR}/.server_info"
@@ -255,9 +230,6 @@ stop_all() {
     if [[ -x "${SCRIPT_DIR}/v1speeddemon.sh" ]]; then
         "${SCRIPT_DIR}/v1speeddemon.sh" --stop >/dev/null 2>&1 || true
     fi
-    if [[ -x "${SCRIPT_DIR}/v1exllama.sh" ]]; then
-        "${SCRIPT_DIR}/v1exllama.sh" --stop >/dev/null 2>&1 || true
-    fi
     if [[ -x "${SCRIPT_DIR}/v1qwen38.sh" ]]; then
         "${SCRIPT_DIR}/v1qwen38.sh" --stop >/dev/null 2>&1 || true
     fi
@@ -295,9 +267,6 @@ while true; do
     elif [[ "$active" == "speeddemon" ]]; then
         echo -e "  Status:  ${GREEN}SPEED DEMON RUNNING${RESET}"
         if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
-    elif [[ "$active" == "exllama" ]]; then
-        echo -e "  Status:  ${GREEN}ExLlamaV3 RUNNING${RESET}"
-        if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
     elif [[ "$active" == "vllm" ]]; then
         echo -e "  Status:  ${GREEN}external vLLM container RUNNING${RESET}"
         if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
@@ -312,12 +281,10 @@ while true; do
     echo -e "      Native 262K │ 2x RTX 3090 │ target image input ON; FP8 draft text-only; video unvalidated"
     echo -e "  ${BOLD}[Q]${RESET} Qwen3.8-27B  ⚡ vision │ native 262K │ FastMTP"
     echo -e "      HauhauCS and Flash-Next profiles with cached speed results"
-    echo -e "  ${BOLD}[2]${RESET} ExLlamaV3   ⚡ 6bpw EXL3 vision │ native 262K │ TabbyAPI │ $(exllama_speed_display)"
-    echo -e "      SC_6.00bpw_H6_V6 │ image input ON │ autosplit RTX 30-series GPUs"
     echo ""
     echo "  Engines (manual):"
     echo "  ─────────────────"
-    echo -e "  ${BOLD}[3]${RESET} llama.cpp  ik_llama.cpp — general GGUF fallback"
+    echo -e "  ${BOLD}[2]${RESET} llama.cpp  ik_llama.cpp — general GGUF fallback"
     echo ""
     echo "  Removed Qwen3.6-era engines and tests are documented in README.md."
     echo ""
@@ -380,31 +347,6 @@ while true; do
             fi
             ;;
         2)
-            if [[ "$active" == "exllama" ]]; then
-                cd "${SCRIPT_DIR}"
-                ./v1exllama.sh --dashboard
-                if [[ "$(detect_engine)" == "none" ]]; then
-                    resume_octaspace
-                fi
-            elif [[ "$active" != "none" ]]; then
-                echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
-                sleep 2
-                continue
-            else
-                if [[ ! -x "${SCRIPT_DIR}/v1exllama.sh" ]]; then
-                    echo ""
-                    echo -e "  ${RED}v1exllama.sh not found or not executable.${RESET}"
-                    sleep 2
-                    continue
-                fi
-                cd "${SCRIPT_DIR}"
-                run_engine_with_octaspace "${SCRIPT_DIR}/v1exllama.sh" --quickstart
-                exllama_rc=$?
-                [[ "$exllama_rc" -eq 42 ]] && exit 0
-            fi
-            ;;
-        3)
             if [[ "$active" != "none" && "$active" != "llamacpp" ]]; then
                 echo ""
                 echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"

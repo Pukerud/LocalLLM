@@ -162,30 +162,3 @@ Completed 2026-08-29 — FP8 SPEED DEMON promotion gate:
   README labeling. Set `SPEED_DEMON_DRAFT_MODE=bf16` for the retained BF16
   fallback. Final launcher validation is complete with inference stopped and
   OctaSpace restored.
-
-Completed 2026-08-29 — ExLlamaV3 option 2:
-
-- Downloaded only `turboderp/Qwen3.8-27B-exl3` revision
-  `SC_6.00bpw_H6_V6` into the isolated `locallm-exllama` data root. The three
-  safetensors shards total approximately 21.1 GiB and were verified against
-  the Hugging Face LFS SHA-256 values.
-- Built an isolated TabbyAPI image from the pinned official image digest with
-  ExLlamaV3 `1.4.4` and `python3.12-dev` for Triton's first-use CUDA helper.
-  The public `latest` image was not used directly because it contained
-  ExLlamaV3 `1.4.3`, which rejected this branch's EXL3 vision shapes.
-- Loaded the model with `max_seq_len=262144`, `cache_size=262144`, 8-bit K/V,
-  vision enabled, and autosplit. Health became ready with no CUDA/Xid/runtime
-  errors; the test used CUDA0/CUDA1 and left CUDA2 free.
-- Short text, image (red-left/blue-right), automatic calculator tool call,
-  tool-result continuation, and model discovery checks passed. A tokenizer
-  probe measured a 259,161-token templated prompt, and a one-token completion
-  at that context completed successfully. A deliberately oversized request
-  was rejected cleanly by TabbyAPI's cache-chunk guard, without destabilizing
-  the server.
-- Added `v1exllama.sh`, the pinned `exllama-v3/Dockerfile`, HostLLM `[2]`, and
-  shifted the general llama.cpp fallback to `[3]`. A fast 4096-token decode
-  test measured `32.22 tok/s` average (coding `32.23`, story `32.22`) and the
-  result is cached for the top-level menu. The profile is reversible,
-  keeps all assets/state outside the repository, and leaves the existing
-  SPEED DEMON and llama.cpp profiles unchanged. ExLlamaV3 inference was
-  stopped and OctaSpace was restored after validation.
