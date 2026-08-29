@@ -412,6 +412,7 @@ start_server() {
         --label "com.pukerud.localllm.engine=exllama-v3"
         --restart=no
         --gpus all
+        --entrypoint /opt/venv/bin/python
         --ipc=host
         --shm-size=8g
         --network host
@@ -434,7 +435,7 @@ start_server() {
     say "  GPUs:    autosplit across visible RTX 30-series GPUs"
     say "  log:     $SERVER_LOG"
 
-    docker_id="$(docker "${docker_args[@]}" "$IMAGE" /opt/venv/bin/python main.py --config /app/config.yml)"
+    docker_id="$(docker "${docker_args[@]}" "$IMAGE" main.py --config /app/config.yml)"
     [[ -n "$docker_id" ]] || die "Docker did not return a container ID"
     write_server_info
     if ! wait_for_health; then
