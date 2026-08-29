@@ -1,6 +1,6 @@
 # LocalLLM — Qwen3.8 Inference
 
-Local NVIDIA-GPU launchers for the current Qwen3.8 profiles, with a general llama.cpp fallback. Only one server should use port `8080` at a time.
+Local NVIDIA-GPU launchers for the current Qwen3.8 profiles, with ExLlamaV3 and a general llama.cpp fallback. Only one server should use port `8080` at a time.
 
 > **Current primary:** Qwen3.8-27B HauhauCS Q8 + vision + FastMTP, configured for native 262K context on three RTX 3090 GPUs.
 
@@ -13,15 +13,17 @@ chmod +x HostLLM.sh v1*.sh
 ./HostLLM.sh
 ```
 
-From the HostLLM menu, press **[1]** for the direct SPEED DEMON profile, or
-press **[Q]** for the Qwen3.8 llama.cpp profile menu.
+From the HostLLM menu, press **[1]** for the direct SPEED DEMON profile,
+**[Q]** for the Qwen3.8 llama.cpp profile menu, **[2]** for ExLlamaV3, or
+**[3]** for the general llama.cpp fallback.
 
 ```text
 HostLLM — Engine Picker
   [1] SPEED DEMON — Qwen3.8 AWQ INT4 + FP8 DFlash2 | ~123 code* / ~67 tools / ~62 prose tok/s
       native 262K | 2x RTX 3090 | image input + auto tools + thinking ON; FP8 draft text-only; video unvalidated
   [Q] Qwen3.8-27B — vision | native 262K | FastMTP
-  [2] llama.cpp — general GGUF fallback
+  [2] ExLlamaV3 — Qwen3.8 EXL3 6bpw + vision | native 262K
+  [3] llama.cpp — general GGUF fallback
 
 Qwen3.8 Quick Start (inside [Q])
   [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K       | speed: cached result
@@ -128,6 +130,47 @@ The menu reads that cache and displays the average beside each profile. Run a pr
 ./v1qwen38.sh --speed-test --profile hauhau-q8-fastmtp
 ./v1qwen38.sh --speed-test-all
 ```
+
+## ExLlamaV3 option 2
+
+Option 2 is the highest self-calibrated Qwen3.8 EXL3 vision variant:
+`turboderp/Qwen3.8-27B-exl3` revision `SC_6.00bpw_H6_V6`. It contains a 6-bit
+text model and a 6-bit vision tower, with the model's native `262144` context.
+The model files occupy approximately 21.1 GiB across three safetensors shards.
+The 1M context mentioned by the base model card is an optional YaRN extension,
+not the native setting used here.
+
+| Item | Configuration |
+|---|---|
+| Runtime | ExLlamaV3 `1.4.4` + TabbyAPI, isolated Docker image |
+| Model | `turboderp/Qwen3.8-27B-exl3` / `SC_6.00bpw_H6_V6` |
+| Context | native `262144`; `--quickstart` uses the full configured cache |
+| KV/cache | 8-bit K/V by default (`EXLLAMA_CACHE_MODE=Q6` or `Q4` is available) |
+| GPUs | autosplit across visible RTX 30-series GPUs; the test used CUDA0/CUDA1 and left CUDA2 free |
+| Draft | none; this is a quality/vision/context option, not a DFlash2 speed profile |
+| API | TabbyAPI OpenAI-compatible server on port `8080` |
+
+The isolated validation passed model load/health at native 262K configuration,
+short text, image input (red on the left and blue on the right), automatic
+calculator tool calling, tool-result continuation, and a one-token prefill with
+a 259,161-token templated prompt. No long generation was run. The near-native
+prefill reached the practical prompt limit imposed by TabbyAPI's cache-chunk
+reservation without a CUDA/Xid/runtime error.
+
+Use the launcher directly with:
+
+```bash
+./v1exllama.sh --quickstart
+./v1exllama.sh --smoke       # short 4096-token text/image/tool smoke test
+./v1exllama.sh --status
+./v1exllama.sh --stop
+```
+
+The launcher downloads only the pinned revision, verifies all three large
+shards, builds the pinned TabbyAPI/ExLlamaV3 image if needed, and stores all
+assets/state below `~/.local/share/locallm-exllama` and
+`~/.local/state/locallm-exllama`. Video metadata is present, but long-video
+inference remains unvalidated.
 
 ## Upstream master and DFlash2 validation
 
@@ -256,7 +299,8 @@ The active menu intentionally stays small:
   [1] SPEED DEMON        Qwen3.8 AWQ INT4 + FP8 DFlash2 │ ~123 code* / ~67 tools / ~62 prose tok/s
       target image input ON │ FP8 DFlash draft text-only │ video unvalidated │ native 262K │ 2x RTX 3090
   [Q] Qwen3.8-27B        vision │ native 262K │ FastMTP
-  [2] llama.cpp          general GGUF fallback
+  [2] ExLlamaV3          6bpw EXL3 vision │ native 262K │ TabbyAPI
+  [3] llama.cpp          general GGUF fallback
   [9] Kill All
   [10] Update
   [11] Exit
@@ -266,7 +310,7 @@ The active menu intentionally stays small:
 
 ### OctaSpace coexistence
 
-If the OctaSpace `osn.service` exists and is active, HostLLM pauses it before launching SPEED DEMON, Qwen3.8, or the general llama.cpp engine so both workloads do not compete for the same GPUs. When the engine stops, HostLLM starts OctaSpace again. If a launcher returns while its server is still running, OctaSpace remains paused until **[9] Kill All** stops the engine. A small state marker preserves this behavior if HostLLM is reopened.
+If the OctaSpace `osn.service` exists and is active, HostLLM pauses it before launching SPEED DEMON, Qwen3.8, ExLlamaV3, or the general llama.cpp engine so both workloads do not compete for the same GPUs. When the engine stops, HostLLM starts OctaSpace again. If a launcher returns while its server is still running, OctaSpace remains paused until **[9] Kill All** stops the engine. A small state marker preserves this behavior if HostLLM is reopened.
 
 ## API connections
 
@@ -346,9 +390,11 @@ The images are convenient server packages. They do not inherently improve infere
 ```text
 HostLLM.sh                 current top-level menu
 v1speeddemon.sh            SPEED DEMON vLLM/DFlash2 profile
+v1exllama.sh               Qwen3.8 EXL3/ExLlamaV3 + TabbyAPI profile
 v1qwen38.sh                Qwen3.8 llama.cpp profiles, tests, and dashboard
 v1llama_cpp.sh             general llama.cpp fallback
 speed-demon/               pinned SPEED DEMON container overlay
+exllama-v3/                pinned TabbyAPI/ExLlamaV3 image overlay
 QWEN38_EXECUTION_PLAN.md   provenance and validation record
 ```
 
@@ -359,7 +405,7 @@ Generated Qwen3.8 models, runtimes, logs, and state are stored outside the repos
 Static checks:
 
 ```bash
-bash -n HostLLM.sh v1qwen38.sh v1speeddemon.sh
+bash -n HostLLM.sh v1qwen38.sh v1speeddemon.sh v1exllama.sh
 ```
 
-The tested Qwen3.8 path uses short text/vision smoke tests and short speed tests only. No full 262K-context generation or long benchmark is part of the normal launcher workflow.
+The tested Qwen3.8 path uses short text/vision smoke tests and short speed tests only. The ExLlamaV3 validation additionally used a one-token near-native-context prefill; no long generation or long benchmark is part of the normal launcher workflow.
