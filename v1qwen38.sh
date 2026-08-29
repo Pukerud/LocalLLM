@@ -95,7 +95,6 @@ Usage:
 Profiles:
   hauhau-q8          HauhauCS Q8_K_P + BF16 vision, native 262K, embedded MTP
   hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, 262K on 3x3090
-  flash-iq3          Flash-Next UD-IQ3_XXS + F16 vision, experimental PR #27742
   flash-iq4          Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit, experimental PR #27742
   hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K
 
@@ -214,17 +213,6 @@ configure_profile() {
             DRAFT_PATH="${MODEL_ROOT}/dflash2/${DFLASH_MODEL}"
             FULL_CTX=262144
             SPEC_MODE="dflash2"
-            ;;
-        flash-iq3)
-            qdir="UD-IQ3_XXS"
-            PROFILE_LABEL="Qwen3.8-Flash-Next ${qdir} / vision / PR #27742"
-            RUNTIME_KIND="flash"
-            RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen4exp-pr27742"
-            MODEL_PATH="${MODEL_ROOT}/flash/${qdir}/Qwen3.8-Flash-Next-${qdir}-00001-of-00003.gguf"
-            MMPROJ_PATH="${MODEL_ROOT}/flash/${FLASH_MMPROJ}"
-            DRAFT_PATH=""
-            FULL_CTX=262144
-            SPEC_MODE="none"
             ;;
         flash-iq4)
             qdir="UD-IQ4_XS"
@@ -369,12 +357,6 @@ ensure_dflash_assets() {
 flash_quant_files() {
     local quant="$1"
     case "$quant" in
-        UD-IQ3_XXS)
-            printf '%s\n' \
-                "Qwen3.8-Flash-Next-UD-IQ3_XXS-00001-of-00003.gguf|268f81fdedf3149a538f252308927a4d5d1f6e062c178568a51e3b519744f8a8" \
-                "Qwen3.8-Flash-Next-UD-IQ3_XXS-00002-of-00003.gguf|cfe600b236b88c7fad1613a5ca5e83b9f2beb63cbd44c32b2be50a44747c695f" \
-                "Qwen3.8-Flash-Next-UD-IQ3_XXS-00003-of-00003.gguf|f1912ba34c79427d2295a58dcb2b732b5931af5bef7a373c60557a57d9ee7250"
-            ;;
         UD-IQ4_XS)
             printf '%s\n' \
                 "Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00003.gguf|5ce89370720f8bf90890f439361282104c1aa1482d4013bb9a50923e758e71a4" \
@@ -408,11 +390,7 @@ ensure_assets() {
         hauhau) ensure_hauhau_assets ;;
         upstream) ensure_dflash_assets ;;
         flash)
-            if [[ "$PROFILE" == "flash-iq3" ]]; then
-                ensure_flash_assets UD-IQ3_XXS
-            else
-                ensure_flash_assets UD-IQ4_XS
-            fi
+            ensure_flash_assets UD-IQ4_XS
             ;;
         *) die "internal error: unknown runtime kind '$RUNTIME_KIND'" ;;
     esac
@@ -1002,7 +980,7 @@ PY
 
 run_speed_test_all() {
     local original_profile="$PROFILE" original_smoke="$SMOKE" rc=0 profile
-    for profile in hauhau-q8 hauhau-q8-fastmtp flash-iq3 flash-iq4; do
+    for profile in hauhau-q8 hauhau-q8-fastmtp flash-iq4; do
         PROFILE="$profile"
         SPEC_OVERRIDE=""
         SMOKE=1
@@ -1214,9 +1192,8 @@ choose_profile() {
     say "Qwen3.8 Quick Start"
     say "  [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K  |  speed: $(speed_display hauhau-q8)"
     say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 262K (3x3090 profile)  |  speed: $(speed_display hauhau-q8-fastmtp)"
-    say "  [3] Flash-Next UD-IQ3_XXS + F16 vision + PR #27742 (experimental)  |  speed: $(speed_display flash-iq3)"
-    say "  [4] Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit + PR #27742 (experimental, larger)  |  speed: $(speed_display flash-iq4)"
-    say "  [5] HauhauCS Q8_K_P + DFlash2 Q4 n=${DFLASH_N_MAX} (text-only, experimental)  |  speed: $(speed_display hauhau-q8-dflash2)"
+    say "  [3] Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit + PR #27742 (experimental, larger)  |  speed: $(speed_display flash-iq4)"
+    say "  [4] HauhauCS Q8_K_P + DFlash2 Q4 n=${DFLASH_N_MAX} (text-only, experimental)  |  speed: $(speed_display hauhau-q8-dflash2)"
     say "  [s] Run short speed tests for all standard profiles"
     say "      DFlash2 is opt-in and text-only on this host; use --speed-test --profile hauhau-q8-dflash2"
 
@@ -1225,9 +1202,8 @@ choose_profile() {
     case "$choice" in
         1) PROFILE="hauhau-q8" ;;
         2) PROFILE="hauhau-q8-fastmtp" ;;
-        3) PROFILE="flash-iq3" ;;
-        4) PROFILE="flash-iq4" ;;
-        5) PROFILE="hauhau-q8-dflash2" ;;
+        3) PROFILE="flash-iq4" ;;
+        4) PROFILE="hauhau-q8-dflash2" ;;
         s|S)
             PROFILE="hauhau-q8"
             MODE="speed-all"

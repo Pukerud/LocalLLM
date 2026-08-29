@@ -15,7 +15,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 ## Baseline
 
 - Three RTX 3090 GPUs, 24 GiB each, compute capability 8.6.
-- GPUs are connected through PHB and report no usable P2P; Hauhau and Flash IQ3 use `--split-mode layer` with equal `--tensor-split 1,1,1`, while Flash IQ4 uses layer split with automatic fitting.
+- GPUs are connected through PHB and report no usable P2P; Hauhau uses `--split-mode layer` with equal `--tensor-split 1,1,1`, while Flash IQ4 uses layer split with automatic fitting.
 - Host has approximately 125 GiB RAM and no swap.
 - Current NVIDIA driver is 595.91.07; use a CUDA 12.9 build/runtime path if a toolkit is required.
 
@@ -33,8 +33,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 ### Experimental Qwen3.8-Flash-Next
 
 - Build a separate pinned PR #27742 (`qwen4exp`) runtime at head `af1ffaf37f1e44edb62e87ab8ddb9bb6840849bc` (recorded 2026-08-27).
-- Use mmap/host handling for the large PLE/n-gram tables; Flash IQ3 uses F16 K/V, while Flash IQ4 uses `q8_0` K/V and automatic layer fitting at native context.
-- Initial candidate: Unsloth `UD-IQ3_XXS`; `UD-IQ4_XS` is permitted only after the smaller candidate starts successfully.
+- Use mmap/host handling for the large PLE/n-gram tables; the retained Flash IQ4 profile uses `q8_0` K/V and automatic layer fitting at native context.
 - Use `ngram-mod` only after a non-speculative short text/vision smoke test.
 - Do not assume an MTP head exists in the Unsloth GGUF; inspect metadata before enabling `draft-mtp`.
 
@@ -65,7 +64,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 3. Add scripts/documentation and run static checks.
 4. Build/download only the stable Hauhau Q8 target and projector first.
 5. Run short text and image smoke tests, with no long-context prompt.
-6. If stable, build/download the Flash-Next candidate and run the same short smoke tests. Flash downloads are lazy because the IQ3/IQ4 shard sets are large.
+6. If stable, build/download the retained Flash-Next IQ4 candidate and run the same short smoke tests. Flash downloads are lazy because its shard set is large.
 7. Commit changes with model/runtime provenance and push to the appropriate repository only after validation.
 
 ## Success criteria
@@ -93,19 +92,19 @@ Completed 2026-08-27:
 - Installed only the build toolchain needed here: build-essential/CMake/Ninja and CUDA Toolkit 12.9.2. The NVIDIA driver stayed at 595.91.07.
 - Built the Hauhau runtime at `4df29be4f4c3673f428170fda944a5b19f743bb8` with the publisher FastMTP patch.
 - Built the Flash runtime at PR #27742 head `af1ffaf37f1e44edb62e87ab8ddb9bb6840849bc`.
-- Downloaded and SHA-256 verified the Hauhau Q8 target, BF16 projector, FastMTP sidecar, and Flash-Next UD-IQ3_XXS shards/F16 projector.
+- Downloaded and SHA-256 verified the Hauhau Q8 target, BF16 projector, FastMTP sidecar, and the retained Flash-Next IQ4 shards/F16 projector.
 - Short Hauhau baseline, native MTP, and FastMTP smoke tests passed for text plus vision.
-- Short Flash-Next UD-IQ3_XXS baseline and `ngram-mod` smoke tests passed for text plus vision.
-- Health-only native-context startup checks passed for Hauhau Q8 at 262144 and Flash UD-IQ3_XXS at 262144. No full-context prompt was sent.
+- Short Flash-Next IQ4 baseline and `ngram-mod` smoke tests passed for text plus vision.
+- Health-only native-context startup checks passed for Hauhau Q8 and Flash IQ4 at 262144. No full-context prompt was sent.
 - Added visible checksum/launch progress, cached short speed tests, and a post-launch dashboard with connection URLs, health, GPU state, and tok/s.
-- Downloaded and SHA-256 verified Flash-Next UD-IQ4_XS (~88 GiB) after IQ3 passed; its initial F16-KV short 4096-context speed test measured 43.49 tok/s coding, 43.22 tok/s story, 43.36 tok/s average.
-- Short 4096-context speed results: Hauhau native 48.74 tok/s, Hauhau FastMTP 60.39 tok/s, Flash IQ3 45.19 tok/s, Flash IQ4 48.16 tok/s with Q8 K/V and automatic layer fitting. These are cached in `speed-results.tsv`, not full-context benchmarks.
+- Downloaded and SHA-256 verified the retained Flash-Next UD-IQ4_XS (~88 GiB); its initial F16-KV short 4096-context speed test measured 43.49 tok/s coding, 43.22 tok/s story, 43.36 tok/s average.
+- Short 4096-context speed results: Hauhau native 48.74 tok/s, Hauhau FastMTP 60.39 tok/s, and Flash IQ4 48.16 tok/s with Q8 K/V and automatic layer fitting. These are cached in `speed-results.tsv`, not full-context benchmarks.
 - Final checks showed the FastMTP server healthy at context 262144, no miner process, all three GPUs visible, `MINER=`/`MINER2=` empty, `WD_ENABLED=0`, and `REBOOT_ON_ERROR=` empty.
 - Cleaned the active HostLLM menu and removed obsolete Qwen3.6-era launcher, benchmark, chat-template, and vLLM metadata files; the README now preserves their history and test results.
 
 Completed 2026-08-28:
 
-- Diagnosed Flash IQ4 native-context startup failure as CUDA OOM during KV/compute-buffer allocation; IQ3 remained healthy.
+- Diagnosed Flash IQ4 native-context startup failure as CUDA OOM during KV/compute-buffer allocation, then verified the retained Q8-KV/auto-fit configuration.
 - Verified Flash IQ4 at native 262144 with `q8_0` K/V, automatic layer fitting (no explicit tensor split), original batch/ubatch 512/128, all three GPUs, and F16 vision.
 - Short text and 64x64 image requests passed; the temporary server was stopped after testing. No full-context generation was run and no Hive/miner settings changed.
 - Reran `./v1qwen38.sh --speed-test --profile flash-iq4`: coding 48.08 tok/s, story 48.25 tok/s, average 48.16 tok/s; the launcher stopped the test server cleanly.

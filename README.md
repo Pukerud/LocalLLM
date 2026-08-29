@@ -26,9 +26,8 @@ HostLLM — Engine Picker
 Qwen3.8 Quick Start (inside [Q])
   [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K       | speed: cached result
   [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 262K           | speed: cached result
-  [3] Flash-Next UD-IQ3_XXS + F16 vision + PR #27742          | speed: cached result
-  [4] Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit + PR #27742 | speed: cached result
-  [5] HauhauCS Q8_K_P + DFlash2 Q4 n=5 (text-only, experimental) | speed: cached result
+  [3] Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit + PR #27742 | speed: cached result
+  [4] HauhauCS Q8_K_P + DFlash2 Q4 n=5 (text-only, experimental) | speed: cached result
   [s] Run short speed tests for installed profiles
   [q] Cancel
 ```
@@ -50,7 +49,6 @@ Measured on 2026-08-27–28 using a 4096-token context, one short coding prompt,
 |---|---:|---:|---:|---|
 | Hauhau Q8 native MTP | 56.87 tok/s | 40.62 tok/s | **48.74 tok/s** | BF16 vision projector |
 | Hauhau Q8 FastMTP | 73.47 tok/s | 47.31 tok/s | **60.39 tok/s** | current recommended profile |
-| Flash IQ3 | 45.24 tok/s | 45.13 tok/s | **45.19 tok/s** | experimental PR #27742 |
 | Flash IQ4 | 48.08 tok/s | 48.25 tok/s | **48.16 tok/s** | experimental PR #27742; Q8 K/V and automatic layer fitting, remeasured 2026-08-28 |
 | Hauhau Q8 + DFlash2 Q4 n=5 | 86.52 tok/s | 38.67 tok/s | **62.59 tok/s** | upstream master `4e97ac86`; text-only; reversed layer-device order; opt-in candidate |
 
@@ -184,9 +182,9 @@ are retained under the host's `~/.local/share/localllm-qwen38/logs/` and
 ## Qwen3.8 runtime details
 
 - HauhauCS Q8_K_P GGUF with matching BF16 vision projector.
-- Flash-Next UD-IQ3_XXS and UD-IQ4_XS GGUFs use the isolated PR #27742 runtime.
+- Flash-Next UD-IQ4_XS GGUF uses the isolated PR #27742 runtime.
 - RTX 3090 builds use CUDA architecture `sm_86`.
-- Hauhau and Flash IQ3 use layer split with `--tensor-split 1,1,1` because this host reports PHB topology and no usable peer-to-peer link; Flash IQ4 uses layer split with automatic fitting because its larger weights need a rebalanced placement.
+- Hauhau uses layer split with `--tensor-split 1,1,1` because this host reports PHB topology and no usable peer-to-peer link; Flash IQ4 uses layer split with automatic fitting because its larger weights need a rebalanced placement.
 - F16 KV cache is used for the native 262144-token context configuration except Flash IQ4, which uses `q8_0` K/V to fit its larger model at native context.
 - FastMTP uses the publisher sidecar and its pinned qwen35-compatible patch.
 - All Qwen3.8 data, runtimes, logs, and state live below:
