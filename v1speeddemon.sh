@@ -563,8 +563,73 @@ show_status() {
     nvidia-smi --query-gpu=index,name,compute_cap,memory.used,memory.total,temperature.gpu --format=csv 2>/dev/null || true
 }
 
+display_ip() {
+    local ip="${SPEED_DEMON_DISPLAY_IP:-}"
+    if [[ -z "$ip" ]]; then
+        ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    fi
+    printf '%s' "${ip:-127.0.0.1}"
+}
+
+cpu_percent() {
+    local _ user1 nice1 system1 idle1 iowait1 irq1 softirq1 steal1 guest1 guest_nice1
+    local user2 nice2 system2 idle2 iowait2 irq2 softirq2 steal2 guest2 guest_nice2
+    local total1 idle_total1 total2 idle_total2 total_delta idle_delta busy_delta
+    read -r _ user1 nice1 system1 idle1 iowait1 irq1 softirq1 steal1 guest1 guest_nice1 < /proc/stat
+    total1=$((user1 + nice1 + system1 + idle1 + iowait1 + irq1 + softirq1 + steal1))
+    idle_total1=$((idle1 + iowait1))
+    sleep 0.1
+    read -r _ user2 nice2 system2 idle2 iowait2 irq2 softirq2 steal2 guest2 guest_nice2 < /proc/stat
+    total2=$((user2 + nice2 + system2 + idle2 + iowait2 + irq2 + softirq2 + steal2))
+    idle_total2=$((idle2 + iowait2))
+    total_delta=$((total2 - total1))
+    idle_delta=$((idle_total2 - idle_total1))
+    busy_delta=$((total_delta - idle_delta))
+    if (( total_delta > 0 )); then
+        printf '%d' $((busy_delta * 100 / total_delta))
+    else
+        printf '0'
+    fi
+}
+
+gpu_dashboard() {
+    local index util used total temp util_display used_display total_display percent_display
+    local total_used=0 total_mem=0 count=0 percent used_gb total_gb
+    while IFS=',' read -r index util used total temp; do
+        index="${index// /}"
+        util="${util// /}"
+        used="${used// /}"
+        total="${total// /}"
+        temp="${temp// /}"
+        [[ -n "$index" ]] || continue
+        if [[ "$util" =~ ^[0-9]+$ ]]; then util_display="$util"; else util_display="--"; fi
+        if [[ "$used" =~ ^[0-9]+$ && "$total" =~ ^[0-9]+$ && "$total" -gt 0 ]]; then
+            used_gb="$(awk -v value="$used" 'BEGIN { printf "%.1f", value / 1024 }')"
+            total_gb="$(awk -v value="$total" 'BEGIN { printf "%.1f", value / 1024 }')"
+            percent=$((used * 100 / total))
+            used_display="$used_gb"; total_display="$total_gb"; percent_display="$percent"
+            total_used=$((total_used + used)); total_mem=$((total_mem + total))
+        else
+            used_display="?"; total_display="?"; percent_display="?"
+        fi
+        printf '  GPU %-2s: %3s%% | VRAM: %s GB / %s GB (%s%%) | Temp: %s degC\n' \
+            "$index" "$util_display" "$used_display" "$total_display" "$percent_display" "${temp:-?}"
+        count=$((count + 1))
+    done < <(nvidia-smi --query-gpu=index,utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits 2>/dev/null || true)
+
+    if (( count > 0 && total_mem > 0 )); then
+        used_gb="$(awk -v value="$total_used" 'BEGIN { printf "%.1f", value / 1024 }')"
+        total_gb="$(awk -v value="$total_mem" 'BEGIN { printf "%.1f", value / 1024 }')"
+        percent=$((total_used * 100 / total_mem))
+        printf '  TOTAL: VRAM: %s GB / %s GB (%s%%) | GPUs: %s\n' \
+            "$used_gb" "$total_gb" "$percent" "$count"
+    else
+        printf '  TOTAL: GPU metrics unavailable\n'
+    fi
+}
+
 show_dashboard() {
-    local choice
+    local choice ip health
     docker_ready
     if ! container_running; then
         warn "SPEED DEMON is not running"
@@ -572,27 +637,40 @@ show_dashboard() {
     fi
     while true; do
         clear 2>/dev/null || true
+        ip="$(display_ip)"
+        if health="$(curl -fsS --max-time 3 "http://127.0.0.1:${PORT}/health" 2>/dev/null)"; then :; else health="not responding"; fi
+
         echo "=================================================================="
-        echo "  SPEED DEMON RUNNING"
+        echo "  SPEED DEMON SERVER RUNNING"
         echo "=================================================================="
-        say "  Model:    $TARGET_REPO"
-        say "  Draft:    $DRAFT_REPO ($DRAFT_MODE DFlash2 n=${DRAFT_TOKENS}; text-only draft)"
-        say "  Context:  $MAX_CONTEXT | KV: FP8 | LMCache: OFF"
-        say "  Speed:    $SPEED_RESULT"
-        say "  Vision:   target image input ON; draft text-only; video unvalidated"
-        say "  Tools:    automatic function calling (qwen3_xml parser)"
-        say "  Thinking: ON by default (qwen3 parser; client may override)"
-        say "  GPUs:     CUDA0,CUDA1 (2x RTX 3090); CUDA2 unused"
+        printf '  Profile:  %s\n' "$SPEED_LABEL"
+        printf '  Model:    %s\n' "$TARGET_REPO"
+        printf '  Context:  %s  |  KV: FP8  |  Speculation: DFlash2 (%s-token draft)\n' "$MAX_CONTEXT" "$DRAFT_TOKENS"
+        printf '  Vision:   ON (target; %s draft text-only)\n' "$DRAFT_MODE"
+        printf '  GPUs:     CUDA0,CUDA1 (2x RTX 3090); CUDA2 unused\n'
+        printf '  Reasoning: ON\n'
         echo ""
-        say "  API:      http://${BIND_HOST}:${PORT}/v1"
-        say "  Model ID: speed-demon"
+        echo "  Connect from any device on your network:"
+        echo ""
+        printf '  API Base:      http://%s:%s/v1\n' "$ip" "$PORT"
+        printf '  Anthropic:      http://%s:%s/v1/messages\n' "$ip" "$PORT"
+        echo ""
+        echo "  API Key: any string or blank (not required)"
+        echo ""
+        printf '  OpenWebUI:      OpenAI base URL → http://%s:%s/v1\n' "$ip" "$PORT"
+        printf '  Pi / Codex:     OPENAI_API_BASE=http://%s:%s/v1\n' "$ip" "$PORT"
+        printf '  Cline / Continue: OpenAI compatible → http://%s:%s/v1\n' "$ip" "$PORT"
+        printf '  Anthropic SDK:   base_url → http://%s:%s/v1\n' "$ip" "$PORT"
         echo "=================================================================="
-        printf '  Health: '
-        curl -fsS --max-time 3 "http://127.0.0.1:${PORT}/health" 2>/dev/null || printf 'not responding'
-        printf '\n'
-        say "  [1] Stop SPEED DEMON and return to menu"
-        say "  [2] Return to menu (keep server running)"
-        say "  [r] Refresh"
+        echo ""
+        printf '  Health: %s\n' "$health"
+        printf '  Speed:  %s\n' "$SPEED_RESULT"
+        printf '  CPU: %s%%\n' "$(cpu_percent)"
+        gpu_dashboard
+        echo ""
+        echo "  [1] Stop server and return to menu"
+        echo "  [2] Return to menu (keep server running)"
+        echo "  [r] Refresh"
         echo ""
         read -r -p "  Select [1/2/r]: " choice
         case "$choice" in
@@ -628,6 +706,10 @@ main() {
             ;;
         start)
             start_server
+            say "SPEED DEMON is running. State: $SERVER_INFO"
+            if [[ -t 0 && -t 1 ]]; then
+                show_dashboard
+            fi
             ;;
         smoke)
             run_smoke

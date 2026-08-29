@@ -107,7 +107,7 @@ are stored outside the repository under:
 The direct launcher commands are:
 
 ```bash
-./v1speeddemon.sh --quickstart
+./v1speeddemon.sh --quickstart   # interactive terminals open the live info dashboard
 ./v1speeddemon.sh --smoke
 ./v1speeddemon.sh --status
 # Optional retained BF16 drafter fallback:
@@ -160,7 +160,7 @@ reservation without a CUDA/Xid/runtime error.
 Use the launcher directly with:
 
 ```bash
-./v1exllama.sh --quickstart
+./v1exllama.sh --quickstart   # interactive terminals open the live info dashboard
 ./v1exllama.sh --smoke       # short 4096-token text/image/tool smoke test
 ./v1exllama.sh --status
 ./v1exllama.sh --stop
