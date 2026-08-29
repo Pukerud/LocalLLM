@@ -22,7 +22,7 @@ HostLLM — Engine Picker
   [1] SPEED DEMON — Qwen3.8 AWQ INT4 + FP8 DFlash2 | ~123 code* / ~67 tools / ~62 prose tok/s
       native 262K | 2x RTX 3090 | image input + auto tools + thinking ON; FP8 draft text-only; video unvalidated
   [Q] Qwen3.8-27B — vision | native 262K | FastMTP
-  [2] ExLlamaV3 — Qwen3.8 EXL3 6bpw + vision | native 262K | speed: cached result
+  [2] ExLlamaV3 — Qwen3.8 EXL3 6bpw + vision | native 262K | ~32.22 tok/s
   [3] llama.cpp — general GGUF fallback
 
 Qwen3.8 Quick Start (inside [Q])
@@ -147,6 +147,7 @@ not the native setting used here.
 | Context | native `262144`; `--quickstart` uses the full configured cache |
 | KV/cache | 8-bit K/V by default (`EXLLAMA_CACHE_MODE=Q6` or `Q4` is available) |
 | GPUs | autosplit across visible RTX 30-series GPUs; the test used CUDA0/CUDA1 and left CUDA2 free |
+| Measured speed | `32.22 tok/s` average; coding `32.23`, story `32.22` at 4096-token context |
 | Draft | none; this is a quality/vision/context option, not a DFlash2 speed profile |
 | API | TabbyAPI OpenAI-compatible server on port `8080` |
 
@@ -300,7 +301,7 @@ The active menu intentionally stays small:
   [1] SPEED DEMON        Qwen3.8 AWQ INT4 + FP8 DFlash2 │ ~123 code* / ~67 tools / ~62 prose tok/s
       target image input ON │ FP8 DFlash draft text-only │ video unvalidated │ native 262K │ 2x RTX 3090
   [Q] Qwen3.8-27B        vision │ native 262K │ FastMTP
-  [2] ExLlamaV3          6bpw EXL3 vision │ native 262K │ TabbyAPI │ speed: cached result
+  [2] ExLlamaV3          6bpw EXL3 vision │ native 262K │ TabbyAPI │ ~32.22 tok/s
   [3] llama.cpp          general GGUF fallback
   [9] Kill All
   [10] Update

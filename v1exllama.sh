@@ -571,7 +571,6 @@ run_speed_test() {
     SMOKE=1
     say "Speed test: ExLlamaV3 (4096-token context; two short prompts)"
     ensure_image
-    ensure_assets
     start_server || return 1
 
     say "  Warm-up request..."

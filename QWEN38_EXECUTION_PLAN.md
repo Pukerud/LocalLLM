@@ -183,7 +183,9 @@ Completed 2026-08-29 — ExLlamaV3 option 2:
   was rejected cleanly by TabbyAPI's cache-chunk guard, without destabilizing
   the server.
 - Added `v1exllama.sh`, the pinned `exllama-v3/Dockerfile`, HostLLM `[2]`, and
-  shifted the general llama.cpp fallback to `[3]`. The profile is reversible,
+  shifted the general llama.cpp fallback to `[3]`. A fast 4096-token decode
+  test measured `32.22 tok/s` average (coding `32.23`, story `32.22`) and the
+  result is cached for the top-level menu. The profile is reversible,
   keeps all assets/state outside the repository, and leaves the existing
   SPEED DEMON and llama.cpp profiles unchanged. ExLlamaV3 inference was
   stopped and OctaSpace was restored after validation.
