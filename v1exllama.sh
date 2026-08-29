@@ -300,7 +300,7 @@ write_config() {
     umask 022
     cat > "$CONFIG_FILE" <<EOF
 network:
-  host: 0.0.0.0
+  host: ${BIND_HOST}
   port: ${PORT}
   disable_auth: true
   api_servers: ["OAI"]
