@@ -494,8 +494,11 @@ PY
 }
 
 speed_tps_from_logs() {
+    # TabbyAPI reports prompt-ingestion speed before the generation speed:
+    # "... at 177.78 T/s, Generate: 32.12 T/s". Use the value after
+    # Generate:, not the earlier prompt-processing number.
     docker logs "$CONTAINER_NAME" 2>&1 \
-        | awk '/Generate:/ { for (i = 1; i <= NF; i++) if ($i ~ /^T\/s,?$/) print $(i - 1) }' \
+        | awk '/Generate:/ { for (i = 1; i <= NF; i++) if ($i == "Generate:") { value = $(i + 1); sub(/[^0-9.].*$/, "", value); print value } }' \
         | tail -1
 }
 
