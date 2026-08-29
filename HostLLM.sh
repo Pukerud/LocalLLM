@@ -230,6 +230,10 @@ detect_engine() {
     fi
 }
 
+hive_llm_miner_active() {
+    [[ -f /run/hive/cur_miner ]] && grep -qx 'custom' /run/hive/cur_miner 2>/dev/null
+}
+
 get_server_info() {
     case "$(detect_engine)" in
         qwen38)
@@ -309,6 +313,13 @@ stop_all() {
     if [[ -x "${SCRIPT_DIR}/v1speeddemon.sh" ]]; then
         "${SCRIPT_DIR}/v1speeddemon.sh" --stop >/dev/null 2>&1 || true
     fi
+    # A HiveOS-managed LLM miner has a supervisor that intentionally restarts
+    # Qwen if only llama-server is killed. Use Hive's lifecycle first so [9]
+    # is also a clean stop for the custom miner.
+    if hive_llm_miner_active && [[ -x /hive/bin/miner ]]; then
+        echo " Stopping HiveOS LLM miner..."
+        /hive/bin/miner stop >/dev/null 2>&1 || true
+    fi
     if [[ -x "${SCRIPT_DIR}/v1qwen38.sh" ]]; then
         "${SCRIPT_DIR}/v1qwen38.sh" --stop >/dev/null 2>&1 || true
     fi
@@ -338,8 +349,14 @@ while true; do
     echo ""
 
     if [[ "$active" == "qwen38" ]]; then
-        echo -e "  Status:  ${GREEN}Qwen3.8 server RUNNING${RESET}"
+        if hive_llm_miner_active; then
+            echo -e "  Status:  ${GREEN}Qwen3.8 server RUNNING (HiveOS LLM miner)${RESET}"
+        else
+            echo -e "  Status:  ${GREEN}Qwen3.8 server RUNNING${RESET}"
+        fi
         if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
+    elif hive_llm_miner_active; then
+        echo -e "  Status:  ${GREEN}HiveOS LLM miner STARTING${RESET}"
     elif [[ "$active" == "llamacpp" ]]; then
         echo -e "  Status:  ${GREEN}llama.cpp RUNNING${RESET}"
         if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
