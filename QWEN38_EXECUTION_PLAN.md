@@ -133,4 +133,5 @@ Completed 2026-08-28 — SPEED DEMON integration:
 Completed 2026-08-29 — SPEED DEMON tool calling:
 
 - Enabled vLLM automatic tool choice with `--enable-auto-tool-choice --tool-call-parser qwen3_xml`, fixing the 400 error returned when Qwen Code sends `tool_choice: auto`.
-- The parser matches the AWQ model's XML tool template; a short real tool-call request will be used to verify the restarted container before this change is considered complete.
+- Added `--reasoning-parser qwen3` and made thinking explicitly ON by default while allowing clients to override it.
+- Verified non-streaming and streaming calculator tool calls, tool-result continuation, and thinking-enabled coding/vision requests against isolated vLLM containers; no tool-choice 400s occurred.

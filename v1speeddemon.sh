@@ -69,7 +69,9 @@ SPEED DEMON uses vLLM 0.28.0, Qwen3.8-27B AWQ INT4, and the Qwen3.8
 DFlash2 drafter on two RTX 3090 GPUs. It is a text/code-first profile.
 The target accepts image input, but DFlash2 drafts from text only; video
 has not been validated. Automatic tool choice is enabled with vLLM's
-`qwen3_xml` parser for Qwen's XML tool-call format. No LMCache is used.
+`qwen3_xml` parser for Qwen's XML tool-call format. Qwen reasoning is enabled by
+default and parsed with `qwen3`; clients may explicitly override the thinking
+setting. No LMCache is used.
 EOF
 }
 
@@ -244,6 +246,7 @@ speculation=DFlash2 n=$DRAFT_TOKENS
 kv=FP8
 cache=none (no LMCache)
 tools=automatic function calling (qwen3_xml parser)
+default_thinking=on (client may override)
 gpus=CUDA0,CUDA1 (2x RTX 3090); CUDA2 unused
 speed=$SPEED_RESULT
 vision=$VISION_LABEL
@@ -321,6 +324,8 @@ start_server() {
         --enable-chunked-prefill
         --enable-auto-tool-choice
         --tool-call-parser qwen3_xml
+        --reasoning-parser qwen3
+        --default-chat-template-kwargs '{"enable_thinking":true,"preserve_thinking":true}'
         --attention-backend FLASHINFER
         --performance-mode balanced
         --compilation-config '{"cudagraph_mode":"FULL_AND_PIECEWISE"}'
@@ -541,6 +546,7 @@ show_dashboard() {
         say "  Speed:    $SPEED_RESULT"
         say "  Vision:   target image input ON; draft text-only; video unvalidated"
         say "  Tools:    automatic function calling (qwen3_xml parser)"
+        say "  Thinking: ON by default (qwen3 parser; client may override)"
         say "  GPUs:     CUDA0,CUDA1 (2x RTX 3090); CUDA2 unused"
         echo ""
         say "  API:      http://${BIND_HOST}:${PORT}/v1"
