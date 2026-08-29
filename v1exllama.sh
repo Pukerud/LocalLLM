@@ -31,6 +31,7 @@ LOG_ROOT="${DATA_ROOT}/logs"
 MODEL_COMPLETE="${MODEL_DIR}/.complete"
 CONFIG_FILE="${STATE_ROOT}/config.yml"
 SERVER_INFO="${STATE_ROOT}/server.info"
+SPEED_CACHE="${STATE_ROOT}/speed-results.tsv"
 
 PORT="${EXLLAMA_PORT:-8080}"
 BIND_HOST="${EXLLAMA_HOST:-0.0.0.0}"
@@ -83,6 +84,7 @@ usage() {
 Usage:
   v1exllama.sh --quickstart
   v1exllama.sh --smoke
+  v1exllama.sh --speed-test
   v1exllama.sh --status
   v1exllama.sh --dashboard
   v1exllama.sh --download
@@ -93,9 +95,11 @@ The profile is turboderp/Qwen3.8-27B-exl3 revision
 SC_6.00bpw_H6_V6: 6-bit EXL3 text plus 6-bit vision, native 262K context.
 It uses ExLlamaV3 1.4.4 through TabbyAPI, autosplits across available RTX
 30-series GPUs, uses an 8-bit K/V cache by default, and has no draft model.
-Set EXLLAMA_CACHE_MODE=Q6 or Q4 if more cache headroom is needed. The short
-smoke test uses a 4096-token cache; --quickstart uses the configured native
-context. No Hive/miner/watchdog settings are changed.
+Use --speed-test for a quick two-prompt 4096-token decode measurement; the
+result is cached for the HostLLM menu. Set EXLLAMA_CACHE_MODE=Q6 or Q4 if
+more cache headroom is needed. The short smoke test uses a 4096-token cache;
+--quickstart uses the configured native context. No Hive/miner/watchdog
+settings are changed.
 EOF
 }
 
@@ -107,6 +111,10 @@ parse_args() {
                 ;;
             --smoke)
                 MODE="smoke"
+                SMOKE=1
+                ;;
+            --speed-test)
+                MODE="speed"
                 SMOKE=1
                 ;;
             --status)
@@ -485,6 +493,118 @@ print(value)
 PY
 }
 
+speed_tps_from_logs() {
+    docker logs "$CONTAINER_NAME" 2>&1 \
+        | awk '/Generate:/ { for (i = 1; i <= NF; i++) if ($i ~ /^T\/s,?$/) print $(i - 1) }' \
+        | tail -1
+}
+
+speed_cache_row() {
+    local row
+    [[ -r "$SPEED_CACHE" ]] || return 1
+    row="$(awk -F'|' '$1 == "exllama-qwen38-sc6-h6-v6" { row = $0 } END { print row }' "$SPEED_CACHE")"
+    [[ -n "$row" ]] || return 1
+    printf '%s\n' "$row"
+}
+
+speed_detail() {
+    local row date context coding story average
+    row="$(speed_cache_row || true)"
+    if [[ -z "$row" ]]; then
+        printf 'not benchmarked'
+        return 0
+    fi
+    IFS='|' read -r _ date context coding story average <<< "$row"
+    printf 'avg %s tok/s | coding %s | story %s | %s' "$average" "$coding" "$story" "$date"
+}
+
+record_speed_result() {
+    local coding="$1" story="$2" average="$3" tmp
+    tmp="${SPEED_CACHE}.tmp.$$"
+    umask 022
+    if [[ -f "$SPEED_CACHE" ]]; then
+        awk -F'|' '$1 != "exllama-qwen38-sc6-h6-v6"' "$SPEED_CACHE" > "$tmp"
+    else
+        : > "$tmp"
+    fi
+    printf 'exllama-qwen38-sc6-h6-v6|%s|4096|%s|%s|%s\n' \
+        "$(date +%Y-%m-%d)" "$coding" "$story" "$average" >> "$tmp"
+    mv -f -- "$tmp" "$SPEED_CACHE"
+}
+
+speed_request() {
+    local kind="$1" prompt="$2" max_tokens="$3" payload out
+    payload="${STATE_ROOT}/speed-${kind}.request.json"
+    out="${STATE_ROOT}/speed-${kind}.response.json"
+    python3 - "$prompt" "$max_tokens" "$payload" <<'PY'
+import json
+import sys
+
+prompt, max_tokens, path = sys.argv[1:]
+body = {
+    "model": "qwen38-exl3-sc6-h6-v6",
+    "messages": [{"role": "user", "content": prompt}],
+    "max_tokens": int(max_tokens),
+    "temperature": 0.2,
+    "stream": False,
+    "chat_template_kwargs": {"enable_thinking": False},
+}
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(body, handle)
+PY
+    curl -fsS --max-time 180 "http://127.0.0.1:${PORT}/v1/chat/completions" \
+        -H 'Content-Type: application/json' \
+        --data-binary "@$payload" \
+        -o "$out"
+    response_text "$out" >/dev/null
+}
+
+run_speed_test() {
+    local coding_tps story_tps average
+    docker_ready
+    if container_running; then
+        die "stop the running ExLlamaV3 container before running --speed-test"
+    fi
+    SMOKE=1
+    say "Speed test: ExLlamaV3 (4096-token context; two short prompts)"
+    ensure_image
+    ensure_assets
+    start_server || return 1
+
+    say "  Warm-up request..."
+    if ! speed_request warmup 'Reply with one word: ready.' 16; then
+        stop_server
+        return 1
+    fi
+    say "  Coding prompt..."
+    if ! speed_request coding 'Write a concise Python function that merges overlapping intervals. Include type hints, one example, and a brief time-complexity note. Keep the answer under 120 words.' 192; then
+        stop_server
+        return 1
+    fi
+    coding_tps="$(speed_tps_from_logs)"
+    [[ "$coding_tps" =~ ^[0-9]+([.][0-9]+)?$ ]] || { stop_server; die "could not read coding generation speed from TabbyAPI logs"; }
+    say "    coding: ${coding_tps} tok/s"
+
+    say "  Story prompt..."
+    if ! speed_request story 'Write a short story in around 100 words about a night-shift engineer who receives a radio message from tomorrow. Give it a clear ending.' 192; then
+        stop_server
+        return 1
+    fi
+    story_tps="$(speed_tps_from_logs)"
+    [[ "$story_tps" =~ ^[0-9]+([.][0-9]+)?$ ]] || { stop_server; die "could not read story generation speed from TabbyAPI logs"; }
+    say "    story: ${story_tps} tok/s"
+
+    average="$(python3 - "$coding_tps" "$story_tps" <<'PY'
+import sys
+values = [float(value) for value in sys.argv[1:]]
+print(f"{sum(values) / len(values):.2f}")
+PY
+)"
+    record_speed_result "$coding_tps" "$story_tps" "$average"
+    stop_server
+    say "  Speed result: avg ${average} tok/s (cached for the HostLLM menu)"
+}
+
 make_test_png() {
     local path="$1"
     python3 - "$path" <<'PY'
@@ -729,7 +849,7 @@ show_dashboard() {
         echo "=================================================================="
         echo ""
         printf '  Health: %s\n' "$health"
-        printf '  Speed:  not benchmarked (quality/vision/context profile)\n'
+        printf '  Speed:  %s\n' "$(speed_detail)"
         printf '  CPU: %s%%\n' "$(cpu_percent)"
         gpu_dashboard
         echo ""
@@ -772,6 +892,9 @@ main() {
             docker_ready
             ensure_image
             say "ExLlamaV3 image is ready: $IMAGE"
+            ;;
+        speed)
+            run_speed_test
             ;;
         start)
             start_server

@@ -25,6 +25,7 @@ if [[ "${EUID}" -eq 0 ]]; then
 fi
 QWEN38_STATE_ROOT="${QWEN38_STATE_ROOT:-${qwen38_home}/.local/state/locallm-qwen38}"
 SPEED_DEMON_STATE_ROOT="${SPEED_DEMON_STATE_ROOT:-${qwen38_home}/.local/state/locallm-speed-demon}"
+EXLLAMA_STATE_ROOT="${EXLLAMA_STATE_ROOT:-${qwen38_home}/.local/state/locallm-exllama}"
 
 # OctaSpace uses the osn.service unit and shares the same three GPUs. HostLLM
 # temporarily pauses it while an inference engine is being started, then
@@ -153,6 +154,25 @@ detect_engine() {
     fi
 }
 
+exllama_speed_display() {
+    local cache="${EXLLAMA_STATE_ROOT}/speed-results.tsv" row date context coding story average
+    if [[ ! -r "$cache" ]]; then
+        printf 'speed not tested'
+        return 0
+    fi
+    row="$(awk -F'|' '$1 == "exllama-qwen38-sc6-h6-v6" { row = $0 } END { print row }' "$cache")"
+    if [[ -z "$row" ]]; then
+        printf 'speed not tested'
+        return 0
+    fi
+    IFS='|' read -r _ date context coding story average <<< "$row"
+    if [[ "$date" == "$(date +%Y-%m-%d)" ]]; then
+        printf '~%s tok/s' "$average"
+    else
+        printf '~%s tok/s (%s)' "$average" "$date"
+    fi
+}
+
 get_server_info() {
     case "$(detect_engine)" in
         qwen38)
@@ -162,7 +182,7 @@ get_server_info() {
             [[ -f "${SPEED_DEMON_STATE_ROOT}/server.info" ]] && cat "${SPEED_DEMON_STATE_ROOT}/server.info"
             ;;
         exllama)
-            [[ -f "${qwen38_home}/.local/state/locallm-exllama/server.info" ]] && cat "${qwen38_home}/.local/state/locallm-exllama/server.info"
+            [[ -f "${EXLLAMA_STATE_ROOT}/server.info" ]] && cat "${EXLLAMA_STATE_ROOT}/server.info"
             ;;
         llamacpp|vllm)
             [[ -f "${SCRIPT_DIR}/.server_info" ]] && cat "${SCRIPT_DIR}/.server_info"
@@ -292,7 +312,7 @@ while true; do
     echo -e "      Native 262K │ 2x RTX 3090 │ target image input ON; FP8 draft text-only; video unvalidated"
     echo -e "  ${BOLD}[Q]${RESET} Qwen3.8-27B  ⚡ vision │ native 262K │ FastMTP"
     echo -e "      HauhauCS and Flash-Next profiles with cached speed results"
-    echo -e "  ${BOLD}[2]${RESET} ExLlamaV3   ⚡ 6bpw EXL3 vision │ native 262K │ TabbyAPI"
+    echo -e "  ${BOLD}[2]${RESET} ExLlamaV3   ⚡ 6bpw EXL3 vision │ native 262K │ TabbyAPI │ $(exllama_speed_display)"
     echo -e "      SC_6.00bpw_H6_V6 │ image input ON │ autosplit RTX 30-series GPUs"
     echo ""
     echo "  Engines (manual):"

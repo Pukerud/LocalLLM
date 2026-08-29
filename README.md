@@ -22,7 +22,7 @@ HostLLM — Engine Picker
   [1] SPEED DEMON — Qwen3.8 AWQ INT4 + FP8 DFlash2 | ~123 code* / ~67 tools / ~62 prose tok/s
       native 262K | 2x RTX 3090 | image input + auto tools + thinking ON; FP8 draft text-only; video unvalidated
   [Q] Qwen3.8-27B — vision | native 262K | FastMTP
-  [2] ExLlamaV3 — Qwen3.8 EXL3 6bpw + vision | native 262K
+  [2] ExLlamaV3 — Qwen3.8 EXL3 6bpw + vision | native 262K | speed: cached result
   [3] llama.cpp — general GGUF fallback
 
 Qwen3.8 Quick Start (inside [Q])
@@ -162,6 +162,7 @@ Use the launcher directly with:
 ```bash
 ./v1exllama.sh --quickstart   # interactive terminals open the live info dashboard
 ./v1exllama.sh --smoke       # short 4096-token text/image/tool smoke test
+./v1exllama.sh --speed-test  # quick 4096-token coding/story measurement
 ./v1exllama.sh --status
 ./v1exllama.sh --stop
 ```
@@ -299,7 +300,7 @@ The active menu intentionally stays small:
   [1] SPEED DEMON        Qwen3.8 AWQ INT4 + FP8 DFlash2 │ ~123 code* / ~67 tools / ~62 prose tok/s
       target image input ON │ FP8 DFlash draft text-only │ video unvalidated │ native 262K │ 2x RTX 3090
   [Q] Qwen3.8-27B        vision │ native 262K │ FastMTP
-  [2] ExLlamaV3          6bpw EXL3 vision │ native 262K │ TabbyAPI
+  [2] ExLlamaV3          6bpw EXL3 vision │ native 262K │ TabbyAPI │ speed: cached result
   [3] llama.cpp          general GGUF fallback
   [9] Kill All
   [10] Update
