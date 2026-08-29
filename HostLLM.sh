@@ -54,6 +54,12 @@ octaspace_active() {
 }
 
 pause_octaspace() {
+    # Treat every non-HostLLM Docker workload as a possible OctaSpace rental.
+    # Check before stopping osn.service so a renter's container is never
+    # terminated by a HostLLM start.
+    if ! hostllm_start_allowed; then
+        return 1
+    fi
     if ! octaspace_exists; then
         rm -f "$OCTA_STOP_MARKER"
         return 0
@@ -65,6 +71,13 @@ pause_octaspace() {
     echo " Stopping OctaSpace (${OCTA_SERVICE}) before starting HostLLM..."
     if ! systemctl_hostllm stop "$OCTA_SERVICE" || octaspace_active; then
         echo -e "  ${RED}Could not stop OctaSpace safely; engine start cancelled.${RESET}"
+        return 1
+    fi
+    # Recheck after the service stop to catch a workload that raced the
+    # preflight. Restore OctaSpace and refuse to start if one appeared.
+    if ! hostllm_start_allowed; then
+        echo -e "  ${RED}Docker workload detected after the pause; restoring OctaSpace and cancelling.${RESET}"
+        systemctl_hostllm start "$OCTA_SERVICE" >/dev/null 2>&1 || true
         return 1
     fi
     if ! : > "$OCTA_STOP_MARKER"; then
@@ -103,9 +116,75 @@ resume_octaspace() {
     return 1
 }
 
+inspect_octaspace_containers() {
+    local lines name image status entry
+    OCTA_RENTAL_INFO=""
+    OCTA_DOCKER_CHECK="unknown"
+    command -v docker >/dev/null 2>&1 || return 1
+    if ! lines="$(docker ps --format '{{.Names}}\t{{.Image}}\t{{.Status}}' 2>/dev/null)"; then
+        return 1
+    fi
+    OCTA_DOCKER_CHECK="ok"
+    while IFS=$'\t' read -r name image status; do
+        [[ -n "$name" ]] || continue
+        # These are HostLLM-owned containers. Any other running container is
+        # treated as a possible renter workload and blocks a new server.
+        case "$name" in
+            vllm-speed-demon|vllm-hostllm) continue ;;
+        esac
+        entry="${name} (${image}; ${status})"
+        if [[ -n "$OCTA_RENTAL_INFO" ]]; then
+            OCTA_RENTAL_INFO+="; "
+        fi
+        OCTA_RENTAL_INFO+="$entry"
+    done <<< "$lines"
+    return 0
+}
+
+hostllm_start_allowed() {
+    if ! inspect_octaspace_containers; then
+        echo -e "  ${RED}START BLOCKED: cannot inspect Docker workloads safely.${RESET}"
+        echo "  Docker status is unknown; refusing to risk an active OctaSpace rental."
+        return 1
+    fi
+    if [[ -n "$OCTA_RENTAL_INFO" ]]; then
+        echo -e "  ${RED}START BLOCKED: possible OctaSpace rental container is running.${RESET}"
+        echo "  Detected: $OCTA_RENTAL_INFO"
+        echo "  Stop/finish the rental before starting a HostLLM server."
+        return 1
+    fi
+    return 0
+}
+
+show_octaspace_status() {
+    if ! inspect_octaspace_containers; then
+        echo -e "  OctaSpace: ${RED}UNKNOWN — Docker workload check failed; starts blocked${RESET}"
+        return
+    fi
+    if [[ -n "$OCTA_RENTAL_INFO" ]]; then
+        echo -e "  OctaSpace: ${RED}RENTED / Docker workload running${RESET}"
+        echo "  Workload: $OCTA_RENTAL_INFO"
+    elif [[ -f "$OCTA_STOP_MARKER" ]] && ! octaspace_active; then
+        echo -e "  OctaSpace: ${YELLOW}paused by HostLLM; no renter container detected${RESET}"
+    elif octaspace_active; then
+        echo -e "  OctaSpace: ${GREEN}running; no renter container detected (available)${RESET}"
+    elif octaspace_exists; then
+        echo -e "  OctaSpace: ${YELLOW}stopped; no renter container detected${RESET}"
+    else
+        echo -e "  OctaSpace: ${YELLOW}service not installed; no renter container detected${RESET}"
+    fi
+}
+
 run_engine_with_octaspace() {
     local rc=0
     if ! pause_octaspace; then
+        sleep 2
+        return 1
+    fi
+    # Final pre-start check closes the small gap between pausing OctaSpace
+    # and invoking the selected engine.
+    if ! hostllm_start_allowed; then
+        resume_octaspace || true
         sleep 2
         return 1
     fi
@@ -273,6 +352,7 @@ while true; do
     else
         echo -e "  Status:  ${YELLOW}No engine running${RESET}"
     fi
+    show_octaspace_status
 
     echo ""
     echo "  Quick Start:"
