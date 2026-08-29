@@ -41,6 +41,25 @@ The launcher visibly reports:
 
 No full-context generation is used by the speed tests. The server may still start with its configured native context after the test context has been selected.
 
+## HiveOS LLM miner
+
+The retained Hauhau FastMTP profile can run as HiveOS's official custom miner,
+so it appears in the HiveOS dashboard and follows the normal `miner start` /
+`miner stop` lifecycle. Install it from the repository root as root:
+
+```bash
+./install-hive-llm-miner.sh
+miner start
+```
+
+The custom miner launches `hauhau-q8-fastmtp` directly and deliberately leaves
+`osn.service` running. When OctaSpace rents the node, its normal HiveOS
+`miner stop` stops the Qwen server; after the rental, `miner start` brings it
+back without restarting OctaSpace. The wrapper fails closed if Docker reports
+an unknown/running non-HostLLM workload. It reports zero hashrate because the
+process is an inference server, but its running state and GPU telemetry remain
+visible in HiveOS. Remove it with `./uninstall-hive-llm-miner.sh`.
+
 ## Tested Qwen3.8 profiles
 
 Measured on 2026-08-27–28 using a 4096-token context, one short coding prompt, and one short story prompt. These are lightweight single-request generation measurements, not full-context benchmarks.

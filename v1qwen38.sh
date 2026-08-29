@@ -40,6 +40,7 @@ MODE="menu"
 PROFILE_EXPLICIT=0
 SPEC_OVERRIDE=""
 SMOKE=0
+NO_DASHBOARD=0
 SERVER_PID=""
 SERVER_LOG=""
 DFLASH_N_MAX="${QWEN38_DFLASH_N_MAX:-5}"
@@ -90,6 +91,7 @@ Usage:
   v1qwen38.sh --build [--profile PROFILE]
   v1qwen38.sh --status [--profile PROFILE]
   v1qwen38.sh --dashboard [--profile PROFILE]
+  v1qwen38.sh --no-dashboard --quickstart --profile PROFILE
   v1qwen38.sh --stop
 
 Profiles:
@@ -124,6 +126,9 @@ parse_args() {
                 ;;
             --dashboard)
                 MODE="dashboard"
+                ;;
+            --no-dashboard)
+                NO_DASHBOARD=1
                 ;;
             --download|--install)
                 MODE="download"
@@ -1247,7 +1252,7 @@ main() {
             build_runtime
             start_server
             say "Server is running. State: ${STATE_ROOT}/server.info"
-            if [[ -t 0 && -t 1 ]]; then
+            if [[ "$NO_DASHBOARD" -eq 0 && -t 0 && -t 1 ]]; then
                 show_dashboard
             fi
             ;;
