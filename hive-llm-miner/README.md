@@ -38,3 +38,21 @@ The installer backs up `rig.conf` and `wallet.conf` once with the suffix
 Hive reports zero hashrate because this is an inference host, but the custom
 miner name, running state, and GPU telemetry remain visible in the HiveOS
 dashboard.
+
+## Optional Flight Sheet import
+
+`Qwen3.8-LLM-Hosting.flight-sheet.json` is a HiveOS Flight Sheet JSON template.
+Import it from the HiveOS Flight Sheets page using the clipboard/file importer.
+The `LLM` coin and empty wallet are metadata only; this custom miner does not
+mine or use a wallet/pool. If HiveOS requires a wallet while importing, create
+or select a harmless custom wallet, then keep these settings:
+
+```text
+Miner: Custom
+Custom miner: llm-hosting
+Installation URL: empty (the package is already installed on the worker)
+Pool: empty / configure in miner
+```
+
+After applying the sheet, verify that the worker still has `MINER=custom` and
+`CUSTOM_MINER=llm-hosting`. Do not apply an ordinary crypto-mining Flight Sheet.

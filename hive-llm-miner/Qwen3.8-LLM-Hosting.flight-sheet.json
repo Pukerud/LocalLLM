@@ -1,0 +1,24 @@
+{
+  "name": "Qwen3.8 LLM Hosting",
+  "isFavorite": false,
+  "items": [
+    {
+      "coin": "LLM",
+      "pool_ssl": false,
+      "wal_id": null,
+      "dpool_ssl": false,
+      "miner": "custom",
+      "miner_alt": "llm-hosting",
+      "miner_config": {
+        "url": "LLM_HOSTING",
+        "miner": "llm-hosting",
+        "template": "%WAL%",
+        "install_url": "",
+        "algo": null,
+        "pass": "",
+        "user_config": ""
+      },
+      "pool_geo": []
+    }
+  ]
+}
