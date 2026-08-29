@@ -7,10 +7,13 @@ set -Eeuo pipefail
 
 LLM_ROOT="${LLM_ROOT:-/home/user/LocalLLM}"
 LAUNCHER="${LLM_ROOT}/v1qwen38.sh"
-# Hive starts custom miners as root; force the established model owner so the
-# launcher does not resolve root's HOME to an unrelated service account.
+# Hive starts custom miners as root. Pin both roots explicitly so the launcher
+# cannot resolve root's HOME to the unrelated /home/octa service account.
+export HOME="${QWEN38_HOME:-/home/user}"
 export QWEN38_OWNER_USER="${QWEN38_OWNER_USER:-user}"
-STATE_ROOT="${QWEN38_STATE_ROOT:-/home/user/.local/state/locallm-qwen38}"
+export QWEN38_DATA_ROOT="${QWEN38_DATA_ROOT:-/home/user/.local/share/localllm-qwen38}"
+export QWEN38_STATE_ROOT="${QWEN38_STATE_ROOT:-/home/user/.local/state/locallm-qwen38}"
+STATE_ROOT="$QWEN38_STATE_ROOT"
 PROFILE="${QWEN38_HIVE_PROFILE:-hauhau-q8-fastmtp}"
 PORT="${QWEN38_PORT:-8080}"
 STOP_FILE="${MINER_STOP:-/run/hive/MINER_STOP}"
