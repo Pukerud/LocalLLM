@@ -18,8 +18,8 @@ press **[Q]** for the Qwen3.8 llama.cpp profile menu.
 
 ```text
 HostLLM — Engine Picker
-  [1] SPEED DEMON — Qwen3.8 AWQ INT4 + DFlash2 | ~144 code / ~97 agent / ~58 prose tok/s
-      native 262K | 2x RTX 3090 | image input + auto tools + thinking ON; draft text-only; video unvalidated
+  [1] SPEED DEMON — Qwen3.8 AWQ INT4 + FP8 DFlash2 | ~123 code* / ~67 tools / ~62 prose tok/s
+      native 262K | 2x RTX 3090 | image input + auto tools + thinking ON; FP8 draft text-only; video unvalidated
   [Q] Qwen3.8-27B — vision | native 262K | FastMTP
   [2] llama.cpp — general GGUF fallback
 
@@ -62,24 +62,29 @@ llama.cpp build, so the opt-in profile deliberately does not load a projector.
 
 SPEED DEMON is a separate vLLM Docker profile for fast text and coding work. It
 uses the standard (not Hauhau-abliterated) `cyankiwi/Qwen3.8-27B-AWQ-INT4`
-target and `z-lab/Qwen3.8-27B-DFlash2` draft model:
+target and the tested `TechPrototyper/Qwen3.8-27B-DFlash2-fp8-vllm` draft by
+default. Set `SPEED_DEMON_DRAFT_MODE=bf16` to use the retained BF16 DFlash2
+fallback.
 
 | Item | Configuration |
 |---|---|
-| Runtime | vLLM `0.28.0` + FlashInfer full decode graph overlay from PR #50885 |
+| Runtime | vLLM `0.28.0` + FlashInfer full decode graph overlay from PR #50885 + FP8 DFlash support from PR #53122 |
 | GPUs | CUDA0 and CUDA1, 2x RTX 3090; CUDA2 remains unused |
 | Context | native `262144` configured context |
 | KV/cache | FP8 KV; no LMCache |
+| Draft | `TechPrototyper/Qwen3.8-27B-DFlash2-fp8-vllm`, seven speculative tokens |
 | Tools | automatic tool choice with vLLM `qwen3_xml` parser |
 | Reasoning | ON by default with vLLM `qwen3` parser; clients may override |
-| Measured speed | approximately 144 tok/s coding, 97 tok/s agent, 58 tok/s prose |
+| Measured speed | approximately 123 tok/s mixed coding*, 67 tok/s tools, 62 tok/s prose |
 | Model ID | `speed-demon` |
 
 The target model supports image input and the short image smoke test passed. The
-DFlash2 drafter receives text only, not image/video embeddings, so image answers
-are still verified by the target but speculative acceptance may be lower. Video
-support has not been validated. The profile is therefore labeled **target vision
-ON; DFlash draft text-only; video unvalidated**, with text/code recommended.
+FP8 DFlash2 drafter receives text only, not image/video embeddings, so image
+answers are still verified by the target but speculative acceptance may be lower.
+Video support has not been validated. The profile is therefore labeled **target
+vision ON; FP8 DFlash draft text-only; video unvalidated**, with text/code
+recommended. The `*` speed figure is a prompt-dependent mixed short-test
+reference; easy coding samples reached approximately 121–145 tok/s.
 
 Automatic tool choice is enabled for Qwen Code and Open WebUI using the vLLM
 `qwen3_xml` parser, matching this model's `<tool_call><function=...>` template.
@@ -103,6 +108,8 @@ The direct launcher commands are:
 ./v1speeddemon.sh --quickstart
 ./v1speeddemon.sh --smoke
 ./v1speeddemon.sh --status
+# Optional retained BF16 drafter fallback:
+SPEED_DEMON_DRAFT_MODE=bf16 ./v1speeddemon.sh --quickstart
 ./v1speeddemon.sh --stop
 ```
 
@@ -246,8 +253,8 @@ Direct dashboard/status commands:
 The active menu intentionally stays small:
 
 ```text
-  [1] SPEED DEMON        Qwen3.8 AWQ INT4 + DFlash2 │ ~144 code / ~97 agent / ~58 prose tok/s
-      target image input ON │ DFlash draft text-only │ video unvalidated │ native 262K │ 2x RTX 3090
+  [1] SPEED DEMON        Qwen3.8 AWQ INT4 + FP8 DFlash2 │ ~123 code* / ~67 tools / ~62 prose tok/s
+      target image input ON │ FP8 DFlash draft text-only │ video unvalidated │ native 262K │ 2x RTX 3090
   [Q] Qwen3.8-27B        vision │ native 262K │ FastMTP
   [2] llama.cpp          general GGUF fallback
   [9] Kill All

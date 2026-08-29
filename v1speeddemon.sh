@@ -27,7 +27,8 @@ DATA_ROOT="${SPEED_DEMON_DATA_ROOT:-${speed_home}/.local/share/localllm-speed-de
 STATE_ROOT="${SPEED_DEMON_STATE_ROOT:-${speed_home}/.local/state/locallm-speed-demon}"
 MODEL_ROOT="${DATA_ROOT}/models"
 TARGET_DIR="${MODEL_ROOT}/qwen38-awq-int4"
-DRAFT_DIR="${MODEL_ROOT}/dflash2"
+BF16_DRAFT_DIR="${MODEL_ROOT}/dflash2"
+FP8_DRAFT_DIR="${MODEL_ROOT}/dflash2-fp8-vllm"
 CACHE_ROOT="${DATA_ROOT}/vllm-cache"
 LOG_ROOT="${DATA_ROOT}/logs"
 SERVER_INFO="${STATE_ROOT}/server.info"
@@ -37,17 +38,43 @@ BIND_HOST="${SPEED_DEMON_HOST:-0.0.0.0}"
 CONTAINER_NAME="${SPEED_DEMON_CONTAINER_NAME:-vllm-speed-demon}"
 MAX_CONTEXT="${SPEED_DEMON_MAX_CONTEXT:-262144}"
 DRAFT_TOKENS="${SPEED_DEMON_DRAFT_TOKENS:-7}"
+DRAFT_MODE="${SPEED_DEMON_DRAFT_MODE:-fp8}"
 BASE_IMAGE="vllm/vllm-openai:v0.28.0"
-SPEED_DEMON_IMAGE="localllm/speed-demon:vllm-0.28.0-flashinfer-50885"
+BF16_IMAGE="localllm/speed-demon:vllm-0.28.0-flashinfer-50885"
+FP8_IMAGE="${SPEED_DEMON_FP8_IMAGE:-localllm/speed-demon:vllm-0.28.0-flashinfer-50885-fp8-53122}"
 TARGET_REPO="cyankiwi/Qwen3.8-27B-AWQ-INT4"
-DRAFT_REPO="z-lab/Qwen3.8-27B-DFlash2"
+BF16_DRAFT_REPO="z-lab/Qwen3.8-27B-DFlash2"
+FP8_DRAFT_REPO="TechPrototyper/Qwen3.8-27B-DFlash2-fp8-vllm"
 MODE="help"
 SMOKE=0
 SERVER_LOG=""
 
-readonly SPEED_LABEL="SPEED DEMON — Qwen3.8-27B AWQ INT4 + DFlash2"
-readonly SPEED_RESULT="~144 tok/s coding | ~97 tok/s agent | ~58 tok/s prose"
-readonly VISION_LABEL="target vision input ON; DFlash2 draft text-only; video unvalidated"
+case "$DRAFT_MODE" in
+    fp8)
+        DRAFT_DIR="$FP8_DRAFT_DIR"
+        DRAFT_REPO="$FP8_DRAFT_REPO"
+        SPEED_DEMON_IMAGE="$FP8_IMAGE"
+        DOCKERFILE_DIR="$SCRIPT_DIR/speed-demon-fp8"
+        SPEED_LABEL="SPEED DEMON — Qwen3.8-27B AWQ INT4 + FP8 DFlash2"
+        SPEED_RESULT="~123 tok/s coding* | ~67 tok/s tools | ~70 tok/s vision"
+        VISION_LABEL="target vision input ON; FP8 DFlash2 draft text-only; video unvalidated"
+        ;;
+    bf16)
+        DRAFT_DIR="$BF16_DRAFT_DIR"
+        DRAFT_REPO="$BF16_DRAFT_REPO"
+        SPEED_DEMON_IMAGE="$BF16_IMAGE"
+        DOCKERFILE_DIR="$SCRIPT_DIR/speed-demon"
+        SPEED_LABEL="SPEED DEMON — Qwen3.8-27B AWQ INT4 + BF16 DFlash2"
+        SPEED_RESULT="~144 tok/s coding | ~97 tok/s agent | ~58 tok/s prose"
+        VISION_LABEL="target vision input ON; BF16 DFlash2 draft text-only; video unvalidated"
+        ;;
+    *)
+        printf 'ERROR: SPEED_DEMON_DRAFT_MODE must be fp8 or bf16\n' >&2
+        exit 1
+        ;;
+esac
+
+readonly SPEED_LABEL SPEED_RESULT VISION_LABEL DRAFT_DIR DRAFT_REPO SPEED_DEMON_IMAGE DOCKERFILE_DIR
 
 mkdir -p "$DATA_ROOT" "$STATE_ROOT" "$MODEL_ROOT" "$CACHE_ROOT" "$LOG_ROOT"
 
@@ -66,12 +93,13 @@ Usage:
   v1speeddemon.sh --stop
 
 SPEED DEMON uses vLLM 0.28.0, Qwen3.8-27B AWQ INT4, and the Qwen3.8
-DFlash2 drafter on two RTX 3090 GPUs. It is a text/code-first profile.
-The target accepts image input, but DFlash2 drafts from text only; video
-has not been validated. Automatic tool choice is enabled with vLLM's
-`qwen3_xml` parser for Qwen's XML tool-call format. Qwen reasoning is enabled by
-default and parsed with `qwen3`; clients may explicitly override the thinking
-setting. No LMCache is used.
+DFlash2 drafter on two RTX 3090 GPUs. The default drafter is the tested FP8
+candidate; set SPEED_DEMON_DRAFT_MODE=bf16 for the BF16 fallback. It is a
+text/code-first profile. The target accepts image input, but DFlash2 drafts
+from text only; video has not been validated. Automatic tool choice is enabled
+with vLLM's `qwen3_xml` parser for Qwen's XML tool-call format. Qwen reasoning
+is enabled by default and parsed with `qwen3`; clients may explicitly override
+the thinking setting. No LMCache is used.
 EOF
 }
 
@@ -135,6 +163,7 @@ validate_settings() {
     [[ "$MAX_CONTEXT" =~ ^[0-9]+$ ]] || die "SPEED_DEMON_MAX_CONTEXT must be numeric"
     (( MAX_CONTEXT >= 1024 )) || die "SPEED_DEMON_MAX_CONTEXT must be at least 1024"
     [[ "$DRAFT_TOKENS" =~ ^[1-7]$ ]] || die "SPEED_DEMON_DRAFT_TOKENS must be 1..7"
+    [[ "$DRAFT_MODE" == fp8 || "$DRAFT_MODE" == bf16 ]] || die "SPEED_DEMON_DRAFT_MODE must be fp8 or bf16"
 }
 
 docker_ready() {
@@ -161,7 +190,7 @@ ensure_image() {
         return 0
     fi
     say "Building isolated SPEED DEMON image from ${BASE_IMAGE}..."
-    docker build --tag "$SPEED_DEMON_IMAGE" "$SCRIPT_DIR/speed-demon"
+    docker build --tag "$SPEED_DEMON_IMAGE" "$DOCKERFILE_DIR"
 }
 
 download_snapshot() {
@@ -169,6 +198,7 @@ download_snapshot() {
     mkdir -p "$dest"
     say "Downloading model snapshot: $repo"
     docker run --rm \
+        --network host \
         --entrypoint python3 \
         --user "$(id -u):$(id -g)" \
         -e "HF_REPO=$repo" \
@@ -239,6 +269,7 @@ host=$BIND_HOST
 context=$([[ "$SMOKE" -eq 1 ]] && echo 4096 || echo "$MAX_CONTEXT")
 model=$TARGET_REPO
 model_path=$TARGET_DIR
+draft_mode=$DRAFT_MODE
 draft=$DRAFT_REPO
 draft_path=$DRAFT_DIR
 runtime=vLLM 0.28.0 + FlashInfer full decode graph overlay PR #50885
@@ -306,7 +337,11 @@ start_server() {
     (( SMOKE )) && context=4096
 
     SERVER_LOG="${LOG_ROOT}/speed-demon-$(date +%Y%m%d-%H%M%S).log"
-    spec_json="{\"method\":\"dflash\",\"model\":\"/models/dflash2\",\"num_speculative_tokens\":${DRAFT_TOKENS}}"
+    if [[ "$DRAFT_MODE" == fp8 ]]; then
+        spec_json="{\"method\":\"dflash\",\"model\":\"/models/dflash2\",\"num_speculative_tokens\":${DRAFT_TOKENS},\"quantization\":\"compressed-tensors\"}"
+    else
+        spec_json="{\"method\":\"dflash\",\"model\":\"/models/dflash2\",\"num_speculative_tokens\":${DRAFT_TOKENS}}"
+    fi
     vllm_args=(
         /models/target
         --served-model-name speed-demon
@@ -415,10 +450,10 @@ PY
 
 run_text_smoke() {
     local out="${STATE_ROOT}/smoke-text.json"
-    say "Smoke 1/2: short text request (max 32 tokens)"
+    say "Smoke 1/2: short thinking-enabled text request (max 64 tokens)"
     curl -fsS --max-time 180 "http://127.0.0.1:${PORT}/v1/chat/completions" \
         -H 'Content-Type: application/json' \
-        -d '{"model":"speed-demon","messages":[{"role":"user","content":"Reply with a short confirmation that SPEED DEMON is ready."}],"max_tokens":32,"temperature":0.2,"chat_template_kwargs":{"enable_thinking":false}}' \
+        -d '{"model":"speed-demon","messages":[{"role":"user","content":"Reply with a short confirmation that SPEED DEMON is ready."}],"max_tokens":64,"temperature":0.2,"chat_template_kwargs":{"enable_thinking":true,"preserve_thinking":true}}' \
         -o "$out"
     response_text "$out" | head -c 500
     printf '\n'
@@ -464,9 +499,9 @@ body = {
         {"type": "image_url", "image_url": {"url": "data:image/png;base64," + b64}},
         {"type": "text", "text": "In one short sentence, which color is on the left side of the image?"},
     ]}],
-    "max_tokens": 32,
+    "max_tokens": 64,
     "temperature": 0.2,
-    "chat_template_kwargs": {"enable_thinking": False},
+    "chat_template_kwargs": {"enable_thinking": True, "preserve_thinking": True},
 }
 open(path, "w", encoding="utf-8").write(json.dumps(body))
 PY
@@ -503,7 +538,7 @@ show_status() {
     docker_ready
     say "$SPEED_LABEL"
     say "Target model: $TARGET_REPO"
-    say "DFlash2 draft: $DRAFT_REPO (n=${DRAFT_TOKENS})"
+    say "DFlash2 draft: $DRAFT_REPO ($DRAFT_MODE, n=${DRAFT_TOKENS})"
     say "Speed reference: $SPEED_RESULT"
     say "Vision: $VISION_LABEL"
     say "Context: $MAX_CONTEXT | KV: FP8 | LMCache: OFF"
@@ -541,7 +576,7 @@ show_dashboard() {
         echo "  SPEED DEMON RUNNING"
         echo "=================================================================="
         say "  Model:    $TARGET_REPO"
-        say "  Draft:    $DRAFT_REPO (DFlash2 n=${DRAFT_TOKENS}; text-only draft)"
+        say "  Draft:    $DRAFT_REPO ($DRAFT_MODE DFlash2 n=${DRAFT_TOKENS}; text-only draft)"
         say "  Context:  $MAX_CONTEXT | KV: FP8 | LMCache: OFF"
         say "  Speed:    $SPEED_RESULT"
         say "  Vision:   target image input ON; draft text-only; video unvalidated"

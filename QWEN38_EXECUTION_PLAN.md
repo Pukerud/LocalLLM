@@ -38,14 +38,15 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 - Use `ngram-mod` only after a non-speculative short text/vision smoke test.
 - Do not assume an MTP head exists in the Unsloth GGUF; inspect metadata before enabling `draft-mtp`.
 
-### Experimental SPEED DEMON
+### SPEED DEMON
 
-- Use the packaged vLLM `0.28.0` image with `cyankiwi/Qwen3.8-27B-AWQ-INT4` as the target and `z-lab/Qwen3.8-27B-DFlash2` as the drafter.
+- Use the packaged vLLM `0.28.0` image with `cyankiwi/Qwen3.8-27B-AWQ-INT4` as the target and the tested `TechPrototyper/Qwen3.8-27B-DFlash2-fp8-vllm` as the default FP8 drafter. Retain `z-lab/Qwen3.8-27B-DFlash2` as the `SPEED_DEMON_DRAFT_MODE=bf16` fallback.
+- The FP8 image layers the tested FlashInfer overlay with the narrowly scoped vLLM PR #53122 quantized-draft/context-KV fix; it is built reproducibly from `speed-demon-fp8/Dockerfile`.
 - Keep target tensor parallelism at 2 on CUDA0/CUDA1; TP=3 is invalid because the model's 32 attention heads are not divisible by 3. CUDA2 remains unused by this profile.
 - Use FP8 KV, no LMCache, DFlash2 with seven speculative tokens, native context `262144`, and the tested FlashInfer full decode graph overlay from vLLM PR #50885.
-- The target accepts image input, but the DFlash2 drafter receives text only. Label the profile as target vision enabled, DFlash draft text-only, and video unvalidated.
-- Enable automatic tool choice with vLLM's `qwen3_xml` parser, matching the target chat template used by Qwen Code and Open WebUI.
-- Treat approximately 144 tok/s coding, 97 tok/s agent, and 58 tok/s prose as short-test reference values, not universal or full-context throughput claims.
+- The target accepts image input, but the DFlash2 drafter receives text only. Label the profile as target vision enabled, FP8 DFlash draft text-only, and video unvalidated.
+- Enable automatic tool choice with vLLM's `qwen3_xml` parser and thinking with the `qwen3` reasoning parser, matching the target chat template used by Qwen Code and Open WebUI.
+- Treat approximately 123 tok/s mixed coding, 67 tok/s tools, and 62 tok/s prose as prompt-dependent short-test reference values, not universal or full-context throughput claims.
 
 ## LocalLLM changes
 
@@ -81,7 +82,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 - No full-context throughput/quality benchmark.
 - No long video test; SPEED DEMON video behavior remains unvalidated.
 - No DFlash/Lucebox/BeeLlama port for Flash-Next.
-- SPEED DEMON is experimental and does not replace the production llama.cpp profile; no LMCache or third-GPU arrangement has been promoted.
+- The FP8 SPEED DEMON image uses an unmerged vLLM PR and remains separately reversible through `SPEED_DEMON_DRAFT_MODE=bf16`; no LMCache or third-GPU arrangement is used.
 
 ## Execution record
 
@@ -135,3 +136,29 @@ Completed 2026-08-29 — SPEED DEMON tool calling:
 - Enabled vLLM automatic tool choice with `--enable-auto-tool-choice --tool-call-parser qwen3_xml`, fixing the 400 error returned when Qwen Code sends `tool_choice: auto`.
 - Added `--reasoning-parser qwen3` and made thinking explicitly ON by default while allowing clients to override it.
 - Verified non-streaming and streaming calculator tool calls, tool-result continuation, and thinking-enabled coding/vision requests against isolated vLLM containers; no tool-choice 400s occurred.
+
+Completed 2026-08-29 — FP8 SPEED DEMON promotion gate:
+
+- Added a reproducible `speed-demon-fp8/` image definition containing the
+  SHA-256-identified vLLM PR #53122 patch (`02feff0142e068bfb8906bf43424d26aa521898baff6edb37f4cc8bc215dccea`).
+- Installed the optional `TechPrototyper/Qwen3.8-27B-DFlash2-fp8-vllm` snapshot
+  beside the existing BF16 draft; the BF16 model and image remain available as
+  a reversible fallback.
+- Built `localllm/speed-demon:vllm-0.28.0-flashinfer-50885-fp8-53122` from the
+  repository Dockerfile and launched it through the normal SPEED DEMON launcher
+  on isolated port `18080`, with native `262144`, CUDA0/CUDA1, FP8 KV, seven
+  speculative tokens, thinking ON, and automatic tools.
+- Promotion suite passed: model discovery, three thinking-enabled coding
+  requests, prose, non-streaming calculator, tool-result continuation, streaming
+  calculator, target vision (red-left image), tokenizer probe above 250K, and
+  one-token prefill at approximately 36.7K/43.8s and 146.8K/169.9s.
+- Promotion measurements: coding `134.7`, `82.0`, and `54.3` tok/s (median
+  `82.0` for those three prompts), prose `62.4`, calculator `66.7`, and vision
+  `89.8`; earlier repeated easy coding samples were approximately 121–145
+  tok/s. Speculative acceptance was 3.22–3.54 tokens in the promotion suite.
+- The patched image showed only the known Transformers `min_frames`/`max_frames`
+  documentation warnings; no CUDA/Xid/traceback/runtime failure occurred.
+- Changed the default SPEED DEMON drafter to FP8 and updated HostLLM `[1]` and
+  README labeling. Set `SPEED_DEMON_DRAFT_MODE=bf16` for the retained BF16
+  fallback. Final launcher validation is complete with inference stopped and
+  OctaSpace restored.
