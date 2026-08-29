@@ -7,6 +7,9 @@ set -Eeuo pipefail
 
 LLM_ROOT="${LLM_ROOT:-/home/user/LocalLLM}"
 LAUNCHER="${LLM_ROOT}/v1qwen38.sh"
+# Hive starts custom miners as root; force the established model owner so the
+# launcher does not resolve root's HOME to an unrelated service account.
+export QWEN38_OWNER_USER="${QWEN38_OWNER_USER:-user}"
 STATE_ROOT="${QWEN38_STATE_ROOT:-/home/user/.local/state/locallm-qwen38}"
 PROFILE="${QWEN38_HIVE_PROFILE:-hauhau-q8-fastmtp}"
 PORT="${QWEN38_PORT:-8080}"
@@ -67,7 +70,7 @@ else
 fi
 
 say "starting $PROFILE (osn.service is left running)"
-"$LAUNCHER" --quickstart --profile "$PROFILE" --no-dashboard
+QWEN38_SKIP_EXISTING_VERIFY=1 "$LAUNCHER" --quickstart --profile "$PROFILE" --no-dashboard
 
 # v1qwen38.sh returns after the server becomes healthy in non-interactive
 # mode. Keep this Hive miner process in the foreground so miner stop reaches

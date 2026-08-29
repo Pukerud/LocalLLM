@@ -311,11 +311,15 @@ download_file() {
     dir="$(dirname -- "$dest")"
     mkdir -p "$dir"
 
-    if [[ -f "$dest" ]] && verify_asset "$dest" "$expected"; then
-        say "Already present: $dest"
-        return 0
-    fi
     if [[ -f "$dest" ]]; then
+        if [[ "${QWEN38_SKIP_EXISTING_VERIFY:-0}" == "1" ]]; then
+            say "Already present (existing checksum verification skipped): $dest"
+            return 0
+        fi
+        if verify_asset "$dest" "$expected"; then
+            say "Already present: $dest"
+            return 0
+        fi
         rm -f -- "$dest"
     fi
 

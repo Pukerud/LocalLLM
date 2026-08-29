@@ -13,7 +13,9 @@ The miner starts:
 It deliberately does **not** stop or start `osn.service`. When OctaSpace rents
 the node, its normal HiveOS `miner stop` command reaches the foreground wrapper,
 which stops the Qwen server. When the rental ends, `miner start` starts the
-wrapper again while `osn.service` remains running.
+wrapper again while `osn.service` remains running. Managed starts skip hashing
+already-present assets for fast handoff; newly downloaded assets are still
+checksum-verified.
 
 The wrapper fails closed if Docker reports any non-HostLLM running container,
 or if Docker status cannot be read. This prevents it from consuming GPUs while
