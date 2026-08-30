@@ -84,7 +84,7 @@ HiveOS custom miner, which remains on Hauhau FastMTP.
 
 | Profile | Coding | Story | Average | Notes |
 |---|---:|---:|---:|---|
-| Tiel Coder Q8 native MTP n=2 | 170.71 tok/s | 124.44 tok/s | **147.57 tok/s** | menu-compatible short 4096-token speed test |
+| Tiel Coder Q8 native MTP n=2 | 168.11 tok/s | 129.12 tok/s | **148.62 tok/s** | four short 4096-token decode measurements |
 | Tiel Coder Q8 native MTP n=3 | 164.38 tok/s | 107.70 tok/s | **136.04 tok/s** | two short measurements; n=2 is the menu default |
 | Tiel Coder Q8 without speculation | 130.66 tok/s | 129.65 tok/s | **130.16 tok/s** | no-spec comparison |
 
