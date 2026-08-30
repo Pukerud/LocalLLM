@@ -62,6 +62,11 @@ readonly UPSTREAM_COMMIT="4e97ac86ebe2c4cb8212d98d2641ad6768810896"
 readonly DFLASH_REPO="incoai/Qwen3.8-27B-DFlash2-GGUF"
 readonly DFLASH_MODEL="Qwen3.8-27B-DFlash2-Q4_K_M.gguf"
 readonly DFLASH_MODEL_SHA="18a380efc9b7ed8d88677fc895f5c11ae170653434ee378f7348f715c14d0594"
+readonly TIEL_REPO="peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF-MTP"
+readonly TIEL_MODEL="Tiel-Coder-35B-A3B-MTP-UD-Q8_K_XL.gguf"
+readonly TIEL_MMPROJ="mmproj-BF16.gguf"
+readonly TIEL_MODEL_SHA="8384abe448e6159b1d43249be9c51f68fe5771e962bb39e3ee89ad1215385310"
+readonly TIEL_MMPROJ_SHA="d9ce31026d1cb1f3f8d5152e2e2a014d9d2b302b6c93a7dc07bb0a0487f52837"
 
 # Set by configure_profile.
 PROFILE_LABEL=""
@@ -72,6 +77,7 @@ DRAFT_PATH=""
 FULL_CTX=262144
 SPEC_MODE="none"
 RUNTIME_DIR=""
+API_MODEL="qwen38"
 
 mkdir -p "$DATA_ROOT" "$STATE_ROOT" "$RUNTIME_ROOT" "$MODEL_ROOT" "$LOG_ROOT"
 SPEED_CACHE="${STATE_ROOT}/speed-results.tsv"
@@ -99,6 +105,7 @@ Profiles:
   hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, 262K on 3x3090
   flash-iq4          Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit, experimental PR #27742
   hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K
+  tiel-q8-mtp         Tiel Coder 35B-A3B Q8_K_XL + BF16 vision + native MTP, native 262K
 
 --smoke uses a 4096-token context, one short text request, and one small PNG
 request. It never sends a long-context prompt. --quickstart uses the profile's
@@ -187,6 +194,7 @@ parse_args() {
 
 configure_profile() {
     local qdir
+    API_MODEL="qwen38"
     case "$PROFILE" in
         hauhau-q8)
             PROFILE_LABEL="Qwen3.8-27B HauhauCS Q8_K_P / vision / native 262K"
@@ -218,6 +226,17 @@ configure_profile() {
             DRAFT_PATH="${MODEL_ROOT}/dflash2/${DFLASH_MODEL}"
             FULL_CTX=262144
             SPEC_MODE="dflash2"
+            ;;
+        tiel-q8-mtp)
+            PROFILE_LABEL="Tiel Coder 35B-A3B Q8_K_XL / BF16 vision / native MTP / 262K"
+            RUNTIME_KIND="tiel"
+            RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen38-hauhau"
+            MODEL_PATH="${MODEL_ROOT}/tiel/${TIEL_MODEL}"
+            MMPROJ_PATH="${MODEL_ROOT}/tiel/${TIEL_MMPROJ}"
+            DRAFT_PATH=""
+            FULL_CTX=262144
+            SPEC_MODE="native"
+            API_MODEL="tiel-coder"
             ;;
         flash-iq4)
             qdir="UD-IQ4_XS"
@@ -351,6 +370,13 @@ ensure_hauhau_assets() {
     fi
 }
 
+ensure_tiel_assets() {
+    local dir="${MODEL_ROOT}/tiel"
+    local base="https://huggingface.co/${TIEL_REPO}/resolve/main"
+    download_file "$base/$TIEL_MODEL" "$dir/$TIEL_MODEL" "$TIEL_MODEL_SHA"
+    download_file "$base/$TIEL_MMPROJ" "$dir/$TIEL_MMPROJ" "$TIEL_MMPROJ_SHA"
+}
+
 ensure_dflash_assets() {
     local target_dir="${MODEL_ROOT}/hauhau"
     local draft_dir="${MODEL_ROOT}/dflash2"
@@ -397,6 +423,7 @@ ensure_assets() {
     say "Checking model assets for ${PROFILE} (checksum progress will be shown)..."
     case "$RUNTIME_KIND" in
         hauhau) ensure_hauhau_assets ;;
+        tiel) ensure_tiel_assets ;;
         upstream) ensure_dflash_assets ;;
         flash)
             ensure_flash_assets UD-IQ4_XS
@@ -438,7 +465,7 @@ build_runtime() {
     fi
 
     pushd "$source" >/dev/null
-    if [[ "$RUNTIME_KIND" == "hauhau" ]]; then
+    if [[ "$RUNTIME_KIND" == "hauhau" || "$RUNTIME_KIND" == "tiel" ]]; then
         git fetch --quiet origin "$HAUHAU_COMMIT"
         git reset --hard --quiet "$HAUHAU_COMMIT"
         git clean -fdx >/dev/null
@@ -767,7 +794,7 @@ run_text_smoke() {
     say "Smoke 1/2: short text request (max 32 tokens)"
     if ! curl -fsS --max-time 120 "http://127.0.0.1:${PORT}/v1/chat/completions" \
         -H 'Content-Type: application/json' \
-        -d '{"model":"qwen38","messages":[{"role":"user","content":"Reply with a short confirmation that Qwen3.8 is ready."}],"max_tokens":32,"temperature":0.2}' \
+        -d "{\"model\":\"${API_MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with a short confirmation that the selected model is ready.\"}],\"max_tokens\":32,\"temperature\":0.2}" \
         -o "$out"; then
         warn "text request failed"
         return 1
@@ -802,11 +829,11 @@ run_vision_smoke() {
     make_test_png "$img"
     b64="$(base64 -w0 "$img")"
     payload="${STATE_ROOT}/smoke-vision-request.json"
-    python3 - "$b64" "$payload" <<'PY'
+    python3 - "$b64" "$payload" "$API_MODEL" <<'PY'
 import json, sys
-b64, path = sys.argv[1:]
+b64, path, model = sys.argv[1:]
 body = {
-  "model": "qwen38",
+  "model": model,
   "messages": [{"role": "user", "content": [
       {"type": "image_url", "image_url": {"url": "data:image/png;base64," + b64}},
       {"type": "text", "text": "In one short sentence, which color is on the left side of the image?"}
@@ -901,13 +928,13 @@ speed_request() {
     local kind="$1" prompt="$2" max_tokens="$3" payload out
     payload="${STATE_ROOT}/speed-${PROFILE}-${kind}.request.json"
     out="${STATE_ROOT}/speed-${PROFILE}-${kind}.response.json"
-    python3 - "$prompt" "$max_tokens" "$payload" <<'PY'
+    python3 - "$prompt" "$max_tokens" "$payload" "$API_MODEL" <<'PY'
 import json
 import sys
 
-prompt, max_tokens, path = sys.argv[1:]
+prompt, max_tokens, path, model = sys.argv[1:]
 body = {
-    "model": "qwen38",
+    "model": model,
     "messages": [{"role": "user", "content": prompt}],
     "max_tokens": int(max_tokens),
     "temperature": 0.2,
@@ -1150,7 +1177,7 @@ show_dashboard() {
         fi
         if [[ -z "$MMPROJ_PATH" ]]; then
             printf '  Vision:   OFF (DFlash2 text-only profile)\n'
-        elif [[ "$RUNTIME_KIND" == "hauhau" ]]; then
+        elif [[ "$RUNTIME_KIND" == "hauhau" || "$RUNTIME_KIND" == "tiel" ]]; then
             printf '  Vision:   ON (BF16 projector)\n'
         else
             printf '  Vision:   ON (F16 projector)\n'
@@ -1203,6 +1230,8 @@ choose_profile() {
     say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 262K (3x3090 profile)  |  speed: $(speed_display hauhau-q8-fastmtp)"
     say "  [3] Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit + PR #27742 (experimental, larger)  |  speed: $(speed_display flash-iq4)"
     say "  [4] HauhauCS Q8_K_P + DFlash2 Q4 n=${DFLASH_N_MAX} (text-only, experimental)  |  speed: $(speed_display hauhau-q8-dflash2)"
+    say "  [5] Tiel Coder 35B-A3B Q8_K_XL + BF16 vision + native MTP + 262K  |  speed: $(speed_display tiel-q8-mtp)"
+    say "      Tested on 3x RTX 3090; experimental; use this option to test later"
     say "  [s] Run short speed tests for all standard profiles"
     say "      DFlash2 is opt-in and text-only on this host; use --speed-test --profile hauhau-q8-dflash2"
 
@@ -1213,6 +1242,7 @@ choose_profile() {
         2) PROFILE="hauhau-q8-fastmtp" ;;
         3) PROFILE="flash-iq4" ;;
         4) PROFILE="hauhau-q8-dflash2" ;;
+        5) PROFILE="tiel-q8-mtp" ;;
         s|S)
             PROFILE="hauhau-q8"
             MODE="speed-all"
