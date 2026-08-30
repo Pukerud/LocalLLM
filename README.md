@@ -28,7 +28,6 @@ Qwen3.8 Quick Start (inside [Q])
   [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 262K           | speed: cached result
   [3] Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit + PR #27742 | speed: cached result
   [4] HauhauCS Q8_K_P + DFlash2 Q4 n=5 (text-only, experimental) | speed: cached result
-  [5] Tiel Coder 35B-A3B Q8_K_XL + BF16 vision + native MTP + 262K | speed: cached result
   [s] Run short speed tests for installed profiles
   [q] Cancel
 ```
@@ -75,39 +74,6 @@ Measured on 2026-08-27–28 using a 4096-token context, one short coding prompt,
 The DFlash2 row is not a replacement for the vision-capable FastMTP profile. The Q4
 DFlash2 drafter currently fails to process multimodal embedding chunks in this
 llama.cpp build, so the opt-in profile deliberately does not load a projector.
-
-## Tested Tiel Coder profile
-
-The experimental `tiel-q8-mtp` option uses the Tiel Coder Q8 MTP GGUF with the
-existing pinned Qwen35-compatible llama.cpp runtime. It does not change the
-HiveOS custom miner, which remains on Hauhau FastMTP.
-
-| Profile | Coding | Story | Average | Notes |
-|---|---:|---:|---:|---|
-| Tiel Coder Q8 native MTP n=2 | 168.11 tok/s | 129.12 tok/s | **148.62 tok/s** | four short 4096-token decode measurements |
-| Tiel Coder Q8 native MTP n=3 | 164.38 tok/s | 107.70 tok/s | **136.04 tok/s** | two short measurements; n=2 is the menu default |
-| Tiel Coder Q8 without speculation | 130.66 tok/s | 129.65 tok/s | **130.16 tok/s** | no-spec comparison |
-
-Text, vision, tool-call, and streaming smoke tests passed. The 262144-token
-native-context health-only startup also passed without sending a long-context
-generation. The model and projector are stored outside the repository under
-`~/.local/share/localllm-qwen38/models/tiel/` and are checksum-verified:
-
-```text
-Tiel-Coder-35B-A3B-MTP-UD-Q8_K_XL.gguf
-8384abe448e6159b1d43249be9c51f68fe5771e962bb39e3ee89ad1215385310
-
-mmproj-BF16.gguf
-d9ce31026d1cb1f3f8d5152e2e2a014d9d2b302b6c93a7dc07bb0a0487f52837
-```
-
-Run it explicitly from the Qwen profile menu or with:
-
-```bash
-./v1qwen38.sh --smoke --profile tiel-q8-mtp
-./v1qwen38.sh --speed-test --profile tiel-q8-mtp
-./v1qwen38.sh --quickstart --profile tiel-q8-mtp
-```
 
 ## SPEED DEMON profile
 
