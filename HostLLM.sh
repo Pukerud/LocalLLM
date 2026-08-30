@@ -376,7 +376,7 @@ while true; do
     echo "  ────────────"
     echo -e "  ${BOLD}[1]${RESET} SPEED DEMON  ⚡ Qwen3.8 AWQ INT4 + FP8 DFlash2 │ ~123 code* / ~67 tools / ~62 prose tok/s"
     echo -e "      Native 262K │ 2x RTX 3090 │ target image input ON; FP8 draft text-only; video unvalidated"
-    echo -e "  ${BOLD}[Q]${RESET} Qwen3.8-27B  ⚡ vision │ native 262K │ FastMTP"
+    echo -e "  ${BOLD}[Q]${RESET} Qwen3.8-27B  ⚡ vision │ 2 users × native 262K │ FastMTP + Q8 KV"
     echo -e "      HauhauCS and Flash-Next profiles with cached speed results"
     echo ""
     echo "  Engines (manual):"

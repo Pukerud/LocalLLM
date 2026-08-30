@@ -2,7 +2,7 @@
 
 Local NVIDIA-GPU launchers for the current Qwen3.8 profiles, with a general llama.cpp fallback. Only one server should use port `8080` at a time.
 
-> **Current primary:** Qwen3.8-27B HauhauCS Q8 + vision + FastMTP, configured for native 262K context on three RTX 3090 GPUs.
+> **Current primary:** Qwen3.8-27B HauhauCS Q8 + vision + FastMTP, configured for two 262K slots on three RTX 3090 GPUs using Q8 KV.
 
 ## Quick Start
 
@@ -20,12 +20,12 @@ press **[Q]** for the Qwen3.8 llama.cpp profile menu.
 HostLLM — Engine Picker
   [1] SPEED DEMON — Qwen3.8 AWQ INT4 + FP8 DFlash2 | ~123 code* / ~67 tools / ~62 prose tok/s
       native 262K | 2x RTX 3090 | image input + auto tools + thinking ON; FP8 draft text-only; video unvalidated
-  [Q] Qwen3.8-27B — vision | native 262K | FastMTP
+  [Q] Qwen3.8-27B — vision | 2 users × native 262K | FastMTP + Q8 KV
   [2] llama.cpp — general GGUF fallback
 
 Qwen3.8 Quick Start (inside [Q])
   [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K       | speed: cached result
-  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 262K           | speed: cached result
+  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 2 slots / 262K each / Q8 KV | speed: cached result
   [3] Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit + PR #27742 | speed: cached result
   [4] HauhauCS Q8_K_P + DFlash2 Q4 n=5 (text-only, experimental) | speed: cached result
   [s] Run short speed tests for installed profiles
@@ -62,18 +62,27 @@ visible in HiveOS. Remove it with `./uninstall-hive-llm-miner.sh`.
 
 ## Tested Qwen3.8 profiles
 
-Measured on 2026-08-27–28 using a 4096-token context, one short coding prompt, and one short story prompt. These are lightweight single-request generation measurements, not full-context benchmarks.
+Measured on 2026-08-27–30 using a 4096-token context, one short coding prompt, and one short story prompt. These are lightweight single-request generation measurements, not full-context benchmarks.
 
 | Profile | Coding | Story | Average | Notes |
 |---|---:|---:|---:|---|
 | Hauhau Q8 native MTP | 56.87 tok/s | 40.62 tok/s | **48.74 tok/s** | BF16 vision projector |
-| Hauhau Q8 FastMTP | 73.47 tok/s | 47.31 tok/s | **60.39 tok/s** | current recommended profile |
+| Hauhau Q8 FastMTP | 69.96 tok/s | 44.65 tok/s | **57.30 tok/s** | current production; 2 slots / 262K each / Q8 KV |
 | Flash IQ4 | 48.08 tok/s | 48.25 tok/s | **48.16 tok/s** | experimental PR #27742; Q8 K/V and automatic layer fitting, remeasured 2026-08-28 |
 | Hauhau Q8 + DFlash2 Q4 n=5 | 86.52 tok/s | 38.67 tok/s | **62.59 tok/s** | upstream master `4e97ac86`; text-only; reversed layer-device order; opt-in candidate |
 
 The DFlash2 row is not a replacement for the vision-capable FastMTP profile. The Q4
 DFlash2 drafter currently fails to process multimodal embedding chunks in this
 llama.cpp build, so the opt-in profile deliberately does not load a projector.
+
+### Two-user maximum-context check
+
+On 2026-08-30, the production Q8 FastMTP model was tested with
+`--parallel 2` and `--ctx-size 524288`, giving two slots with `n_ctx_slot=262144`.
+The F16-KV version failed allocation on GPU2, while the Q8-KV version loaded
+successfully and completed two simultaneous short requests. Peak observed usage
+was approximately 22.2 GiB of 24 GiB on the fullest GPU. The production profile
+now uses this Q8-KV/two-slot configuration.
 
 ## SPEED DEMON profile
 
@@ -161,8 +170,9 @@ Short 4096-token A/B checks using the same two prompts measured:
 | Flash IQ4 | 46.95 tok/s | 55.56 tok/s | +18.3%; short vision check passed |
 
 These are lightweight single-request measurements, not full-context benchmarks.
-The current production FastMTP runtime remains pinned and its historical 60.39
-tok/s result remains the production baseline.
+The 60.39 tok/s FastMTP figure is the historical single-slot F16-KV baseline;
+current production uses two slots with Q8 KV and measures 57.30 tok/s on the same
+short speed-test format.
 
 The official Q4 DFlash2 draft was downloaded from
 `incoai/Qwen3.8-27B-DFlash2-GGUF` and verified with SHA-256:
@@ -204,7 +214,7 @@ are retained under the host's `~/.local/share/localllm-qwen38/logs/` and
 - Flash-Next UD-IQ4_XS GGUF uses the isolated PR #27742 runtime.
 - RTX 3090 builds use CUDA architecture `sm_86`.
 - Hauhau uses layer split with `--tensor-split 1,1,1` because this host reports PHB topology and no usable peer-to-peer link; Flash IQ4 uses layer split with automatic fitting because its larger weights need a rebalanced placement.
-- F16 KV cache is used for the native 262144-token context configuration except Flash IQ4, which uses `q8_0` K/V to fit its larger model at native context.
+- F16 KV cache is used by the single-slot native profiles; production FastMTP uses `q8_0` K/V with two slots and an aggregate 524288-token server context so each slot retains native 262144 context.
 - FastMTP uses the publisher sidecar and its pinned qwen35-compatible patch.
 - All Qwen3.8 data, runtimes, logs, and state live below:
 
@@ -223,9 +233,9 @@ After Quick Start finishes, the launcher shows a live dashboard. Press **[2]** t
 ==================================================================
   QWEN3.8 SERVER RUNNING
 ==================================================================
-  Profile:  Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP / 262K
+  Profile:  Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP / 2 slots / 262K each / Q8 KV
   Model:    Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-Q8_K_P.gguf
-  Context:  262144  |  KV: F16  |  Speculation: FastMTP (3-token draft)
+  Context:  262144 per slot  |  Slots: 2  |  KV: Q8_0  |  Speculation: FastMTP (3-token draft)
   Vision:   ON (BF16 projector)
   GPUs:     3x RTX 3090 (24 GB each)
   Reasoning: ON
@@ -272,7 +282,7 @@ The active menu intentionally stays small:
 ```text
   [1] SPEED DEMON        Qwen3.8 AWQ INT4 + FP8 DFlash2 │ ~123 code* / ~67 tools / ~62 prose tok/s
       target image input ON │ FP8 DFlash draft text-only │ video unvalidated │ native 262K │ 2x RTX 3090
-  [Q] Qwen3.8-27B        vision │ native 262K │ FastMTP
+  [Q] Qwen3.8-27B        vision │ 2 users × native 262K │ FastMTP + Q8 KV
   [2] llama.cpp          general GGUF fallback
   [9] Kill All
   [10] Update
@@ -344,7 +354,7 @@ The old launchers were built around Qwen3.6 model files, Qwen3.6 draft models, Q
 - BeeLlama DFlash benchmarks tested Qwen3.6 target/draft combinations at roughly 100K context with TurboQuant/TCQ KV settings.
 - The old benchmark scripts measured different prompts, models, contexts, KV types, and hardware. Their numbers are not directly comparable to the current Qwen3.8 smoke-speed results.
 
-The current comparable lightweight measurements are the Qwen3.8 table above: FastMTP averaged **60.39 tok/s**, while native MTP averaged **48.74 tok/s**.
+The current comparable lightweight measurements are the Qwen3.8 table above: two-slot FastMTP averages **57.30 tok/s**, while native single-slot MTP averaged **48.74 tok/s**.
 
 ### BeeLlama preview history
 
