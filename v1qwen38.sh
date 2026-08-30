@@ -70,6 +70,9 @@ MODEL_PATH=""
 MMPROJ_PATH=""
 DRAFT_PATH=""
 FULL_CTX=262144
+SERVER_CTX=262144
+PARALLEL=1
+KV_TYPE="f16"
 SPEC_MODE="none"
 RUNTIME_DIR=""
 
@@ -96,7 +99,7 @@ Usage:
 
 Profiles:
   hauhau-q8          HauhauCS Q8_K_P + BF16 vision, native 262K, embedded MTP
-  hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, 262K on 3x3090
+  hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, 2x262K slots on 3x3090
   flash-iq4          Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit, experimental PR #27742
   hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K
 
@@ -187,6 +190,9 @@ parse_args() {
 
 configure_profile() {
     local qdir
+    SERVER_CTX=262144
+    PARALLEL=1
+    KV_TYPE="f16"
     case "$PROFILE" in
         hauhau-q8)
             PROFILE_LABEL="Qwen3.8-27B HauhauCS Q8_K_P / vision / native 262K"
@@ -199,13 +205,16 @@ configure_profile() {
             SPEC_MODE="native"
             ;;
         hauhau-q8-fastmtp)
-            PROFILE_LABEL="Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP / 262K"
+            PROFILE_LABEL="Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP / 2 slots / 262K each / Q8 KV"
             RUNTIME_KIND="hauhau"
             RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen38-hauhau"
             MODEL_PATH="${MODEL_ROOT}/hauhau/${HAUHAU_MODEL}"
             MMPROJ_PATH="${MODEL_ROOT}/hauhau/${HAUHAU_MMPROJ}"
             DRAFT_PATH="${MODEL_ROOT}/hauhau/${HAUHAU_DRAFT}"
             FULL_CTX=262144
+            SERVER_CTX=524288
+            PARALLEL=2
+            KV_TYPE="q8_0"
             SPEC_MODE="fast"
             ;;
         hauhau-q8-dflash2)
@@ -228,6 +237,7 @@ configure_profile() {
             MMPROJ_PATH="${MODEL_ROOT}/flash/${FLASH_MMPROJ}"
             DRAFT_PATH=""
             FULL_CTX=262144
+            KV_TYPE="q8_0"
             SPEC_MODE="none"
             ;;
         *)
@@ -499,6 +509,9 @@ host=$BIND_HOST
 model=$MODEL_PATH
 mmproj=$MMPROJ_PATH
 context=$FULL_CTX
+server_context=$SERVER_CTX
+parallel=$PARALLEL
+kv_cache=$KV_TYPE
 speculation=$SPEC_MODE
 log=$SERVER_LOG
 EOF
@@ -559,7 +572,7 @@ check_port_free() {
 }
 
 make_server_args() {
-    local ctx="$FULL_CTX" batch=512 ubatch=128
+    local ctx="$SERVER_CTX" batch=512 ubatch=128
     if (( SMOKE )); then
         ctx=4096
         batch=256
@@ -579,7 +592,7 @@ make_server_args() {
         --flash-attn on
         --batch-size "$batch"
         --ubatch-size "$ubatch"
-        --parallel 1
+        --parallel "$PARALLEL"
         --jinja
         --temp 1.0
         --top-k 20
@@ -597,7 +610,7 @@ make_server_args() {
         # layer fitting to leave enough room for native 262K context on 3x24GB.
         SERVER_ARGS+=(--cache-type-k q8_0 --cache-type-v q8_0)
     else
-        SERVER_ARGS+=(--tensor-split 1,1,1 --cache-type-k f16 --cache-type-v f16)
+        SERVER_ARGS+=(--tensor-split 1,1,1 --cache-type-k "$KV_TYPE" --cache-type-v "$KV_TYPE")
     fi
 
     if [[ "$PROFILE" == "hauhau-q8-dflash2" ]]; then
@@ -711,14 +724,14 @@ start_server() {
 
     SERVER_LOG="${LOG_ROOT}/${PROFILE}-$(date +%Y%m%d-%H%M%S).log"
     say "Starting: $PROFILE_LABEL"
-    say "  context: $FULL_CTX (smoke context: $([[ $SMOKE -eq 1 ]] && echo 4096 || echo no))"
+    say "  context: ${FULL_CTX} per slot (server total ${SERVER_CTX}; ${PARALLEL} slots; smoke context: $([[ $SMOKE -eq 1 ]] && echo 4096 || echo no))"
     if [[ "$PROFILE" == "flash-iq4" ]]; then
-        say "  GPUs: 3x RTX 3090, layer split auto-fit, Q8 KV"
+        say "  GPUs: 3x RTX 3090, layer split auto-fit, Q8 KV, ${PARALLEL} slot(s)"
     elif [[ "$PROFILE" == "hauhau-q8-dflash2" ]]; then
-        say "  GPUs: 3x RTX 3090, reversed layer split CUDA2,CUDA1,CUDA0, F16 KV"
+        say "  GPUs: 3x RTX 3090, reversed layer split CUDA2,CUDA1,CUDA0, ${KV_TYPE^^} KV, ${PARALLEL} slot(s)"
         say "  Vision: OFF (DFlash2 text-only profile)"
     else
-        say "  GPUs: 3x RTX 3090, layer split 1,1,1, F16 KV"
+        say "  GPUs: 3x RTX 3090, layer split 1,1,1, ${KV_TYPE^^} KV, ${PARALLEL} slot(s)"
     fi
     say "  log: $SERVER_LOG"
     printf 'Command:' > "$SERVER_LOG"
@@ -1143,11 +1156,8 @@ show_dashboard() {
         echo "=================================================================="
         printf '  Profile:  %s\n' "$PROFILE_LABEL"
         printf '  Model:    %s\n' "$(basename -- "$MODEL_PATH")"
-        if [[ "$PROFILE" == "flash-iq4" ]]; then
-            printf '  Context:  %s  |  KV: Q8  |  Speculation: %s\n' "$FULL_CTX" "$spec_label"
-        else
-            printf '  Context:  %s  |  KV: F16  |  Speculation: %s\n' "$FULL_CTX" "$spec_label"
-        fi
+        printf '  Context:  %s per slot  |  Slots: %s  |  KV: %s  |  Speculation: %s\n' \
+            "$FULL_CTX" "$PARALLEL" "${KV_TYPE^^}" "$spec_label"
         if [[ -z "$MMPROJ_PATH" ]]; then
             printf '  Vision:   OFF (DFlash2 text-only profile)\n'
         elif [[ "$RUNTIME_KIND" == "hauhau" ]]; then
@@ -1200,7 +1210,7 @@ choose_profile() {
     say ""
     say "Qwen3.8 Quick Start"
     say "  [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K  |  speed: $(speed_display hauhau-q8)"
-    say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 262K (3x3090 profile)  |  speed: $(speed_display hauhau-q8-fastmtp)"
+    say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 2 slots / 262K each / Q8 KV  |  speed: $(speed_display hauhau-q8-fastmtp)"
     say "  [3] Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit + PR #27742 (experimental, larger)  |  speed: $(speed_display flash-iq4)"
     say "  [4] HauhauCS Q8_K_P + DFlash2 Q4 n=${DFLASH_N_MAX} (text-only, experimental)  |  speed: $(speed_display hauhau-q8-dflash2)"
     say "  [s] Run short speed tests for all standard profiles"
