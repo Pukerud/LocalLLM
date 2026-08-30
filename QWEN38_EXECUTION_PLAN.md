@@ -15,7 +15,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 ## Baseline
 
 - Three RTX 3090 GPUs, 24 GiB each, compute capability 8.6.
-- GPUs are connected through PHB and report no usable P2P; Hauhau uses `--split-mode layer` with equal `--tensor-split 1,1,1`, while Flash IQ4 uses layer split with automatic fitting.
+- GPUs are connected through PHB and report no usable P2P; Hauhau uses `--split-mode layer` with equal `--tensor-split 1,1,1`, while the uncensored Flash IQ4 target uses layer split with automatic fitting.
 - Host has approximately 125 GiB RAM and no swap.
 - Current NVIDIA driver is 595.91.07; use a CUDA 12.9 build/runtime path if a toolkit is required.
 
@@ -33,9 +33,9 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 ### Experimental Qwen3.8-Flash-Next
 
 - Build a separate pinned PR #27742 (`qwen4exp`) runtime at head `af1ffaf37f1e44edb62e87ab8ddb9bb6840849bc` (recorded 2026-08-27).
-- Use mmap/host handling for the large PLE/n-gram tables; the retained Flash IQ4 profile uses `q8_0` K/V and automatic layer fitting at native context.
-- Use `ngram-mod` only after a non-speculative short text/vision smoke test.
-- Do not assume an MTP head exists in the Unsloth GGUF; inspect metadata before enabling `draft-mtp`.
+- Use mmap/host handling for the large PLE/n-gram tables; the uncensored Flash IQ4 profile uses `q8_0` K/V and automatic layer fitting at native context.
+- The selected uncensored IQ4XS-NGQ4 GGUF intentionally omits its MTP head; keep speculative decoding disabled for this target.
+- Use the supplied BF16 vision projector and validate text, vision, and tool behavior before promotion.
 
 ### SPEED DEMON
 
@@ -64,7 +64,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 3. Add scripts/documentation and run static checks.
 4. Build/download only the stable Hauhau Q8 target and projector first.
 5. Run short text and image smoke tests, with no long-context prompt.
-6. If stable, build/download the retained Flash-Next IQ4 candidate and run the same short smoke tests. Flash downloads are lazy because its shard set is large.
+6. If stable, build/download the uncensored Flash-Next IQ4 target and run the same short smoke tests. Flash downloads are lazy because its weight file is large.
 7. Commit changes with model/runtime provenance and push to the appropriate repository only after validation.
 
 ## Success criteria
@@ -80,7 +80,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 
 - No full-context throughput/quality benchmark.
 - No long video test; SPEED DEMON video behavior remains unvalidated.
-- No DFlash/Lucebox/BeeLlama port for Flash-Next.
+- No DFlash/Lucebox/BeeLlama port for Flash-Next; the selected uncensored GGUF has no exported MTP head.
 - The FP8 SPEED DEMON image uses an unmerged vLLM PR and remains separately reversible through `SPEED_DEMON_DRAFT_MODE=bf16`; no LMCache or third-GPU arrangement is used.
 
 ## Execution record
@@ -161,3 +161,11 @@ Completed 2026-08-29 — FP8 SPEED DEMON promotion gate:
   README labeling. Set `SPEED_DEMON_DRAFT_MODE=bf16` for the retained BF16
   fallback. Final launcher validation is complete with inference stopped and
   OctaSpace restored.
+
+Completed 2026-08-30 — uncensored Flash-Next replacement:
+
+- Downloaded `cygnal/Qwen3.8-Flash-Next-Uncensored-IQ4XS-NGQ4-GGUF` beside the previous `unsloth` UD-IQ4_XS target and verified the GGUF SHA-256 `cedf1e08063f6df77926e1169f67b327dcc6301b5b329589615bdf09d4895f7e` plus BF16 projector SHA-256 `9c56f5aa2d30242325a91aa3e4c03348e9944648f4af6692a7a86db93aae7ffa`.
+- Side-by-side full-context allocation and short-generation tests used the same qwen4exp PR #27742 runtime, Q8 K/V, automatic layer fitting, one slot, and `n_ctx_slot=262144`. Both targets passed text and vision.
+- At the configured native context, the previous target averaged `40.72` tok/s and the uncensored target averaged `38.97` tok/s (`95.7%`), with longer vision decode at `39.33` versus `37.53` tok/s (`95.4%`).
+- The uncensored target returned a direct technical answer to the refusal probe and emitted a valid `get_weather` tool call. The standard 4096-token launcher-style test averaged `47.30` tok/s.
+- Promoted the uncensored target as the `flash-iq4` model, removed the previous UD-IQ4_XS weights/projector, and retained the tested qwen4exp runtime. No full-context generation was sent.

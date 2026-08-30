@@ -55,9 +55,11 @@ readonly HAUHAU_MODEL_SHA="4e7735df4d1e2ec721f2551f531b815702a2f89123238c564797e
 readonly HAUHAU_MMPROJ_SHA="5681b690bcb8eb10cd28d62d078cb4e01521a3ea4880a3fc7d54de72de2dd142"
 readonly HAUHAU_DRAFT_SHA="115e618e1f73cb50817ed5856f0551c6bf9c3d94df96f440eaca78dc63b8968b"
 readonly QWEN4EXP_COMMIT="af1ffaf37f1e44edb62e87ab8ddb9bb6840849bc"
-readonly FLASH_REPO="unsloth/Qwen3.8-Flash-Next-GGUF"
-readonly FLASH_MMPROJ="mmproj-F16.gguf"
-readonly FLASH_MMPROJ_SHA="1f7b7f0b984cf065c604360c29c8098362ed61b290db0ff12c6f360bb1a8a980"
+readonly FLASH_REPO="cygnal/Qwen3.8-Flash-Next-Uncensored-IQ4XS-NGQ4-GGUF"
+readonly FLASH_MODEL="Qwen3.8-Flash-Next-Uncensored-IQ4XS-NGQ4.gguf"
+readonly FLASH_MODEL_SHA="cedf1e08063f6df77926e1169f67b327dcc6301b5b329589615bdf09d4895f7e"
+readonly FLASH_MMPROJ="mmproj-Qwen3.8-Flash-Next-Uncensored-BF16.gguf"
+readonly FLASH_MMPROJ_SHA="9c56f5aa2d30242325a91aa3e4c03348e9944648f4af6692a7a86db93aae7ffa"
 readonly UPSTREAM_COMMIT="4e97ac86ebe2c4cb8212d98d2641ad6768810896"
 readonly DFLASH_REPO="incoai/Qwen3.8-27B-DFlash2-GGUF"
 readonly DFLASH_MODEL="Qwen3.8-27B-DFlash2-Q4_K_M.gguf"
@@ -100,7 +102,7 @@ Usage:
 Profiles:
   hauhau-q8          HauhauCS Q8_K_P + BF16 vision, native 262K, embedded MTP
   hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, 2x262K slots on 3x3090
-  flash-iq4          Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit, experimental PR #27742
+  flash-iq4          Flash-Next uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV/auto-fit, PR #27742
   hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K
 
 --smoke uses a 4096-token context, one short text request, and one small PNG
@@ -229,12 +231,12 @@ configure_profile() {
             SPEC_MODE="dflash2"
             ;;
         flash-iq4)
-            qdir="UD-IQ4_XS"
-            PROFILE_LABEL="Qwen3.8-Flash-Next ${qdir} / vision / Q8 KV / auto-fit / PR #27742"
+            qdir="IQ4XS-NGQ4"
+            PROFILE_LABEL="Qwen3.8-Flash-Next Uncensored ${qdir} / vision / Q8 KV / auto-fit / PR #27742"
             RUNTIME_KIND="flash"
             RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen4exp-pr27742"
-            MODEL_PATH="${MODEL_ROOT}/flash/${qdir}/Qwen3.8-Flash-Next-${qdir}-00001-of-00003.gguf"
-            MMPROJ_PATH="${MODEL_ROOT}/flash/${FLASH_MMPROJ}"
+            MODEL_PATH="${MODEL_ROOT}/flash-uncensored/${qdir}/${FLASH_MODEL}"
+            MMPROJ_PATH="${MODEL_ROOT}/flash-uncensored/${qdir}/${FLASH_MMPROJ}"
             DRAFT_PATH=""
             FULL_CTX=262144
             KV_TYPE="q8_0"
@@ -373,34 +375,12 @@ ensure_dflash_assets() {
     download_file "$draft_base/$DFLASH_MODEL" "$draft_dir/$DFLASH_MODEL" "$DFLASH_MODEL_SHA"
 }
 
-flash_quant_files() {
-    local quant="$1"
-    case "$quant" in
-        UD-IQ4_XS)
-            printf '%s\n' \
-                "Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00003.gguf|5ce89370720f8bf90890f439361282104c1aa1482d4013bb9a50923e758e71a4" \
-                "Qwen3.8-Flash-Next-UD-IQ4_XS-00002-of-00003.gguf|577a38a2392b40ca2193cea502e1d92f60b8cd370675d308e0ec21885d9daaa7" \
-                "Qwen3.8-Flash-Next-UD-IQ4_XS-00003-of-00003.gguf|d4634e6d84f0ebb0940be15c90d3790bf6464e3dea3a1cddc567dc0e83ad8833"
-            ;;
-        *) die "unsupported Flash-Next quant '$quant'" ;;
-    esac
-}
-
 ensure_flash_assets() {
-    local quant="$1" line file expected dir
-    local base
-    dir="${MODEL_ROOT}/flash/${quant}"
-    base="https://huggingface.co/${FLASH_REPO}/resolve/main/${quant}"
+    local dir="${MODEL_ROOT}/flash-uncensored/IQ4XS-NGQ4"
+    local base="https://huggingface.co/${FLASH_REPO}/resolve/main"
     mkdir -p "$dir"
-
-    while IFS='|' read -r file expected; do
-        [[ -n "$file" ]] || continue
-        download_file "$base/$file" "$dir/$file" "$expected"
-    done < <(flash_quant_files "$quant")
-
-    download_file \
-        "https://huggingface.co/${FLASH_REPO}/resolve/main/${FLASH_MMPROJ}" \
-        "${MODEL_ROOT}/flash/${FLASH_MMPROJ}" "$FLASH_MMPROJ_SHA"
+    download_file "$base/$FLASH_MODEL" "$dir/$FLASH_MODEL" "$FLASH_MODEL_SHA"
+    download_file "$base/$FLASH_MMPROJ" "$dir/$FLASH_MMPROJ" "$FLASH_MMPROJ_SHA"
 }
 
 ensure_assets() {
@@ -409,7 +389,7 @@ ensure_assets() {
         hauhau) ensure_hauhau_assets ;;
         upstream) ensure_dflash_assets ;;
         flash)
-            ensure_flash_assets UD-IQ4_XS
+            ensure_flash_assets
             ;;
         *) die "internal error: unknown runtime kind '$RUNTIME_KIND'" ;;
     esac
@@ -1211,7 +1191,7 @@ choose_profile() {
     say "Qwen3.8 Quick Start"
     say "  [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K  |  speed: $(speed_display hauhau-q8)"
     say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 2 slots / 262K each / Q8 KV  |  speed: $(speed_display hauhau-q8-fastmtp)"
-    say "  [3] Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit + PR #27742 (experimental, larger)  |  speed: $(speed_display flash-iq4)"
+    say "  [3] Flash-Next Uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV/auto-fit + PR #27742  |  speed: $(speed_display flash-iq4)"
     say "  [4] HauhauCS Q8_K_P + DFlash2 Q4 n=${DFLASH_N_MAX} (text-only, experimental)  |  speed: $(speed_display hauhau-q8-dflash2)"
     say "  [s] Run short speed tests for all standard profiles"
     say "      DFlash2 is opt-in and text-only on this host; use --speed-test --profile hauhau-q8-dflash2"

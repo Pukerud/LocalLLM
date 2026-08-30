@@ -26,7 +26,7 @@ HostLLM — Engine Picker
 Qwen3.8 Quick Start (inside [Q])
   [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K       | speed: cached result
   [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 2 slots / 262K each / Q8 KV | speed: cached result
-  [3] Flash-Next UD-IQ4_XS + F16 vision + Q8 KV/auto-fit + PR #27742 | speed: cached result
+  [3] Flash-Next Uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV/auto-fit + PR #27742 | speed: cached result
   [4] HauhauCS Q8_K_P + DFlash2 Q4 n=5 (text-only, experimental) | speed: cached result
   [s] Run short speed tests for installed profiles
   [q] Cancel
@@ -68,12 +68,31 @@ Measured on 2026-08-27–30 using a 4096-token context, one short coding prompt,
 |---|---:|---:|---:|---|
 | Hauhau Q8 native MTP | 56.87 tok/s | 40.62 tok/s | **48.74 tok/s** | BF16 vision projector |
 | Hauhau Q8 FastMTP | 69.96 tok/s | 44.65 tok/s | **57.30 tok/s** | current production; 2 slots / 262K each / Q8 KV |
-| Flash IQ4 | 48.08 tok/s | 48.25 tok/s | **48.16 tok/s** | experimental PR #27742; Q8 K/V and automatic layer fitting, remeasured 2026-08-28 |
+| Flash IQ4 Uncensored | 47.78 tok/s | 46.83 tok/s | **47.30 tok/s** | cygnal IQ4XS-NGQ4; Q8 K/V and automatic layer fitting; 3-run average, 2026-08-30 |
 | Hauhau Q8 + DFlash2 Q4 n=5 | 86.52 tok/s | 38.67 tok/s | **62.59 tok/s** | upstream master `4e97ac86`; text-only; reversed layer-device order; opt-in candidate |
 
-The DFlash2 row is not a replacement for the vision-capable FastMTP profile. The Q4
+The DFlash2 row is not a replacement for the vision-capable profiles. The Q4
 DFlash2 drafter currently fails to process multimodal embedding chunks in this
 llama.cpp build, so the opt-in profile deliberately does not load a projector.
+
+### Uncensored Flash-Next replacement validation
+
+The previous official `UD-IQ4_XS` Flash-Next model was tested side-by-side with
+`cygnal/Qwen3.8-Flash-Next-Uncensored-IQ4XS-NGQ4-GGUF` on 2026-08-30. Both used
+the same qwen4exp PR #27742 runtime, three RTX 3090 GPUs, automatic layer fitting,
+Q8 K/V, one slot, and a configured native `262144`-token context. No full-context
+generation was sent; the health check verified `n_ctx_slot=262144`.
+
+| Target | Coding | Story | Average | Vision |
+|---|---:|---:|---:|---|
+| Previous UD-IQ4_XS | 40.96 tok/s | 40.49 tok/s | **40.72 tok/s** | passed |
+| Uncensored IQ4XS-NGQ4 | 38.72 tok/s | 39.21 tok/s | **38.97 tok/s** | passed |
+
+The new target was **95.7%** of the previous full-context decode average and its
+longer vision response was **95.4%** of the previous model. It also produced a
+direct technical answer to the uncensoring probe and emitted a valid `get_weather`
+tool call. Its model and projector SHA-256 checks passed. The launcher now uses
+this uncensored target; the previous Flash weights were removed after validation.
 
 ### Two-user maximum-context check
 
@@ -167,7 +186,7 @@ Short 4096-token A/B checks using the same two prompts measured:
 | Profile | Pinned runtime | Upstream master | Result |
 |---|---:|---:|---|
 | Hauhau FastMTP | 60.36 tok/s | 62.84 tok/s | +4.1%; short vision check passed |
-| Flash IQ4 | 46.95 tok/s | 55.56 tok/s | +18.3%; short vision check passed |
+| Previous Flash UD-IQ4_XS | 46.95 tok/s | 55.56 tok/s | +18.3%; short vision check passed |
 
 These are lightweight single-request measurements, not full-context benchmarks.
 The 60.39 tok/s FastMTP figure is the historical single-slot F16-KV baseline;
@@ -203,7 +222,7 @@ participate in the normal `--speed-test-all` set. Use:
 ```
 
 The profile defaults to `n=5`; set `QWEN38_DFLASH_N_MAX=3` to run the other
-validated draft-length test. The current Hauhau FastMTP and Flash IQ4 profiles remain unchanged and remain the
+validated draft-length test. The current Hauhau FastMTP and uncensored Flash profiles remain
 vision-capable production choices. DFlash2 startup logs and the short A/B results
 are retained under the host's `~/.local/share/localllm-qwen38/logs/` and
 `~/.local/state/locallm-qwen38-upstream-test/` directories.
@@ -211,9 +230,9 @@ are retained under the host's `~/.local/share/localllm-qwen38/logs/` and
 ## Qwen3.8 runtime details
 
 - HauhauCS Q8_K_P GGUF with matching BF16 vision projector.
-- Flash-Next UD-IQ4_XS GGUF uses the isolated PR #27742 runtime.
+- Flash-Next Uncensored IQ4XS-NGQ4 GGUF uses the isolated PR #27742 runtime.
 - RTX 3090 builds use CUDA architecture `sm_86`.
-- Hauhau uses layer split with `--tensor-split 1,1,1` because this host reports PHB topology and no usable peer-to-peer link; Flash IQ4 uses layer split with automatic fitting because its larger weights need a rebalanced placement.
+- Hauhau uses layer split with `--tensor-split 1,1,1` because this host reports PHB topology and no usable peer-to-peer link; the uncensored Flash IQ4 target uses layer split with automatic fitting because its larger weights need a rebalanced placement.
 - F16 KV cache is used by the single-slot native profiles; production FastMTP uses `q8_0` K/V with two slots and an aggregate 524288-token server context so each slot retains native 262144 context.
 - FastMTP uses the publisher sidecar and its pinned qwen35-compatible patch.
 - All Qwen3.8 data, runtimes, logs, and state live below:
