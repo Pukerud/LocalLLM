@@ -178,6 +178,16 @@ refresh_gpu_layout() {
     GPU_SUMMARY="${GPU_COUNT}x ${GPU_NAMES[0]} (${total_gib} GiB total; ${GPU_DEVICE_LIST})"
 }
 
+default_fast_mtp_slots() {
+    if [[ -n "${QWEN38_FASTMTP_SLOTS:-}" ]]; then
+        printf '%s' "$QWEN38_FASTMTP_SLOTS"
+    elif (( GPU_COUNT >= 4 )); then
+        printf '3'
+    else
+        printf '2'
+    fi
+}
+
 usage() {
     cat <<'EOF'
 Usage:
@@ -300,10 +310,7 @@ configure_profile() {
             SPEC_MODE="native"
             ;;
         hauhau-q8-fastmtp)
-            FAST_MTP_SLOTS="${QWEN38_FASTMTP_SLOTS:-2}"
-            if [[ -z "${QWEN38_FASTMTP_SLOTS:-}" && "$GPU_COUNT" -ge 4 ]]; then
-                FAST_MTP_SLOTS=3
-            fi
+            FAST_MTP_SLOTS="$(default_fast_mtp_slots)"
             [[ "$FAST_MTP_SLOTS" =~ ^[1-4]$ ]] || die "QWEN38_FASTMTP_SLOTS must be an integer from 1 to 4"
             PROFILE_LABEL="Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP / ${FAST_MTP_SLOTS} slots / 262K each / Q8 KV"
             RUNTIME_KIND="hauhau"
@@ -1291,6 +1298,7 @@ show_dashboard() {
 }
 
 choose_profile() {
+    FAST_MTP_SLOTS="$(default_fast_mtp_slots)"
     say ""
     say "Qwen3.8 Quick Start"
     say "  GPUs detected: ${GPU_SUMMARY}"
