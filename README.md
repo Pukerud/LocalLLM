@@ -108,7 +108,7 @@ was approximately 22.2 GiB of 24 GiB on the fullest GPU.
 On 2026-08-31, the host exposed a fourth RTX 3090. The same model loaded with
 all four GPUs, `--tensor-split 1,1,1,1`, `--parallel 3`, and aggregate
 `--ctx-size 786432`; llama.cpp reported three `n_ctx_slot=262144` slots and
-about 18.0 GiB per GPU at allocation. No full-context generation was sent.
+about 22.4 GiB on the fullest GPU (74.6 GiB total) at allocation. No full-context generation was sent.
 The launcher now selects three slots automatically on four or more GPUs and
 retains two slots on a three-GPU host. Set `QWEN38_FASTMTP_SLOTS=2` to force
 the conservative two-slot mode.
@@ -286,10 +286,11 @@ After Quick Start finishes, the launcher shows a live dashboard. Press **[2]** t
   Health: {"status":"ok"}
   Speed:  avg 60.39 tok/s | coding 73.47 | story 47.31
   CPU: 0%
-  GPU 0 :   0% | VRAM: 15.5 GB / 24.0 GB (64%) | Temp: 48 degC
-  GPU 1 :   0% | VRAM: 15.5 GB / 24.0 GB (64%) | Temp: 50 degC
-  GPU 2 :   0% | VRAM: 18.2 GB / 24.0 GB (75%) | Temp: 46 degC
-  TOTAL: VRAM: 70.5 GB / 96.0 GB (73%) | GPUs: 4
+  GPU 0 :   0% | VRAM: 18.3 GB / 24.0 GB (76%) | Temp: 42 degC
+  GPU 1 :   0% | VRAM: 16.7 GB / 24.0 GB (69%) | Temp: 40 degC
+  GPU 2 :   0% | VRAM: 17.2 GB / 24.0 GB (71%) | Temp: 42 degC
+  GPU 3 :   0% | VRAM: 22.4 GB / 24.0 GB (93%) | Temp: 41 degC
+  TOTAL: VRAM: 74.6 GB / 96.0 GB (77%) | GPUs: 4
 
   [1] Stop server and return to menu
   [2] Return to menu (keep server running)
