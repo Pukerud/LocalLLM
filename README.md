@@ -2,7 +2,7 @@
 
 Local NVIDIA-GPU launchers for the current Qwen3.8 profiles, with a general llama.cpp fallback. Only one server should use port `8080` at a time.
 
-> **Current primary:** Qwen3.8-27B HauhauCS Q8 + vision + FastMTP, configured for two 262K slots on three RTX 3090 GPUs using Q8 KV.
+> **Current primary:** Qwen3.8-27B HauhauCS Q8 + vision + FastMTP, auto-scaled across all detected RTX GPUs. The current four-GPU host runs three native-262K slots with Q8 KV.
 
 ## Quick Start
 
@@ -20,12 +20,12 @@ press **[Q]** for the Qwen3.8 llama.cpp profile menu.
 HostLLM — Engine Picker
   [1] SPEED DEMON — Qwen3.8 AWQ INT4 + FP8 DFlash2 | ~123 code* / ~67 tools / ~62 prose tok/s
       native 262K | 2x RTX 3090 | image input + auto tools + thinking ON; FP8 draft text-only; video unvalidated
-  [Q] Qwen3.8-27B — vision | 2 users × native 262K | FastMTP + Q8 KV
+  [Q] Qwen3.8-27B — vision | auto-scaled native-262K slots | FastMTP + Q8 KV
   [2] llama.cpp — general GGUF fallback
 
 Qwen3.8 Quick Start (inside [Q])
   [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K       | speed: cached result
-  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 2 slots / 262K each / Q8 KV | speed: cached result
+  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + auto-scaled slots / 262K each / Q8 KV | speed: cached result
   [3] Flash-Next Uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV/auto-fit + PR #27742 | speed: cached result
   [4] HauhauCS Q8_K_P + DFlash2 Q4 n=5 (text-only, experimental) | speed: cached result
   [s] Run short speed tests for installed profiles
@@ -53,12 +53,15 @@ miner start
 ```
 
 The custom miner launches `hauhau-q8-fastmtp` directly and deliberately leaves
-`osn.service` running. When OctaSpace rents the node, its normal HiveOS
-`miner stop` stops the Qwen server; after the rental, `miner start` brings it
-back without restarting OctaSpace. The wrapper fails closed if Docker reports
-an unknown/running non-HostLLM workload. It reports zero hashrate because the
-process is an inference server, but its running state and GPU telemetry remain
-visible in HiveOS. Remove it with `./uninstall-hive-llm-miner.sh`.
+`osn.service` running. It auto-detects all available GPUs and uses three native
+262K slots on the current four-RTX-3090 host (two slots on the original
+three-GPU layout). When OctaSpace rents the node, its normal HiveOS `miner stop`
+stops the Qwen server; after the rental, `miner start` brings it back without
+restarting OctaSpace. The wrapper fails closed if Docker reports an
+unknown/running non-HostLLM workload and cleans up its Hive screen on startup
+failure so later `miner start` calls are recoverable. It reports zero hashrate
+because the process is an inference server, but its running state and GPU
+telemetry remain visible in HiveOS. Remove it with `./uninstall-hive-llm-miner.sh`.
 
 ## Tested Qwen3.8 profiles
 
@@ -67,7 +70,7 @@ Measured on 2026-08-27–30 using a 4096-token context, one short coding prompt,
 | Profile | Coding | Story | Average | Notes |
 |---|---:|---:|---:|---|
 | Hauhau Q8 native MTP | 56.87 tok/s | 40.62 tok/s | **48.74 tok/s** | BF16 vision projector |
-| Hauhau Q8 FastMTP | 69.96 tok/s | 44.65 tok/s | **57.30 tok/s** | current production; 2 slots / 262K each / Q8 KV |
+| Hauhau Q8 FastMTP | 69.96 tok/s | 44.65 tok/s | **57.30 tok/s** | current production baseline; 3 slots / 262K each / Q8 KV on 4 GPUs |
 | Flash IQ4 Uncensored | 47.78 tok/s | 46.83 tok/s | **47.30 tok/s** | cygnal IQ4XS-NGQ4; Q8 K/V and automatic layer fitting; 3-run average, 2026-08-30 |
 | Hauhau Q8 + DFlash2 Q4 n=5 | 86.52 tok/s | 38.67 tok/s | **62.59 tok/s** | upstream master `4e97ac86`; text-only; reversed layer-device order; opt-in candidate |
 
@@ -100,8 +103,15 @@ On 2026-08-30, the production Q8 FastMTP model was tested with
 `--parallel 2` and `--ctx-size 524288`, giving two slots with `n_ctx_slot=262144`.
 The F16-KV version failed allocation on GPU2, while the Q8-KV version loaded
 successfully and completed two simultaneous short requests. Peak observed usage
-was approximately 22.2 GiB of 24 GiB on the fullest GPU. The production profile
-now uses this Q8-KV/two-slot configuration.
+was approximately 22.2 GiB of 24 GiB on the fullest GPU.
+
+On 2026-08-31, the host exposed a fourth RTX 3090. The same model loaded with
+all four GPUs, `--tensor-split 1,1,1,1`, `--parallel 3`, and aggregate
+`--ctx-size 786432`; llama.cpp reported three `n_ctx_slot=262144` slots and
+about 18.0 GiB per GPU at allocation. No full-context generation was sent.
+The launcher now selects three slots automatically on four or more GPUs and
+retains two slots on a three-GPU host. Set `QWEN38_FASTMTP_SLOTS=2` to force
+the conservative two-slot mode.
 
 ## SPEED DEMON profile
 
@@ -190,8 +200,8 @@ Short 4096-token A/B checks using the same two prompts measured:
 
 These are lightweight single-request measurements, not full-context benchmarks.
 The 60.39 tok/s FastMTP figure is the historical single-slot F16-KV baseline;
-current production uses two slots with Q8 KV and measures 57.30 tok/s on the same
-short speed-test format.
+current four-GPU production uses three slots with Q8 KV and measures 57.30 tok/s
+on the same short speed-test format (the original three-GPU layout used two slots).
 
 The official Q4 DFlash2 draft was downloaded from
 `incoai/Qwen3.8-27B-DFlash2-GGUF` and verified with SHA-256:
@@ -202,7 +212,7 @@ Qwen3.8-27B-DFlash2-Q4_K_M.gguf
 ```
 
 DFlash2 was tested against the existing Hauhau Q8 target at `n_max=3` and `n_max=5`.
-The working three-GPU layout uses target devices `CUDA2,CUDA1,CUDA0` and places
+The original three-GPU layout used target devices `CUDA2,CUDA1,CUDA0` and places
 the draft on `CUDA0`; the target output projection must be visible to the draft
 scheduler. The n=3 run averaged 58.47 tok/s. The n=5 runs averaged about 64.0
 tok/s with the projector loaded; the final launcher verification of the text-only profile measured 62.59 tok/s.
@@ -232,8 +242,8 @@ are retained under the host's `~/.local/share/localllm-qwen38/logs/` and
 - HauhauCS Q8_K_P GGUF with matching BF16 vision projector.
 - Flash-Next Uncensored IQ4XS-NGQ4 GGUF uses the isolated PR #27742 runtime.
 - RTX 3090 builds use CUDA architecture `sm_86`.
-- Hauhau uses layer split with `--tensor-split 1,1,1` because this host reports PHB topology and no usable peer-to-peer link; the uncensored Flash IQ4 target uses layer split with automatic fitting because its larger weights need a rebalanced placement.
-- F16 KV cache is used by the single-slot native profiles; production FastMTP uses `q8_0` K/V with two slots and an aggregate 524288-token server context so each slot retains native 262144 context.
+- Hauhau uses layer split across all detected GPUs with an equal dynamic `--tensor-split` (currently `1,1,1,1`); this host reports PHB topology and no usable peer-to-peer link. The uncensored Flash IQ4 target uses layer split with automatic fitting because its larger weights need a rebalanced placement.
+- F16 KV cache is used by the single-slot native profiles; FastMTP uses `q8_0` K/V with auto-scaled slots and an aggregate context equal to `262144 × slots`, so every slot retains native 262144 context.
 - FastMTP uses the publisher sidecar and its pinned qwen35-compatible patch.
 - All Qwen3.8 data, runtimes, logs, and state live below:
 
@@ -252,11 +262,11 @@ After Quick Start finishes, the launcher shows a live dashboard. Press **[2]** t
 ==================================================================
   QWEN3.8 SERVER RUNNING
 ==================================================================
-  Profile:  Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP / 2 slots / 262K each / Q8 KV
+  Profile:  Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP / 3 slots / 262K each / Q8 KV
   Model:    Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-Q8_K_P.gguf
-  Context:  262144 per slot  |  Slots: 2  |  KV: Q8_0  |  Speculation: FastMTP (3-token draft)
+  Context:  262144 per slot  |  Slots: 3  |  KV: Q8_0  |  Speculation: FastMTP (3-token draft)
   Vision:   ON (BF16 projector)
-  GPUs:     3x RTX 3090 (24 GB each)
+  GPUs:     4x RTX 3090 (24 GB each)
   Reasoning: ON
 
   Connect from any device on your network:
@@ -279,7 +289,7 @@ After Quick Start finishes, the launcher shows a live dashboard. Press **[2]** t
   GPU 0 :   0% | VRAM: 15.5 GB / 24.0 GB (64%) | Temp: 48 degC
   GPU 1 :   0% | VRAM: 15.5 GB / 24.0 GB (64%) | Temp: 50 degC
   GPU 2 :   0% | VRAM: 18.2 GB / 24.0 GB (75%) | Temp: 46 degC
-  TOTAL: VRAM: 49.1 GB / 72.0 GB (68%) | GPUs: 3
+  TOTAL: VRAM: 70.5 GB / 96.0 GB (73%) | GPUs: 4
 
   [1] Stop server and return to menu
   [2] Return to menu (keep server running)

@@ -15,7 +15,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 ## Baseline
 
 - Three RTX 3090 GPUs, 24 GiB each, compute capability 8.6.
-- GPUs are connected through PHB and report no usable P2P; Hauhau uses `--split-mode layer` with equal `--tensor-split 1,1,1`, while the uncensored Flash IQ4 target uses layer split with automatic fitting.
+- GPUs are connected through PHB and report no usable P2P; Hauhau uses `--split-mode layer` with a dynamic equal `--tensor-split` across all selected GPUs, while the uncensored Flash IQ4 target uses layer split with automatic fitting.
 - Host has approximately 125 GiB RAM and no swap.
 - Current NVIDIA driver is 595.91.07; use a CUDA 12.9 build/runtime path if a toolkit is required.
 
@@ -169,3 +169,11 @@ Completed 2026-08-30 — uncensored Flash-Next replacement:
 - At the configured native context, the previous target averaged `40.72` tok/s and the uncensored target averaged `38.97` tok/s (`95.7%`), with longer vision decode at `39.33` versus `37.53` tok/s (`95.4%`).
 - The uncensored target returned a direct technical answer to the refusal probe and emitted a valid `get_weather` tool call. The standard 4096-token launcher-style test averaged `47.30` tok/s.
 - Promoted the uncensored target as the `flash-iq4` model, removed the previous UD-IQ4_XS weights/projector, and retained the tested qwen4exp runtime. No full-context generation was sent.
+
+Completed 2026-08-31 — four-GPU scaling:
+
+- The worker now exposes four identical RTX 3090 GPUs (`CUDA0`–`CUDA3`, 96 GiB total). All devices report PHB links with no usable peer-to-peer path.
+- Hauhau FastMTP allocation passed with all four GPUs, dynamic `--tensor-split 1,1,1,1`, `--parallel 3`, aggregate `--ctx-size 786432`, Q8 K/V, and three `n_ctx_slot=262144` slots. No full-context generation was sent.
+- Updated the launcher to discover/select GPUs, generate device/split arguments, and automatically use three slots on four or more GPUs while retaining two slots on three GPUs. `QWEN38_FASTMTP_SLOTS=2` remains the conservative override.
+- Improved HostLLM and Qwen dashboards/menu labels to show the detected GPU inventory. SPEED DEMON now explicitly labels its intentional fixed CUDA0/CUDA1 scope instead of claiming CUDA2 was the only unused GPU.
+- Improved the Hive wrapper's exit cleanup so a failed/stopped custom miner does not leave an empty screen that blocks the next `miner start`. The custom miner remains `MINER=custom` with `osn.service` untouched.

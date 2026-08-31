@@ -77,6 +77,15 @@ PARALLEL=1
 KV_TYPE="f16"
 SPEC_MODE="none"
 RUNTIME_DIR=""
+FAST_MTP_SLOTS=2
+GPU_COUNT=0
+GPU_INDICES=()
+GPU_NAMES=()
+GPU_MEMORY_MIB=()
+GPU_DEVICE_LIST=""
+GPU_DEVICE_LIST_REVERSED=""
+GPU_TENSOR_SPLIT=""
+GPU_SUMMARY="GPU information unavailable"
 
 mkdir -p "$DATA_ROOT" "$STATE_ROOT" "$RUNTIME_ROOT" "$MODEL_ROOT" "$LOG_ROOT"
 SPEED_CACHE="${STATE_ROOT}/speed-results.tsv"
@@ -84,6 +93,90 @@ SPEED_CACHE="${STATE_ROOT}/speed-results.tsv"
 say() { printf '%s\n' "$*"; }
 warn() { printf 'WARNING: %s\n' "$*" >&2; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+
+refresh_gpu_layout() {
+    local query index name memory requested_value found j total_mib total_gib
+    local -a all_indices=() all_names=() all_memory=() requested=()
+    local -a devices=() reverse_devices=() split_values=() default_splits=()
+
+    GPU_COUNT=0
+    GPU_INDICES=()
+    GPU_NAMES=()
+    GPU_MEMORY_MIB=()
+    GPU_DEVICE_LIST=""
+    GPU_DEVICE_LIST_REVERSED=""
+    GPU_TENSOR_SPLIT=""
+    GPU_SUMMARY="GPU information unavailable"
+
+    command -v nvidia-smi >/dev/null 2>&1 || return 1
+    if ! query="$(nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader,nounits 2>/dev/null)"; then
+        return 1
+    fi
+    while IFS=',' read -r index name memory; do
+        index="${index//[[:space:]]/}"
+        memory="${memory//[[:space:]]/}"
+        name="$(printf '%s' "$name" | sed 's/^ *//;s/ *$//')"
+        [[ "$index" =~ ^[0-9]+$ && "$memory" =~ ^[0-9]+$ ]] || continue
+        all_indices+=("$index")
+        all_names+=("$name")
+        all_memory+=("$memory")
+    done <<< "$query"
+    (( ${#all_indices[@]} > 0 )) || return 1
+
+    if [[ -n "${QWEN38_GPU_INDICES:-}" ]]; then
+        IFS=',' read -r -a requested <<< "$QWEN38_GPU_INDICES"
+    else
+        requested=("${all_indices[@]}")
+    fi
+
+    for requested_value in "${requested[@]}"; do
+        requested_value="${requested_value//[[:space:]]/}"
+        [[ "$requested_value" =~ ^[0-9]+$ ]] || die "QWEN38_GPU_INDICES contains invalid GPU index '$requested_value'"
+        found=-1
+        for j in "${!all_indices[@]}"; do
+            if [[ "${all_indices[$j]}" == "$requested_value" ]]; then
+                found="$j"
+                break
+            fi
+        done
+        (( found >= 0 )) || die "QWEN38_GPU_INDICES requested unavailable GPU $requested_value"
+        GPU_INDICES+=("${all_indices[$found]}")
+        GPU_NAMES+=("${all_names[$found]}")
+        GPU_MEMORY_MIB+=("${all_memory[$found]}")
+    done
+
+    GPU_COUNT="${#GPU_INDICES[@]}"
+    (( GPU_COUNT > 0 )) || return 1
+    for index in "${GPU_INDICES[@]}"; do
+        devices+=("CUDA${index}")
+    done
+    for (( j=${#devices[@]}-1; j>=0; j-- )); do
+        reverse_devices+=("${devices[$j]}")
+    done
+    GPU_DEVICE_LIST="$(IFS=,; printf '%s' "${devices[*]}")"
+    GPU_DEVICE_LIST_REVERSED="$(IFS=,; printf '%s' "${reverse_devices[*]}")"
+
+    if [[ -n "${QWEN38_TENSOR_SPLIT:-}" ]]; then
+        IFS=',' read -r -a split_values <<< "$QWEN38_TENSOR_SPLIT"
+        (( ${#split_values[@]} == GPU_COUNT )) || die "QWEN38_TENSOR_SPLIT must contain exactly ${GPU_COUNT} values"
+        for requested_value in "${split_values[@]}"; do
+            [[ "$requested_value" =~ ^[0-9]+([.][0-9]+)?$ ]] || die "QWEN38_TENSOR_SPLIT contains invalid value '$requested_value'"
+        done
+        GPU_TENSOR_SPLIT="$QWEN38_TENSOR_SPLIT"
+    else
+        for index in "${GPU_INDICES[@]}"; do
+            default_splits+=(1)
+        done
+        GPU_TENSOR_SPLIT="$(IFS=,; printf '%s' "${default_splits[*]}")"
+    fi
+
+    total_mib=0
+    for memory in "${GPU_MEMORY_MIB[@]}"; do
+        total_mib=$((total_mib + memory))
+    done
+    total_gib="$(awk -v value="$total_mib" 'BEGIN { printf "%.0f", value / 1024 }')"
+    GPU_SUMMARY="${GPU_COUNT}x ${GPU_NAMES[0]} (${total_gib} GiB total; ${GPU_DEVICE_LIST})"
+}
 
 usage() {
     cat <<'EOF'
@@ -101,7 +194,7 @@ Usage:
 
 Profiles:
   hauhau-q8          HauhauCS Q8_K_P + BF16 vision, native 262K, embedded MTP
-  hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, 2x262K slots on 3x3090
+  hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, auto-scaled native-262K slots
   flash-iq4          Flash-Next uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV/auto-fit, PR #27742
   hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K
 
@@ -207,15 +300,20 @@ configure_profile() {
             SPEC_MODE="native"
             ;;
         hauhau-q8-fastmtp)
-            PROFILE_LABEL="Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP / 2 slots / 262K each / Q8 KV"
+            FAST_MTP_SLOTS="${QWEN38_FASTMTP_SLOTS:-2}"
+            if [[ -z "${QWEN38_FASTMTP_SLOTS:-}" && "$GPU_COUNT" -ge 4 ]]; then
+                FAST_MTP_SLOTS=3
+            fi
+            [[ "$FAST_MTP_SLOTS" =~ ^[1-4]$ ]] || die "QWEN38_FASTMTP_SLOTS must be an integer from 1 to 4"
+            PROFILE_LABEL="Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP / ${FAST_MTP_SLOTS} slots / 262K each / Q8 KV"
             RUNTIME_KIND="hauhau"
             RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen38-hauhau"
             MODEL_PATH="${MODEL_ROOT}/hauhau/${HAUHAU_MODEL}"
             MMPROJ_PATH="${MODEL_ROOT}/hauhau/${HAUHAU_MMPROJ}"
             DRAFT_PATH="${MODEL_ROOT}/hauhau/${HAUHAU_DRAFT}"
             FULL_CTX=262144
-            SERVER_CTX=524288
-            PARALLEL=2
+            SERVER_CTX=$((FULL_CTX * FAST_MTP_SLOTS))
+            PARALLEL="$FAST_MTP_SLOTS"
             KV_TYPE="q8_0"
             SPEC_MODE="fast"
             ;;
@@ -585,19 +683,22 @@ make_server_args() {
         --port "$PORT"
     )
 
-    if [[ "$PROFILE" == "flash-iq4" ]]; then
-        # The larger IQ4 model needs quantized KV plus llama.cpp's automatic
-        # layer fitting to leave enough room for native 262K context on 3x24GB.
-        SERVER_ARGS+=(--cache-type-k q8_0 --cache-type-v q8_0)
-    else
-        SERVER_ARGS+=(--tensor-split 1,1,1 --cache-type-k "$KV_TYPE" --cache-type-v "$KV_TYPE")
-    fi
-
+    local target_devices="$GPU_DEVICE_LIST"
     if [[ "$PROFILE" == "hauhau-q8-dflash2" ]]; then
         # DFlash reuses the target output projection. Reverse the target
         # device order so that the target output and the one-device draft
-        # both use CUDA0; this avoids an unsupported cross-device buffer.
-        SERVER_ARGS+=(--device CUDA2,CUDA1,CUDA0)
+        # both use the lowest selected CUDA device; this avoids an unsupported
+        # cross-device buffer while still using every detected GPU.
+        target_devices="$GPU_DEVICE_LIST_REVERSED"
+    fi
+    SERVER_ARGS+=(--device "$target_devices")
+
+    if [[ "$PROFILE" == "flash-iq4" ]]; then
+        # The larger IQ4 model needs quantized KV plus llama.cpp's automatic
+        # layer fitting to leave enough room for native 262K context.
+        SERVER_ARGS+=(--cache-type-k q8_0 --cache-type-v q8_0)
+    else
+        SERVER_ARGS+=(--tensor-split "$GPU_TENSOR_SPLIT" --cache-type-k "$KV_TYPE" --cache-type-v "$KV_TYPE")
     fi
 
     if (( SMOKE )); then
@@ -685,6 +786,7 @@ wait_for_health() {
 
 start_server() {
     local bin="$RUNTIME_DIR/source/build/bin/llama-server"
+    refresh_gpu_layout || die "NVIDIA GPU inventory unavailable; refusing to start Qwen3.8"
     [[ -x "$bin" ]] || die "runtime is not built: $bin"
     [[ -f "$MODEL_PATH" ]] || die "model is missing: $MODEL_PATH"
     if [[ -n "$MMPROJ_PATH" && ! -f "$MMPROJ_PATH" ]]; then
@@ -706,12 +808,12 @@ start_server() {
     say "Starting: $PROFILE_LABEL"
     say "  context: ${FULL_CTX} per slot (server total ${SERVER_CTX}; ${PARALLEL} slots; smoke context: $([[ $SMOKE -eq 1 ]] && echo 4096 || echo no))"
     if [[ "$PROFILE" == "flash-iq4" ]]; then
-        say "  GPUs: 3x RTX 3090, layer split auto-fit, Q8 KV, ${PARALLEL} slot(s)"
+        say "  GPUs: ${GPU_SUMMARY}, layer split auto-fit, Q8 KV, ${PARALLEL} slot(s)"
     elif [[ "$PROFILE" == "hauhau-q8-dflash2" ]]; then
-        say "  GPUs: 3x RTX 3090, reversed layer split CUDA2,CUDA1,CUDA0, ${KV_TYPE^^} KV, ${PARALLEL} slot(s)"
+        say "  GPUs: ${GPU_SUMMARY}, reversed layer split ${GPU_DEVICE_LIST_REVERSED}, ${KV_TYPE^^} KV, ${PARALLEL} slot(s)"
         say "  Vision: OFF (DFlash2 text-only profile)"
     else
-        say "  GPUs: 3x RTX 3090, layer split 1,1,1, ${KV_TYPE^^} KV, ${PARALLEL} slot(s)"
+        say "  GPUs: ${GPU_SUMMARY}, layer split ${GPU_TENSOR_SPLIT}, ${KV_TYPE^^} KV, ${PARALLEL} slot(s)"
     fi
     say "  log: $SERVER_LOG"
     printf 'Command:' > "$SERVER_LOG"
@@ -1000,7 +1102,9 @@ run_speed_test_all() {
 
 show_status() {
     configure_profile
+    refresh_gpu_layout || warn "NVIDIA GPU inventory unavailable"
     say "Profile: $PROFILE_LABEL"
+    say "GPU layout: ${GPU_SUMMARY}"
     say "Data root: $DATA_ROOT"
     say "Runtime: $RUNTIME_DIR/source/build/bin/llama-server"
     say "Model: $MODEL_PATH"
@@ -1143,9 +1247,9 @@ show_dashboard() {
         elif [[ "$RUNTIME_KIND" == "hauhau" ]]; then
             printf '  Vision:   ON (BF16 projector)\n'
         else
-            printf '  Vision:   ON (F16 projector)\n'
+            printf '  Vision:   ON (BF16 projector)\n'
         fi
-        echo "  GPUs:     3x RTX 3090 (24 GB each)"
+        printf '  GPUs:     %s\n' "$GPU_SUMMARY"
         printf '  Reasoning: ON\n'
         echo ""
         echo "  Connect from any device on your network:"
@@ -1189,8 +1293,9 @@ show_dashboard() {
 choose_profile() {
     say ""
     say "Qwen3.8 Quick Start"
+    say "  GPUs detected: ${GPU_SUMMARY}"
     say "  [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K  |  speed: $(speed_display hauhau-q8)"
-    say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + 2 slots / 262K each / Q8 KV  |  speed: $(speed_display hauhau-q8-fastmtp)"
+    say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + ${FAST_MTP_SLOTS} slots / 262K each / Q8 KV  |  speed: $(speed_display hauhau-q8-fastmtp)"
     say "  [3] Flash-Next Uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV/auto-fit + PR #27742  |  speed: $(speed_display flash-iq4)"
     say "  [4] HauhauCS Q8_K_P + DFlash2 Q4 n=${DFLASH_N_MAX} (text-only, experimental)  |  speed: $(speed_display hauhau-q8-dflash2)"
     say "  [s] Run short speed tests for all standard profiles"
@@ -1218,6 +1323,10 @@ main() {
         stop_server
         exit 0
     fi
+    case "$MODE" in
+        download|build) ;;
+        *) refresh_gpu_layout || die "NVIDIA GPU inventory unavailable; refusing to continue" ;;
+    esac
     if [[ "$MODE" == "status" ]]; then
         configure_profile
         show_status

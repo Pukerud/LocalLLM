@@ -31,8 +31,19 @@ on_signal() {
     exit 0
 }
 
+close_hive_screen() {
+    local session="${STY:-}"
+    [[ -n "$session" ]] || return 0
+    session="${session##*/}"
+    command -v screen >/dev/null 2>&1 || return 0
+    # Hive's miner launcher leaves a base screen behind if h-run exits during
+    # startup. Close our session so the next `miner start` can create a clean
+    # window instead of being mistaken for an already-running miner.
+    screen -S "$session" -X quit >/dev/null 2>&1 || true
+}
+
 trap on_signal INT TERM HUP
-trap stop_llm EXIT
+trap 'stop_llm; close_hive_screen' EXIT
 
 [[ -x "$LAUNCHER" ]] || { say "missing launcher: $LAUNCHER"; exit 1; }
 
@@ -72,7 +83,15 @@ else
     fi
 fi
 
-say "starting $PROFILE (osn.service is left running)"
+gpu_summary() {
+    local query count name
+    query="$(nvidia-smi --query-gpu=index,name --format=csv,noheader 2>/dev/null || true)"
+    count="$(printf '%s\n' "$query" | awk 'NF { count += 1 } END { print count + 0 }')"
+    name="$(printf '%s\n' "$query" | awk -F',' 'NR == 1 { value=$2; sub(/^ +/, "", value); sub(/ +$/, "", value); print value; exit }')"
+    [[ "$count" -gt 0 ]] && printf '%sx %s' "$count" "$name" || printf 'GPU inventory unavailable'
+}
+
+say "starting $PROFILE on $(gpu_summary) (osn.service is left running)"
 QWEN38_SKIP_EXISTING_VERIFY=1 "$LAUNCHER" --quickstart --profile "$PROFILE" --no-dashboard
 
 # v1qwen38.sh returns after the server becomes healthy in non-interactive

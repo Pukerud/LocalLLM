@@ -26,8 +26,8 @@ fi
 QWEN38_STATE_ROOT="${QWEN38_STATE_ROOT:-${qwen38_home}/.local/state/locallm-qwen38}"
 SPEED_DEMON_STATE_ROOT="${SPEED_DEMON_STATE_ROOT:-${qwen38_home}/.local/state/locallm-speed-demon}"
 
-# OctaSpace uses the osn.service unit and shares the same three GPUs. HostLLM
-# temporarily pauses it while an inference engine is being started, then
+# OctaSpace uses the osn.service unit and shares the same detected GPUs.
+# HostLLM temporarily pauses it while an inference engine is being started, then
 # resumes it after that engine has stopped. The marker survives leaving this
 # menu so [9] can restore OctaSpace even after HostLLM is reopened.
 OCTA_SERVICE="osn.service"
@@ -234,6 +234,19 @@ hive_llm_miner_active() {
     [[ -f /run/hive/cur_miner ]] && grep -qx 'custom' /run/hive/cur_miner 2>/dev/null
 }
 
+host_gpu_summary() {
+    local query count first_name total_gib devices
+    if ! command -v nvidia-smi >/dev/null 2>&1 || ! query="$(nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader,nounits 2>/dev/null)" || [[ -z "$query" ]]; then
+        printf 'GPU inventory unavailable'
+        return 0
+    fi
+    count="$(printf '%s\n' "$query" | awk 'NF { count += 1 } END { print count + 0 }')"
+    first_name="$(printf '%s\n' "$query" | awk -F',' 'NR == 1 { name=$2; sub(/^ +/, "", name); sub(/ +$/, "", name); print name; exit }')"
+    total_gib="$(printf '%s\n' "$query" | awk -F',' '{ gsub(/[[:space:]]/, "", $3); total += $3 } END { printf "%.0f", total / 1024 }')"
+    devices="$(printf '%s\n' "$query" | awk -F',' '{ gsub(/[[:space:]]/, "", $1); printf "%s%s", sep, "CUDA" $1; sep="," }')"
+    printf '%sx %s | %s GiB | %s' "$count" "$first_name" "$total_gib" "$devices"
+}
+
 get_server_info() {
     case "$(detect_engine)" in
         qwen38)
@@ -370,14 +383,17 @@ while true; do
         echo -e "  Status:  ${YELLOW}No engine running${RESET}"
     fi
     show_octaspace_status
+    echo -e "  Hardware: ${CYAN}$(host_gpu_summary)${RESET}"
 
     echo ""
     echo "  Quick Start:"
     echo "  ────────────"
     echo -e "  ${BOLD}[1]${RESET} SPEED DEMON  ⚡ Qwen3.8 AWQ INT4 + FP8 DFlash2 │ ~123 code* / ~67 tools / ~62 prose tok/s"
-    echo -e "      Native 262K │ 2x RTX 3090 │ target image input ON; FP8 draft text-only; video unvalidated"
-    echo -e "  ${BOLD}[Q]${RESET} Qwen3.8-27B  ⚡ vision │ 2 users × native 262K │ FastMTP + Q8 KV"
-    echo -e "      HauhauCS and Flash-Next profiles with cached speed results"
+    echo -e "      Native 262K │ fixed CUDA0,CUDA1 (2-GPU profile); target image input ON"
+    echo -e "      FP8 draft is text-only; video unvalidated"
+    echo -e "  ${BOLD}[Q]${RESET} Qwen3.8-27B  ⚡ vision │ auto-scaled native 262K slots │ FastMTP + Q8 KV"
+    echo -e "      Uses all detected GPUs; up to 3 users on 4x RTX 3090"
+    echo -e "      HauhauCS and uncensored Flash-Next profiles with cached speed results"
     echo ""
     echo "  Engines (manual):"
     echo "  ─────────────────"

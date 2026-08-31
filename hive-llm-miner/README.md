@@ -1,8 +1,9 @@
 # HiveOS LLM custom miner
 
 This custom HiveOS miner exposes the retained Qwen3.8 Hauhau FastMTP server as
-an ordinary HiveOS miner. It uses the official `hive-miners-custom` control
-package and the normal `miner start` / `miner stop` lifecycle.
+an ordinary HiveOS miner. It uses every detected NVIDIA GPU, the official
+`hive-miners-custom` control package, and the normal `miner start` / `miner stop`
+lifecycle.
 
 The miner starts:
 
@@ -10,16 +11,18 @@ The miner starts:
 /home/user/LocalLLM/v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp --no-dashboard
 ```
 
-It deliberately does **not** stop or start `osn.service`. When OctaSpace rents
-the node, its normal HiveOS `miner stop` command reaches the foreground wrapper,
-which stops the Qwen server. When the rental ends, `miner start` starts the
-wrapper again while `osn.service` remains running. Managed starts skip hashing
-already-present assets for fast handoff; newly downloaded assets are still
-checksum-verified.
+It deliberately does **not** stop or start `osn.service`. On the current
+4x RTX 3090 host, the launcher automatically uses three native-262K slots;
+on the original 3-GPU layout it uses two. When OctaSpace rents the node, its
+normal HiveOS `miner stop` command reaches the foreground wrapper, which stops
+the Qwen server. When the rental ends, `miner start` starts the wrapper again
+while `osn.service` remains running. Managed starts skip hashing already-present
+assets for fast handoff; newly downloaded assets are still checksum-verified.
 
 The wrapper fails closed if Docker reports any non-HostLLM running container,
 or if Docker status cannot be read. This prevents it from consuming GPUs while
-a renter workload is active.
+a renter workload is active. It also closes its Hive screen when startup exits,
+which prevents a stale empty screen from blocking the next `miner start`.
 
 Install from the repository root as root:
 

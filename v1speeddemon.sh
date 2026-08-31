@@ -278,7 +278,7 @@ kv=FP8
 cache=none (no LMCache)
 tools=automatic function calling (qwen3_xml parser)
 default_thinking=on (client may override)
-gpus=CUDA0,CUDA1 (2x RTX 3090); CUDA2 unused
+gpus=CUDA0,CUDA1 (fixed 2-GPU profile; additional detected GPUs reserved)
 speed=$SPEED_RESULT
 vision=$VISION_LABEL
 log=$SERVER_LOG
@@ -393,7 +393,7 @@ start_server() {
     say "  target: $TARGET_REPO"
     say "  draft:  $DRAFT_REPO (DFlash2 n=${DRAFT_TOKENS})"
     say "  context: $context (native configured context: $MAX_CONTEXT)"
-    say "  GPUs: CUDA0,CUDA1 (2x RTX 3090); CUDA2 unused"
+    say "  GPUs: CUDA0,CUDA1 (fixed 2-GPU profile; additional detected GPUs reserved)"
     say "  speed: $SPEED_RESULT"
     say "  vision: $VISION_LABEL"
     say "  log: $SERVER_LOG"
@@ -542,7 +542,7 @@ show_status() {
     say "Speed reference: $SPEED_RESULT"
     say "Vision: $VISION_LABEL"
     say "Context: $MAX_CONTEXT | KV: FP8 | LMCache: OFF"
-    say "GPUs: CUDA0,CUDA1 (2x RTX 3090); CUDA2 unused"
+    say "GPUs: CUDA0,CUDA1 (fixed 2-GPU profile; additional detected GPUs reserved)"
     say "Container: $CONTAINER_NAME"
     if container_running; then
         say "State: RUNNING"
@@ -647,7 +647,7 @@ show_dashboard() {
         printf '  Model:    %s\n' "$TARGET_REPO"
         printf '  Context:  %s  |  KV: FP8  |  Speculation: DFlash2 (%s-token draft)\n' "$MAX_CONTEXT" "$DRAFT_TOKENS"
         printf '  Vision:   ON (target; %s draft text-only)\n' "$DRAFT_MODE"
-        printf '  GPUs:     CUDA0,CUDA1 (2x RTX 3090); CUDA2 unused\n'
+        printf '  GPUs:     CUDA0,CUDA1 (fixed 2-GPU profile; additional detected GPUs reserved)\n'
         printf '  Reasoning: ON\n'
         echo ""
         echo "  Connect from any device on your network:"
