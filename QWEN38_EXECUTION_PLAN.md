@@ -174,6 +174,7 @@ Completed 2026-08-31 — four-GPU scaling:
 
 - The worker now exposes four identical RTX 3090 GPUs (`CUDA0`–`CUDA3`, 96 GiB total). All devices report PHB links with no usable peer-to-peer path.
 - Hauhau FastMTP allocation passed with all four GPUs, dynamic `--tensor-split 1,1,1,1`, `--parallel 3`, aggregate `--ctx-size 786432`, Q8 K/V, and three `n_ctx_slot=262144` slots. No full-context generation was sent.
+- Three-run short-request medians on the 4-GPU/3-slot production server were `70.78` tok/s coding and `46.39` tok/s story, averaging `58.59` tok/s; these were short requests with thinking disabled and are not full-context measurements.
 - Updated the launcher to discover/select GPUs, generate device/split arguments, and automatically use three slots on four or more GPUs while retaining two slots on three GPUs. `QWEN38_FASTMTP_SLOTS=2` remains the conservative override.
 - Improved HostLLM and Qwen dashboards/menu labels to show the detected GPU inventory. SPEED DEMON now explicitly labels its intentional fixed CUDA0/CUDA1 scope instead of claiming CUDA2 was the only unused GPU.
 - Improved the Hive wrapper's exit cleanup so a failed/stopped custom miner does not leave an empty screen that blocks the next `miner start`. The custom miner remains `MINER=custom` with `osn.service` untouched.

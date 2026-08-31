@@ -70,7 +70,7 @@ Measured on 2026-08-27–30 using a 4096-token context, one short coding prompt,
 | Profile | Coding | Story | Average | Notes |
 |---|---:|---:|---:|---|
 | Hauhau Q8 native MTP | 56.87 tok/s | 40.62 tok/s | **48.74 tok/s** | BF16 vision projector |
-| Hauhau Q8 FastMTP | 69.96 tok/s | 44.65 tok/s | **57.30 tok/s** | current production baseline; 3 slots / 262K each / Q8 KV on 4 GPUs |
+| Hauhau Q8 FastMTP | 70.78 tok/s | 46.39 tok/s | **58.59 tok/s** | current 4-GPU production; 3 slots / 262K each / Q8 KV; 3-run median per prompt |
 | Flash IQ4 Uncensored | 47.78 tok/s | 46.83 tok/s | **47.30 tok/s** | cygnal IQ4XS-NGQ4; Q8 K/V and automatic layer fitting; 3-run average, 2026-08-30 |
 | Hauhau Q8 + DFlash2 Q4 n=5 | 86.52 tok/s | 38.67 tok/s | **62.59 tok/s** | upstream master `4e97ac86`; text-only; reversed layer-device order; opt-in candidate |
 
