@@ -47,10 +47,8 @@ trap 'stop_llm; close_hive_screen' EXIT
 
 [[ -x "$LAUNCHER" ]] || { say "missing launcher: $LAUNCHER"; exit 1; }
 
-# A running non-HostLLM Docker container is treated as a possible OctaSpace
-# rental. Fail closed before using any GPU, including if Docker cannot be
-# queried. HostLLM-owned containers are excluded because they are handled by
-# HostLLM's own engine arbitration.
+# A running Docker container is treated as a possible OctaSpace rental.
+# Fail closed before using any GPU, including if Docker cannot be queried.
 docker_workload_info() {
     local lines name image status
     command -v docker >/dev/null 2>&1 || return 2
@@ -59,9 +57,6 @@ docker_workload_info() {
     fi
     while IFS=$'\t' read -r name image status; do
         [[ -n "$name" ]] || continue
-        case "$name" in
-            vllm-speed-demon|vllm-hostllm) continue ;;
-        esac
         printf '%s (%s; %s)\n' "$name" "$image" "$status"
         return 0
     done <<< "$lines"

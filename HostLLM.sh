@@ -24,7 +24,6 @@ if [[ "${EUID}" -eq 0 ]]; then
     fi
 fi
 QWEN38_STATE_ROOT="${QWEN38_STATE_ROOT:-${qwen38_home}/.local/state/locallm-qwen38}"
-SPEED_DEMON_STATE_ROOT="${SPEED_DEMON_STATE_ROOT:-${qwen38_home}/.local/state/locallm-speed-demon}"
 
 # OctaSpace uses the osn.service unit and shares the same detected GPUs.
 # HostLLM temporarily pauses it while an inference engine is being started, then
@@ -127,11 +126,8 @@ inspect_octaspace_containers() {
     OCTA_DOCKER_CHECK="ok"
     while IFS=$'\t' read -r name image status; do
         [[ -n "$name" ]] || continue
-        # These are HostLLM-owned containers. Any other running container is
-        # treated as a possible renter workload and blocks a new server.
-        case "$name" in
-            vllm-speed-demon|vllm-hostllm) continue ;;
-        esac
+        # Any running container is treated as a possible renter workload and
+        # blocks a new server.
         entry="${name} (${image}; ${status})"
         if [[ -n "$OCTA_RENTAL_INFO" ]]; then
             OCTA_RENTAL_INFO+="; "
@@ -221,10 +217,6 @@ detect_engine() {
         echo "qwen38"
     elif pgrep -f "llama-server" > /dev/null 2>&1; then
         echo "llamacpp"
-    elif docker ps --filter "name=^/vllm-speed-demon$" --format '{{.Names}}' 2>/dev/null | grep -q "^vllm-speed-demon$"; then
-        echo "speeddemon"
-    elif docker ps --filter "name=vllm-hostllm" --format '{{.Names}}' 2>/dev/null | grep -q "vllm-hostllm"; then
-        echo "vllm"
     else
         echo "none"
     fi
@@ -252,10 +244,7 @@ get_server_info() {
         qwen38)
             [[ -f "${QWEN38_STATE_ROOT}/server.info" ]] && cat "${QWEN38_STATE_ROOT}/server.info"
             ;;
-        speeddemon)
-            [[ -f "${SPEED_DEMON_STATE_ROOT}/server.info" ]] && cat "${SPEED_DEMON_STATE_ROOT}/server.info"
-            ;;
-        llamacpp|vllm)
+        llamacpp)
             [[ -f "${SCRIPT_DIR}/.server_info" ]] && cat "${SCRIPT_DIR}/.server_info"
             ;;
         *)
@@ -323,9 +312,6 @@ check_update() {
 stop_all() {
     local rc=0
     echo ""
-    if [[ -x "${SCRIPT_DIR}/v1speeddemon.sh" ]]; then
-        "${SCRIPT_DIR}/v1speeddemon.sh" --stop >/dev/null 2>&1 || true
-    fi
     # A HiveOS-managed LLM miner has a supervisor that intentionally restarts
     # Qwen if only llama-server is killed. Use Hive's lifecycle first so [9]
     # is also a clean stop for the custom miner.
@@ -338,9 +324,6 @@ stop_all() {
     fi
     echo " Stopping llama-server..."
     pkill -f "llama-server" 2>/dev/null && echo "   llama-server killed." || echo "   (not running)"
-    echo " Cleaning up any old vLLM container..."
-    docker rm -f vllm-hostllm 2>/dev/null || true
-    echo "   vLLM cleanup complete."
     rm -f "${SCRIPT_DIR}/.server_info" "${SCRIPT_DIR}/.server_compose"
     if [[ "$(detect_engine)" == "none" ]]; then
         resume_octaspace || rc=1
@@ -373,12 +356,6 @@ while true; do
     elif [[ "$active" == "llamacpp" ]]; then
         echo -e "  Status:  ${GREEN}llama.cpp RUNNING${RESET}"
         if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
-    elif [[ "$active" == "speeddemon" ]]; then
-        echo -e "  Status:  ${GREEN}SPEED DEMON RUNNING${RESET}"
-        if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
-    elif [[ "$active" == "vllm" ]]; then
-        echo -e "  Status:  ${GREEN}external vLLM container RUNNING${RESET}"
-        if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
     else
         echo -e "  Status:  ${YELLOW}No engine running${RESET}"
     fi
@@ -388,11 +365,9 @@ while true; do
     echo ""
     echo "  Quick Start:"
     echo "  ────────────"
-    echo -e "  ${BOLD}[1]${RESET} SPEED DEMON  ⚡ Qwen3.8 AWQ INT4 + FP8 DFlash2 │ ~123 code* / ~67 tools / ~62 prose tok/s"
-    echo -e "      Native 262K │ fixed CUDA0,CUDA1 (2-GPU profile); target image input ON"
-    echo -e "      FP8 draft is text-only; video unvalidated"
-    echo -e "  ${BOLD}[Q]${RESET} Qwen3.8-27B  ⚡ vision │ auto-scaled native 262K slots │ FastMTP + Q8 KV"
+    echo -e "  ${BOLD}[1]${RESET} Qwen3.8-27B  ⚡ vision │ auto-scaled native 262K slots │ FastMTP + Q8 KV"
     echo -e "      Uses all detected GPUs; 3 users + n=4 draft on 4x RTX 3090"
+    echo -e "  ${BOLD}[Q]${RESET} Qwen3.8 profile menu (alias for [1])"
     echo -e "      HauhauCS and uncensored Flash-Next profiles with cached speed results"
     echo ""
     echo "  Engines (manual):"
@@ -409,32 +384,7 @@ while true; do
     choice=$(echo "$choice" | tr -d '[:space:]')
 
     case $choice in
-        1)
-            if [[ "$active" == "speeddemon" ]]; then
-                cd "${SCRIPT_DIR}"
-                ./v1speeddemon.sh --dashboard
-                if [[ "$(detect_engine)" == "none" ]]; then
-                    resume_octaspace
-                fi
-            elif [[ "$active" != "none" ]]; then
-                echo ""
-                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
-                sleep 2
-                continue
-            else
-                if [[ ! -x "${SCRIPT_DIR}/v1speeddemon.sh" ]]; then
-                    echo ""
-                    echo -e "  ${RED}v1speeddemon.sh not found or not executable.${RESET}"
-                    sleep 2
-                    continue
-                fi
-                cd "${SCRIPT_DIR}"
-                run_engine_with_octaspace "${SCRIPT_DIR}/v1speeddemon.sh" --quickstart
-                speed_rc=$?
-                [[ "$speed_rc" -eq 42 ]] && exit 0
-            fi
-            ;;
-        q|Q)
+        1|q|Q)
             if [[ "$active" == "qwen38" ]]; then
                 cd "${SCRIPT_DIR}"
                 ./v1qwen38.sh --dashboard

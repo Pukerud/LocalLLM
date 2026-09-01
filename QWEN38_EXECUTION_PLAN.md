@@ -37,16 +37,6 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 - The selected uncensored IQ4XS-NGQ4 GGUF intentionally omits its MTP head; keep MTP disabled, with `ngram-mod` available as an opt-in experiment.
 - Use the supplied BF16 vision projector and validate text, vision, and tool behavior before promotion.
 
-### SPEED DEMON
-
-- Use the packaged vLLM `0.28.0` image with `cyankiwi/Qwen3.8-27B-AWQ-INT4` as the target and the tested `TechPrototyper/Qwen3.8-27B-DFlash2-fp8-vllm` as the default FP8 drafter. Retain `z-lab/Qwen3.8-27B-DFlash2` as the `SPEED_DEMON_DRAFT_MODE=bf16` fallback.
-- The FP8 image layers the tested FlashInfer overlay with the narrowly scoped vLLM PR #53122 quantized-draft/context-KV fix; it is built reproducibly from `speed-demon-fp8/Dockerfile`.
-- Keep SPEED DEMON target tensor parallelism at 2 on CUDA0/CUDA1; TP=3 is invalid because the model's 32 attention heads are not divisible by 3. CUDA2/CUDA3 remain reserved by this profile.
-- Use FP8 KV, no LMCache, DFlash2 with seven speculative tokens, native context `262144`, and the tested FlashInfer full decode graph overlay from vLLM PR #50885.
-- The target accepts image input, but the DFlash2 drafter receives text only. Label the profile as target vision enabled, FP8 DFlash draft text-only, and video unvalidated.
-- Enable automatic tool choice with vLLM's `qwen3_xml` parser and thinking with the `qwen3` reasoning parser, matching the target chat template used by Qwen Code and Open WebUI.
-- Treat approximately 123 tok/s mixed coding, 67 tok/s tools, and 62 tok/s prose as prompt-dependent short-test reference values, not universal or full-context throughput claims.
-
 ## LocalLLM changes
 
 1. Add isolated runtime/profile scripts rather than mutating the old Qwen3.6 DFlash/Lucebox/BeeLlama paths.
@@ -54,8 +44,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 3. Add safe dependency/build capability checks, including `sm_86`; remove the old `sm_89` assumption for this host.
 4. Add short smoke-test helper using `/health`, one short text request, and one small image request.
 5. Add Quick Start entries only for profiles that pass the smoke test; do not expose obsolete Qwen3.6-only engines in the active menu.
-6. Add the tested SPEED DEMON launcher as a top-level HostLLM `[1]` option rather than placing it inside the Qwen submenu.
-7. Update README with the model/runtime requirements, short-test policy, and legacy engine history.
+6. Update README with the model/runtime requirements, short-test policy, and legacy engine history.
 
 ## Execution/test order
 
@@ -79,9 +68,8 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 ## Known deferred work
 
 - No full-context throughput/quality benchmark.
-- No long video test; SPEED DEMON video behavior remains unvalidated.
+- No long video test; video behavior remains unvalidated.
 - No DFlash/Lucebox/BeeLlama port for Flash-Next; the selected uncensored GGUF has no exported MTP head.
-- The FP8 SPEED DEMON image uses an unmerged vLLM PR and remains separately reversible through `SPEED_DEMON_DRAFT_MODE=bf16`; no LMCache or third-GPU arrangement is used.
 
 ## Execution record
 
@@ -122,46 +110,6 @@ Completed 2026-08-28 — upstream master / DFlash2 evaluation:
 - DFlash2 vision-first tests failed in the draft context with `failed to initialize batch` / `failed to decode mtmd chunk`; the opt-in `hauhau-q8-dflash2` profile therefore deliberately omits the projector and is text-only. It is not a replacement for the vision-capable production profiles and is excluded from normal `--speed-test-all`.
 - Added the explicit `hauhau-q8-dflash2` profile with default `n=5`, checksum-verified asset download, reversed device placement, text-only smoke handling, and dashboard/menu labeling. Existing Hauhau FastMTP and Flash IQ4 defaults remain unchanged.
 
-Completed 2026-08-28 — SPEED DEMON integration:
-
-- Added `v1speeddemon.sh`, a side-by-side vLLM launcher using the tested AWQ target, DFlash2 drafter, native 262K context, FP8 KV, and no LMCache.
-- Added a derived packaged Docker image definition containing the tested FlashInfer PR #50885 full-decode graph overlay; the stock vLLM image remains the base.
-- Added short text/image smoke handling, health/status/dashboard output, persistent container logs, model download support, and separate SPEED DEMON state below `~/.local/share/localllm-speed-demon` and `~/.local/state/locallm-speed-demon`.
-- Added SPEED DEMON as HostLLM top-level option `[1]`; `[Q]` continues to select the llama.cpp Qwen3.8 profiles. HostLLM recognizes and stops the vLLM container and preserves OctaSpace pause/resume behavior.
-- Kept the vision description precise: the target sees image input, DFlash2 drafts text only, and video remains unvalidated. No production Qwen profile or Hive/miner setting was changed.
-
-Completed 2026-08-29 — SPEED DEMON tool calling:
-
-- Enabled vLLM automatic tool choice with `--enable-auto-tool-choice --tool-call-parser qwen3_xml`, fixing the 400 error returned when Qwen Code sends `tool_choice: auto`.
-- Added `--reasoning-parser qwen3` and made thinking explicitly ON by default while allowing clients to override it.
-- Verified non-streaming and streaming calculator tool calls, tool-result continuation, and thinking-enabled coding/vision requests against isolated vLLM containers; no tool-choice 400s occurred.
-
-Completed 2026-08-29 — FP8 SPEED DEMON promotion gate:
-
-- Added a reproducible `speed-demon-fp8/` image definition containing the
-  SHA-256-identified vLLM PR #53122 patch (`02feff0142e068bfb8906bf43424d26aa521898baff6edb37f4cc8bc215dccea`).
-- Installed the optional `TechPrototyper/Qwen3.8-27B-DFlash2-fp8-vllm` snapshot
-  beside the existing BF16 draft; the BF16 model and image remain available as
-  a reversible fallback.
-- Built `localllm/speed-demon:vllm-0.28.0-flashinfer-50885-fp8-53122` from the
-  repository Dockerfile and launched it through the normal SPEED DEMON launcher
-  on isolated port `18080`, with native `262144`, CUDA0/CUDA1, FP8 KV, seven
-  speculative tokens, thinking ON, and automatic tools.
-- Promotion suite passed: model discovery, three thinking-enabled coding
-  requests, prose, non-streaming calculator, tool-result continuation, streaming
-  calculator, target vision (red-left image), tokenizer probe above 250K, and
-  one-token prefill at approximately 36.7K/43.8s and 146.8K/169.9s.
-- Promotion measurements: coding `134.7`, `82.0`, and `54.3` tok/s (median
-  `82.0` for those three prompts), prose `62.4`, calculator `66.7`, and vision
-  `89.8`; earlier repeated easy coding samples were approximately 121–145
-  tok/s. Speculative acceptance was 3.22–3.54 tokens in the promotion suite.
-- The patched image showed only the known Transformers `min_frames`/`max_frames`
-  documentation warnings; no CUDA/Xid/traceback/runtime failure occurred.
-- Changed the default SPEED DEMON drafter to FP8 and updated HostLLM `[1]` and
-  README labeling. Set `SPEED_DEMON_DRAFT_MODE=bf16` for the retained BF16
-  fallback. Final launcher validation is complete with inference stopped and
-  OctaSpace restored.
-
 Completed 2026-08-30 — uncensored Flash-Next replacement:
 
 - Downloaded `cygnal/Qwen3.8-Flash-Next-Uncensored-IQ4XS-NGQ4-GGUF` beside the previous `unsloth` UD-IQ4_XS target and verified the GGUF SHA-256 `cedf1e08063f6df77926e1169f67b327dcc6301b5b329589615bdf09d4895f7e` plus BF16 projector SHA-256 `9c56f5aa2d30242325a91aa3e4c03348e9944648f4af6692a7a86db93aae7ffa`.
@@ -176,7 +124,7 @@ Completed 2026-08-31 — four-GPU scaling:
 - Hauhau FastMTP allocation passed with all four GPUs, dynamic `--tensor-split 1,1,1,1`, `--parallel 3`, aggregate `--ctx-size 786432`, Q8 K/V, and three `n_ctx_slot=262144` slots. No full-context generation was sent.
 - Three-run short-request medians on the 4-GPU/3-slot production server were `70.78` tok/s coding and `46.39` tok/s story, averaging `58.59` tok/s; these were short requests with thinking disabled and are not full-context measurements.
 - Updated the launcher to discover/select GPUs, generate device/split arguments, and automatically use three slots on four or more GPUs while retaining two slots on three GPUs. `QWEN38_FASTMTP_SLOTS=2` remains the conservative override.
-- Improved HostLLM and Qwen dashboards/menu labels to show the detected GPU inventory. SPEED DEMON now explicitly labels its intentional fixed CUDA0/CUDA1 scope instead of claiming CUDA2 was the only unused GPU.
+- Improved HostLLM and Qwen dashboards/menu labels to show the detected GPU inventory.
 - Improved the Hive wrapper's exit cleanup so a failed/stopped custom miner does not leave an empty screen that blocks the next `miner start`. The custom miner remains `MINER=custom` with `osn.service` untouched.
 
 Completed 2026-09-01 — upstream/runtime speed research:
@@ -186,3 +134,10 @@ Completed 2026-09-01 — upstream/runtime speed research:
 - Tested `ngram-mod` on the uncensored Flash GGUF. It is lossless target-verified speculation but workload-dependent: repeated JSON reached roughly 129–136 tok/s, code 90–145 tok/s after warm-up, and prose ranged from 59–71 tok/s. It remains opt-in.
 - Tested FastMTP draft lengths n=3, n=4, and n=5 on the four-GPU Hauhau profile. n=4 gave the best balanced short result (83.50 code / 43.70 story / 63.60 average) and was promoted; the production profile remains three native-262K slots.
 - Tested Flash with two native-262K slots on b10731. Allocation, two concurrent text requests, vision, JSON, and tool calls passed. The default Flash profile now uses two slots; `QWEN38_FLASH_SLOTS=1` remains available for maximum single-stream speed.
+
+Completed 2026-09-01 — engine retirement and Flash follow-up experiments:
+
+- Removed the alternate vLLM engine, its launcher, Docker overlays, menu routes, model metadata, and documentation. Deleted its remote container images, model snapshots, cache, state, and logs; the general llama.cpp fallback and Qwen profiles remain.
+- Built an isolated CUDA/sm_86 llama.cpp runtime from current upstream plus PR #27941 and PR #27977 (`d24c7ae73`, build 10747). Unit architecture checks passed; short no-speculation, n-gram, two-slot concurrency, and n-gram vision checks passed. The short decode A/B was effectively neutral, and a long-context A/B was not completed because an approximately 8.4K-token prefill already took about 503 seconds on this host; no long-context speed claim was promoted.
+- Tested the `dzannotti/Qwen3.8-Flash-Next-MTP-Q4_K_M.gguf` sidecar with the current uncensored Flash target using the experimental PR #28104 MTP stack and the merged recurrent rollback code. Native 262K one-slot allocation required `--fit-target 4096`; at that margin the text server loaded and achieved approximately 96 code / 48 prose / 102 JSON tok/s at n=3, with draft acceptance approximately 1.00 / 0.81 / 1.00. The target vision request completed, but draft acceptance was zero.
+- Greedy code and JSON matched the no-draft target, while the prose continuation diverged reproducibly even at n=1. The sidecar was therefore rejected for this uncensored target and deleted; MTP remains disabled and the existing n-gram profile is retained.

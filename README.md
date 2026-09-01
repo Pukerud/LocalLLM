@@ -13,14 +13,13 @@ chmod +x HostLLM.sh v1*.sh
 ./HostLLM.sh
 ```
 
-From the HostLLM menu, press **[1]** for the direct SPEED DEMON profile, or
-press **[Q]** for the Qwen3.8 llama.cpp profile menu.
+From the HostLLM menu, press **[1]** (or **[Q]**) for the Qwen3.8
+llama.cpp profile menu.
 
 ```text
 HostLLM — Engine Picker
-  [1] SPEED DEMON — Qwen3.8 AWQ INT4 + FP8 DFlash2 | ~123 code* / ~67 tools / ~62 prose tok/s
-      native 262K | 2x RTX 3090 | image input + auto tools + thinking ON; FP8 draft text-only; video unvalidated
-  [Q] Qwen3.8-27B — vision | auto-scaled native-262K slots | FastMTP + Q8 KV
+  [1] Qwen3.8-27B — vision | auto-scaled native-262K slots | FastMTP + Q8 KV
+  [Q] Qwen3.8 profile menu (alias for [1])
   [2] llama.cpp — general GGUF fallback
 
 Qwen3.8 Quick Start (inside [Q])
@@ -142,71 +141,14 @@ or more GPUs, while retaining `n=3` and two slots on a three-GPU host. Set
 `QWEN38_FASTMTP_SLOTS=2` to force the conservative two-slot mode or
 `QWEN38_FASTMTP_N_MAX=3` to use the previous draft length.
 
-## SPEED DEMON profile
-
-SPEED DEMON is a separate vLLM Docker profile for fast text and coding work. It
-uses the standard (not Hauhau-abliterated) `cyankiwi/Qwen3.8-27B-AWQ-INT4`
-target and the tested `TechPrototyper/Qwen3.8-27B-DFlash2-fp8-vllm` draft by
-default. Set `SPEED_DEMON_DRAFT_MODE=bf16` to use the retained BF16 DFlash2
-fallback.
-
-| Item | Configuration |
-|---|---|
-| Runtime | vLLM `0.28.0` + FlashInfer full decode graph overlay from PR #50885 + FP8 DFlash support from PR #53122 |
-| GPUs | CUDA0 and CUDA1, 2x RTX 3090; CUDA2/CUDA3 remain reserved |
-| Context | native `262144` configured context |
-| KV/cache | FP8 KV; no LMCache |
-| Draft | `TechPrototyper/Qwen3.8-27B-DFlash2-fp8-vllm`, seven speculative tokens |
-| Tools | automatic tool choice with vLLM `qwen3_xml` parser |
-| Reasoning | ON by default with vLLM `qwen3` parser; clients may override |
-| Measured speed | approximately 123 tok/s mixed coding*, 67 tok/s tools, 62 tok/s prose |
-| Model ID | `speed-demon` |
-
-The target model supports image input and the short image smoke test passed. The
-FP8 DFlash2 drafter receives text only, not image/video embeddings, so image
-answers are still verified by the target but speculative acceptance may be lower.
-Video support has not been validated. The profile is therefore labeled **target
-vision ON; FP8 DFlash draft text-only; video unvalidated**, with text/code
-recommended. The `*` speed figure is a prompt-dependent mixed short-test
-reference; easy coding samples reached approximately 121–145 tok/s.
-
-Automatic tool choice is enabled for Qwen Code and Open WebUI using the vLLM
-`qwen3_xml` parser, matching this model's `<tool_call><function=...>` template.
-Reasoning is ON by default and is parsed with `qwen3`; clients may explicitly
-override the thinking setting. Clients should send the normal OpenAI `tools`
-payload with `tool_choice: auto`.
-
-SPEED DEMON starts on the normal HostLLM port `8080` and is mutually exclusive
-with the llama.cpp engines. HostLLM pauses OctaSpace before starting it and
-restores OctaSpace after the engine is stopped. The vLLM image and model assets
-are stored outside the repository under:
-
-```text
-~/.local/share/localllm-speed-demon
-~/.local/state/locallm-speed-demon
-```
-
-The direct launcher commands are:
-
-```bash
-./v1speeddemon.sh --quickstart
-./v1speeddemon.sh --smoke
-./v1speeddemon.sh --status
-# Optional retained BF16 drafter fallback:
-SPEED_DEMON_DRAFT_MODE=bf16 ./v1speeddemon.sh --quickstart
-./v1speeddemon.sh --stop
-```
-
-The smoke test uses a short text request and one small image only. It does not
-send a long-context generation.
-
 Results are cached in:
 
 ```text
 ~/.local/state/locallm-qwen38/speed-results.tsv
 ```
 
-The menu reads that cache and displays the average beside each profile. Run a profile-specific test with:
+The Qwen submenu reads that cache and displays the average beside each profile.
+Run a profile-specific test with:
 
 ```bash
 ./v1qwen38.sh --speed-test --profile hauhau-q8-fastmtp
@@ -340,20 +282,28 @@ Direct dashboard/status commands:
 The active menu intentionally stays small:
 
 ```text
-  [1] SPEED DEMON        Qwen3.8 AWQ INT4 + FP8 DFlash2 │ ~123 code* / ~67 tools / ~62 prose tok/s
-      target image input ON │ FP8 DFlash draft text-only │ video unvalidated │ native 262K │ 2x RTX 3090
-  [Q] Qwen3.8-27B        vision │ auto-scaled native 262K slots │ FastMTP + Q8 KV
+  [1] Qwen3.8-27B        vision │ auto-scaled native 262K slots │ FastMTP + Q8 KV
+      Uses all detected GPUs; 3 users + n=4 draft on 4x RTX 3090
+      HauhauCS and uncensored Flash-Next profiles with cached speed results
+  [Q] Qwen3.8 profile menu (alias for [1])
   [2] llama.cpp          general GGUF fallback
   [9] Kill All
   [10] Update
   [11] Exit
 ```
 
-`v1llama_cpp.sh` remains available for manually running other current GGUF models. The removed Qwen3.6-era launchers and tests are recorded below and are no longer offered by HostLLM.
+`v1llama_cpp.sh` remains available for manually running other current GGUF
+models. The removed Qwen3.6-era launchers and tests are recorded below and are
+no longer offered by HostLLM.
 
 ### OctaSpace coexistence
 
-If the OctaSpace `osn.service` exists and is active, HostLLM pauses it before launching SPEED DEMON, Qwen3.8, or the general llama.cpp engine so both workloads do not compete for the same GPUs. When the engine stops, HostLLM starts OctaSpace again. If a launcher returns while its server is still running, OctaSpace remains paused until **[9] Kill All** stops the engine. A small state marker preserves this behavior if HostLLM is reopened.
+If the OctaSpace `osn.service` exists and is active, HostLLM pauses it before
+launching Qwen3.8 or the general llama.cpp engine so both workloads do not
+compete for the same GPUs. When the engine stops, HostLLM starts OctaSpace
+again. If a launcher returns while its server is still running, OctaSpace
+remains paused until **[9] Kill All** stops the engine. A small state marker
+preserves this behavior if HostLLM is reopened.
 
 ## API connections
 
@@ -382,9 +332,13 @@ The Qwen3.8 launcher does not modify HiveOS, watchdog, miner, or driver configur
 
 ## Future high-throughput candidates
 
-Qwen publishes serving examples for vLLM, SGLang, and TokenSpeed. A future isolated test could use the official `Qwen/Qwen3.8-27B-FP8` safetensors checkpoint with a packaged serving engine. It must be tested on this exact 3×3090 PHB host before replacing the current profile.
+No alternate serving engine is retained in the active configuration. Any future
+engine or checkpoint experiment must remain isolated and must pass the same
+short text, vision, tool, and safety checks before replacing a current profile.
 
-BeeLlama Docker images are packaging for BeeLlama's `llama-server`, not a special Qwen3.8 accelerator. Its preview release is rolling and does not contain the custom Hauhau FastMTP or Flash-Next runtime used here.
+BeeLlama Docker images are packaging for BeeLlama's `llama-server`, not a special
+Qwen3.8 accelerator. Its preview release is rolling and does not contain the
+custom Hauhau FastMTP or Flash-Next runtime used here.
 
 ## Legacy engines and tests
 
@@ -400,7 +354,7 @@ The old launchers were built around Qwen3.6 model files, Qwen3.6 draft models, Q
 |---|---|---|
 | Legacy MTP Quick Start | Qwen3.6 native MTP, no vision; advertised up to 100 tok/s on a 4090 | Superseded by the tested Qwen3.8 profiles |
 | buun-llama-cpp DFlash | Qwen3.6 DFlash speculative decoding | Qwen3.6-only workflow, no vision, and the script used an `sm_89` build assumption |
-| Old vLLM Docker profile | Qwen3.6 AutoRound INT4 plus Genesis patches | The stored compose/model setup was Qwen3.6-specific; future vLLM work should use an isolated Qwen3.8 FP8 profile |
+| Old vLLM Docker profile | Qwen3.6 AutoRound INT4 plus Genesis patches | Removed with the obsolete Qwen3.6-specific serving path |
 | Lucebox DFlash | Qwen3.6 DFlash safetensors draft and DDTree | Unstable, Qwen3.6-only, and compiled with an `sm_89` assumption |
 | Upstream llama.cpp MTP dashboard | Qwen3.6 model conversion with PR #22673 MTP layers | Redundant after the Qwen3.8 runtime became the supported path |
 | BeeLlama DFlash dashboard | Qwen3.6 DFlash, TurboQuant/TCQ KV cache, vision, and reasoning | Useful historical fork, but not the Hauhau FastMTP or Flash-Next runtime |
@@ -432,10 +386,8 @@ The images are convenient server packages. They do not inherently improve infere
 
 ```text
 HostLLM.sh                 current top-level menu
-v1speeddemon.sh            SPEED DEMON vLLM/DFlash2 profile
 v1qwen38.sh                Qwen3.8 llama.cpp profiles, tests, and dashboard
 v1llama_cpp.sh             general llama.cpp fallback
-speed-demon/               pinned SPEED DEMON container overlay
 QWEN38_EXECUTION_PLAN.md   provenance and validation record
 ```
 
@@ -446,7 +398,7 @@ Generated Qwen3.8 models, runtimes, logs, and state are stored outside the repos
 Static checks:
 
 ```bash
-bash -n HostLLM.sh v1qwen38.sh v1speeddemon.sh
+bash -n HostLLM.sh v1qwen38.sh v1llama_cpp.sh
 ```
 
 The tested Qwen3.8 path uses short text/vision smoke tests and short speed tests only. No full 262K-context generation or long benchmark is part of the normal launcher workflow.
