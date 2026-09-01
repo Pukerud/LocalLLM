@@ -990,6 +990,14 @@ speed_cache_row() {
     awk -F'|' -v wanted="$wanted" '$1 == wanted { row = $0 } END { if (row != "") print row }' "$SPEED_CACHE"
 }
 
+speed_cache_key() {
+    if [[ "$PROFILE" == "flash-iq4" && "$SPEC_MODE" == "ngram" ]]; then
+        printf 'flash-iq4-ngram'
+    else
+        printf '%s' "$PROFILE"
+    fi
+}
+
 speed_display() {
     local row date context coding story average
     row="$(speed_cache_row "$1" || true)"
@@ -1017,16 +1025,17 @@ speed_detail() {
 }
 
 record_speed_result() {
-    local coding="$1" story="$2" average="$3" tmp
+    local coding="$1" story="$2" average="$3" tmp cache_profile
+    cache_profile="$(speed_cache_key)"
     tmp="${SPEED_CACHE}.tmp.$$"
     umask 022
     if [[ -f "$SPEED_CACHE" ]]; then
-        awk -F'|' -v profile="$PROFILE" '$1 != profile' "$SPEED_CACHE" > "$tmp"
+        awk -F'|' -v profile="$cache_profile" '$1 != profile' "$SPEED_CACHE" > "$tmp"
     else
         : > "$tmp"
     fi
     printf '%s|%s|4096|%s|%s|%s\n' \
-        "$PROFILE" "$(date +%Y-%m-%d)" "$coding" "$story" "$average" >> "$tmp"
+        "$cache_profile" "$(date +%Y-%m-%d)" "$coding" "$story" "$average" >> "$tmp"
     mv -f -- "$tmp" "$SPEED_CACHE"
 }
 
@@ -1339,7 +1348,7 @@ choose_profile() {
     say "  [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K  |  speed: $(speed_display hauhau-q8)"
     say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP n=${FAST_MTP_N_MAX} + ${FAST_MTP_SLOTS} slots / 262K each / Q8 KV  |  speed: $(speed_display hauhau-q8-fastmtp)"
     say "  [3] Flash-Next Uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV + ${FLASH_SLOTS} slots / qwen4exp b10731  |  speed: $(speed_display flash-iq4)"
-    say "  [4] Flash-Next Uncensored IQ4XS-NGQ4 + ngram-mod (experimental, warm structured output)  |  speed: $(speed_display flash-iq4)"
+    say "  [4] Flash-Next Uncensored IQ4XS-NGQ4 + ngram-mod (experimental, warm structured output)  |  speed: $(speed_display flash-iq4-ngram)"
     say "  [5] HauhauCS Q8_K_P + DFlash2 Q4 n=${DFLASH_N_MAX} (text-only, experimental)  |  speed: $(speed_display hauhau-q8-dflash2)"
     say "  [s] Run short speed tests for all standard profiles"
     say "      DFlash2 is opt-in and text-only on this host; use --speed-test --profile hauhau-q8-dflash2"

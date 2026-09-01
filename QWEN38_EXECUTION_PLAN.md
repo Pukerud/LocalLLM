@@ -1,11 +1,11 @@
 # Qwen3.8 / Flash-Next LocalLLM execution plan
 
-Date: 2026-08-27
+Date: 2026-08-27; updated 2026-09-01
 Target: `/home/user/LocalLLM` on `192.168.1.69`
 
 ## Guardrails
 
-- Do not start, modify, or enable the custom miner.
+- Do not start, modify, or enable the custom miner unless explicitly requested for a lifecycle test or deployment.
 - Keep `WD_ENABLED=0` and `REBOOT_ON_ERROR=` unchanged.
 - Do not change the NVIDIA driver or Hive watchdog configuration.
 - Keep the general llama.cpp fallback; archive obsolete Qwen3.6-specific engines and tests after Qwen3.8 validation.
@@ -14,7 +14,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 
 ## Baseline
 
-- Three RTX 3090 GPUs, 24 GiB each, compute capability 8.6.
+- Four RTX 3090 GPUs, 24 GiB each, compute capability 8.6.
 - GPUs are connected through PHB and report no usable P2P; Hauhau uses `--split-mode layer` with a dynamic equal `--tensor-split` across all selected GPUs, while the uncensored Flash IQ4 target uses layer split with automatic fitting.
 - Host has approximately 125 GiB RAM and no swap.
 - Current NVIDIA driver is 595.91.07; use a CUDA 12.9 build/runtime path if a toolkit is required.
@@ -32,16 +32,16 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 
 ### Experimental Qwen3.8-Flash-Next
 
-- Build a separate pinned PR #27742 (`qwen4exp`) runtime at head `af1ffaf37f1e44edb62e87ab8ddb9bb6840849bc` (recorded 2026-08-27).
+- Build a separate pinned upstream `qwen4exp` runtime at `b10731` / `0eadefebd` (tested 2026-09-01); retain the older PR #27742 runtime for rollback.
 - Use mmap/host handling for the large PLE/n-gram tables; the uncensored Flash IQ4 profile uses `q8_0` K/V and automatic layer fitting at native context.
-- The selected uncensored IQ4XS-NGQ4 GGUF intentionally omits its MTP head; keep speculative decoding disabled for this target.
+- The selected uncensored IQ4XS-NGQ4 GGUF intentionally omits its MTP head; keep MTP disabled, with `ngram-mod` available as an opt-in experiment.
 - Use the supplied BF16 vision projector and validate text, vision, and tool behavior before promotion.
 
 ### SPEED DEMON
 
 - Use the packaged vLLM `0.28.0` image with `cyankiwi/Qwen3.8-27B-AWQ-INT4` as the target and the tested `TechPrototyper/Qwen3.8-27B-DFlash2-fp8-vllm` as the default FP8 drafter. Retain `z-lab/Qwen3.8-27B-DFlash2` as the `SPEED_DEMON_DRAFT_MODE=bf16` fallback.
 - The FP8 image layers the tested FlashInfer overlay with the narrowly scoped vLLM PR #53122 quantized-draft/context-KV fix; it is built reproducibly from `speed-demon-fp8/Dockerfile`.
-- Keep target tensor parallelism at 2 on CUDA0/CUDA1; TP=3 is invalid because the model's 32 attention heads are not divisible by 3. CUDA2 remains unused by this profile.
+- Keep SPEED DEMON target tensor parallelism at 2 on CUDA0/CUDA1; TP=3 is invalid because the model's 32 attention heads are not divisible by 3. CUDA2/CUDA3 remain reserved by this profile.
 - Use FP8 KV, no LMCache, DFlash2 with seven speculative tokens, native context `262144`, and the tested FlashInfer full decode graph overlay from vLLM PR #50885.
 - The target accepts image input, but the DFlash2 drafter receives text only. Label the profile as target vision enabled, FP8 DFlash draft text-only, and video unvalidated.
 - Enable automatic tool choice with vLLM's `qwen3_xml` parser and thinking with the `qwen3` reasoning parser, matching the target chat template used by Qwen Code and Open WebUI.
@@ -178,3 +178,11 @@ Completed 2026-08-31 — four-GPU scaling:
 - Updated the launcher to discover/select GPUs, generate device/split arguments, and automatically use three slots on four or more GPUs while retaining two slots on three GPUs. `QWEN38_FASTMTP_SLOTS=2` remains the conservative override.
 - Improved HostLLM and Qwen dashboards/menu labels to show the detected GPU inventory. SPEED DEMON now explicitly labels its intentional fixed CUDA0/CUDA1 scope instead of claiming CUDA2 was the only unused GPU.
 - Improved the Hive wrapper's exit cleanup so a failed/stopped custom miner does not leave an empty screen that blocks the next `miner start`. The custom miner remains `MINER=custom` with `osn.service` untouched.
+
+Completed 2026-09-01 — upstream/runtime speed research:
+
+- Checked current llama.cpp master and built `b10731` (`0eadefebd`) with CUDA 12.9 / sm_86 in a side-by-side runtime. The qwen4exp model loaded the uncensored GGUF with one and two native-262K slots across all four RTX 3090s; text, vision, tool calling, and JSON validation passed.
+- Compared the current pinned qwen4exp runtime with b10731 under identical four-GPU Q8-KV settings. No-spec decode improved from roughly 46 tok/s to 66 tok/s on short code/prose requests; `CUDA_SCALE_LAUNCH_QUEUES=4x` did not materially change decode speed.
+- Tested `ngram-mod` on the uncensored Flash GGUF. It is lossless target-verified speculation but workload-dependent: repeated JSON reached roughly 129–136 tok/s, code 90–145 tok/s after warm-up, and prose ranged from 59–71 tok/s. It remains opt-in.
+- Tested FastMTP draft lengths n=3, n=4, and n=5 on the four-GPU Hauhau profile. n=4 gave the best balanced short result (83.50 code / 43.70 story / 63.60 average) and was promoted; the production profile remains three native-262K slots.
+- Tested Flash with two native-262K slots on b10731. Allocation, two concurrent text requests, vision, JSON, and tool calls passed. The default Flash profile now uses two slots; `QWEN38_FLASH_SLOTS=1` remains available for maximum single-stream speed.

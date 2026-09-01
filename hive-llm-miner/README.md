@@ -12,8 +12,8 @@ The miner starts:
 ```
 
 It deliberately does **not** stop or start `osn.service`. On the current
-4x RTX 3090 host, the launcher automatically uses three native-262K slots;
-on the original 3-GPU layout it uses two. When OctaSpace rents the node, its
+4x RTX 3090 host, the launcher automatically uses FastMTP n=4 and three
+native-262K slots; on the original 3-GPU layout it uses n=3 and two slots. When OctaSpace rents the node, its
 normal HiveOS `miner stop` command reaches the foreground wrapper, which stops
 the Qwen server. When the rental ends, `miner start` starts the wrapper again
 while `osn.service` remains running. Managed starts skip hashing already-present
