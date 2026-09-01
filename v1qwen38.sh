@@ -78,6 +78,7 @@ KV_TYPE="f16"
 SPEC_MODE="none"
 RUNTIME_DIR=""
 FAST_MTP_SLOTS=2
+FAST_MTP_N_MAX=3
 GPU_COUNT=0
 GPU_INDICES=()
 GPU_NAMES=()
@@ -199,6 +200,16 @@ default_flash_slots() {
     fi
 }
 
+default_fast_mtp_n_max() {
+    if [[ -n "${QWEN38_FASTMTP_N_MAX:-}" ]]; then
+        printf '%s' "$QWEN38_FASTMTP_N_MAX"
+    elif (( GPU_COUNT >= 4 )); then
+        printf '4'
+    else
+        printf '3'
+    fi
+}
+
 usage() {
     cat <<'EOF'
 Usage:
@@ -215,7 +226,7 @@ Usage:
 
 Profiles:
   hauhau-q8          HauhauCS Q8_K_P + BF16 vision, native 262K, embedded MTP
-  hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, auto-scaled native-262K slots
+  hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, auto-scaled slots/draft length
   flash-iq4          Flash-Next uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV/auto-fit, qwen4exp b10731
   hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K
 
@@ -322,8 +333,10 @@ configure_profile() {
             ;;
         hauhau-q8-fastmtp)
             FAST_MTP_SLOTS="$(default_fast_mtp_slots)"
+            FAST_MTP_N_MAX="$(default_fast_mtp_n_max)"
             [[ "$FAST_MTP_SLOTS" =~ ^[1-4]$ ]] || die "QWEN38_FASTMTP_SLOTS must be an integer from 1 to 4"
-            PROFILE_LABEL="Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP / ${FAST_MTP_SLOTS} slots / 262K each / Q8 KV"
+            [[ "$FAST_MTP_N_MAX" =~ ^[1-7]$ ]] || die "QWEN38_FASTMTP_N_MAX must be an integer from 1 to 7"
+            PROFILE_LABEL="Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP n=${FAST_MTP_N_MAX} / ${FAST_MTP_SLOTS} slots / 262K each / Q8 KV"
             RUNTIME_KIND="hauhau"
             RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen38-hauhau"
             MODEL_PATH="${MODEL_ROOT}/hauhau/${HAUHAU_MODEL}"
@@ -763,7 +776,7 @@ make_server_args() {
                 --spec-draft-model "$DRAFT_PATH"
                 --spec-draft-ngl all
                 --spec-type draft-mtp
-                --spec-draft-n-max 3
+                --spec-draft-n-max "$FAST_MTP_N_MAX"
                 --spec-draft-p-min 0
             )
             ;;
@@ -1255,7 +1268,7 @@ show_dashboard() {
         fi
         case "$SPEC_MODE" in
             native) spec_label="native MTP" ;;
-            fast) spec_label="FastMTP (3-token draft)" ;;
+            fast) spec_label="FastMTP (${FAST_MTP_N_MAX}-token draft)" ;;
             ngram) spec_label="n-gram speculation" ;;
             dflash2) spec_label="DFlash2 Q4 (n=${DFLASH_N_MAX})" ;;
             *) spec_label="off" ;;
@@ -1318,12 +1331,13 @@ show_dashboard() {
 
 choose_profile() {
     FAST_MTP_SLOTS="$(default_fast_mtp_slots)"
+    FAST_MTP_N_MAX="$(default_fast_mtp_n_max)"
     FLASH_SLOTS="$(default_flash_slots)"
     say ""
     say "Qwen3.8 Quick Start"
     say "  GPUs detected: ${GPU_SUMMARY}"
     say "  [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K  |  speed: $(speed_display hauhau-q8)"
-    say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + ${FAST_MTP_SLOTS} slots / 262K each / Q8 KV  |  speed: $(speed_display hauhau-q8-fastmtp)"
+    say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP n=${FAST_MTP_N_MAX} + ${FAST_MTP_SLOTS} slots / 262K each / Q8 KV  |  speed: $(speed_display hauhau-q8-fastmtp)"
     say "  [3] Flash-Next Uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV + ${FLASH_SLOTS} slots / qwen4exp b10731  |  speed: $(speed_display flash-iq4)"
     say "  [4] Flash-Next Uncensored IQ4XS-NGQ4 + ngram-mod (experimental, warm structured output)  |  speed: $(speed_display flash-iq4)"
     say "  [5] HauhauCS Q8_K_P + DFlash2 Q4 n=${DFLASH_N_MAX} (text-only, experimental)  |  speed: $(speed_display hauhau-q8-dflash2)"

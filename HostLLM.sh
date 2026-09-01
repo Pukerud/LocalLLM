@@ -392,7 +392,7 @@ while true; do
     echo -e "      Native 262K │ fixed CUDA0,CUDA1 (2-GPU profile); target image input ON"
     echo -e "      FP8 draft is text-only; video unvalidated"
     echo -e "  ${BOLD}[Q]${RESET} Qwen3.8-27B  ⚡ vision │ auto-scaled native 262K slots │ FastMTP + Q8 KV"
-    echo -e "      Uses all detected GPUs; up to 3 users on 4x RTX 3090"
+    echo -e "      Uses all detected GPUs; 3 users + n=4 draft on 4x RTX 3090"
     echo -e "      HauhauCS and uncensored Flash-Next profiles with cached speed results"
     echo ""
     echo "  Engines (manual):"
