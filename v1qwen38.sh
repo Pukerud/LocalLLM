@@ -54,7 +54,7 @@ readonly HAUHAU_DRAFT="Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-FastMTP-32K.gg
 readonly HAUHAU_MODEL_SHA="4e7735df4d1e2ec721f2551f531b815702a2f89123238c564797eda4b0304bc2"
 readonly HAUHAU_MMPROJ_SHA="5681b690bcb8eb10cd28d62d078cb4e01521a3ea4880a3fc7d54de72de2dd142"
 readonly HAUHAU_DRAFT_SHA="115e618e1f73cb50817ed5856f0551c6bf9c3d94df96f440eaca78dc63b8968b"
-readonly QWEN4EXP_COMMIT="af1ffaf37f1e44edb62e87ab8ddb9bb6840849bc"
+readonly QWEN4EXP_COMMIT="0eadefebd3f8f92a86d634a0e5b8fffc9dc792c0"
 readonly FLASH_REPO="cygnal/Qwen3.8-Flash-Next-Uncensored-IQ4XS-NGQ4-GGUF"
 readonly FLASH_MODEL="Qwen3.8-Flash-Next-Uncensored-IQ4XS-NGQ4.gguf"
 readonly FLASH_MODEL_SHA="cedf1e08063f6df77926e1169f67b327dcc6301b5b329589615bdf09d4895f7e"
@@ -86,6 +86,7 @@ GPU_DEVICE_LIST=""
 GPU_DEVICE_LIST_REVERSED=""
 GPU_TENSOR_SPLIT=""
 GPU_SUMMARY="GPU information unavailable"
+FLASH_SLOTS=1
 
 mkdir -p "$DATA_ROOT" "$STATE_ROOT" "$RUNTIME_ROOT" "$MODEL_ROOT" "$LOG_ROOT"
 SPEED_CACHE="${STATE_ROOT}/speed-results.tsv"
@@ -188,6 +189,16 @@ default_fast_mtp_slots() {
     fi
 }
 
+default_flash_slots() {
+    if [[ -n "${QWEN38_FLASH_SLOTS:-}" ]]; then
+        printf '%s' "$QWEN38_FLASH_SLOTS"
+    elif (( GPU_COUNT >= 4 )); then
+        printf '2'
+    else
+        printf '1'
+    fi
+}
+
 usage() {
     cat <<'EOF'
 Usage:
@@ -205,7 +216,7 @@ Usage:
 Profiles:
   hauhau-q8          HauhauCS Q8_K_P + BF16 vision, native 262K, embedded MTP
   hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, auto-scaled native-262K slots
-  flash-iq4          Flash-Next uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV/auto-fit, PR #27742
+  flash-iq4          Flash-Next uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV/auto-fit, qwen4exp b10731
   hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K
 
 --smoke uses a 4096-token context, one short text request, and one small PNG
@@ -337,13 +348,17 @@ configure_profile() {
             ;;
         flash-iq4)
             qdir="IQ4XS-NGQ4"
-            PROFILE_LABEL="Qwen3.8-Flash-Next Uncensored ${qdir} / vision / Q8 KV / auto-fit / PR #27742"
+            FLASH_SLOTS="$(default_flash_slots)"
+            [[ "$FLASH_SLOTS" =~ ^[1-2]$ ]] || die "QWEN38_FLASH_SLOTS must be 1 or 2"
+            PROFILE_LABEL="Qwen3.8-Flash-Next Uncensored ${qdir} / vision / Q8 KV / ${FLASH_SLOTS} slots / qwen4exp b10731"
             RUNTIME_KIND="flash"
-            RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen4exp-pr27742"
+            RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen4exp-b10731"
             MODEL_PATH="${MODEL_ROOT}/flash-uncensored/${qdir}/${FLASH_MODEL}"
             MMPROJ_PATH="${MODEL_ROOT}/flash-uncensored/${qdir}/${FLASH_MMPROJ}"
             DRAFT_PATH=""
             FULL_CTX=262144
+            SERVER_CTX=$((FULL_CTX * FLASH_SLOTS))
+            PARALLEL="$FLASH_SLOTS"
             KV_TYPE="q8_0"
             SPEC_MODE="none"
             ;;
@@ -545,10 +560,13 @@ build_runtime() {
         git apply "$patch_file"
         say "Applied HauhauCS FastMTP patch to pinned qwen35 runtime"
     elif [[ "$RUNTIME_KIND" == "flash" ]]; then
-        git fetch --quiet origin "pull/27742/head:refs/remotes/origin/pr-27742"
+        git fetch --quiet origin master
+        if ! git cat-file -e "${QWEN4EXP_COMMIT}^{commit}" 2>/dev/null; then
+            git fetch --quiet origin "$QWEN4EXP_COMMIT"
+        fi
         git reset --hard --quiet "$QWEN4EXP_COMMIT"
         git clean -fdx >/dev/null
-        say "Using qwen4exp PR #27742 commit $QWEN4EXP_COMMIT"
+        say "Using qwen4exp upstream commit $QWEN4EXP_COMMIT"
     else
         git fetch --quiet origin master
         if ! git cat-file -e "${UPSTREAM_COMMIT}^{commit}" 2>/dev/null; then
@@ -1090,7 +1108,7 @@ PY
 }
 
 run_speed_test_all() {
-    local original_profile="$PROFILE" original_smoke="$SMOKE" rc=0 profile
+    local original_profile="$PROFILE" original_smoke="$SMOKE" original_spec="$SPEC_OVERRIDE" rc=0 profile
     for profile in hauhau-q8 hauhau-q8-fastmtp flash-iq4; do
         PROFILE="$profile"
         SPEC_OVERRIDE=""
@@ -1103,6 +1121,7 @@ run_speed_test_all() {
     done
     PROFILE="$original_profile"
     SMOKE="$original_smoke"
+    SPEC_OVERRIDE="$original_spec"
     configure_profile
     return "$rc"
 }
@@ -1299,13 +1318,15 @@ show_dashboard() {
 
 choose_profile() {
     FAST_MTP_SLOTS="$(default_fast_mtp_slots)"
+    FLASH_SLOTS="$(default_flash_slots)"
     say ""
     say "Qwen3.8 Quick Start"
     say "  GPUs detected: ${GPU_SUMMARY}"
     say "  [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K  |  speed: $(speed_display hauhau-q8)"
     say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + ${FAST_MTP_SLOTS} slots / 262K each / Q8 KV  |  speed: $(speed_display hauhau-q8-fastmtp)"
-    say "  [3] Flash-Next Uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV/auto-fit + PR #27742  |  speed: $(speed_display flash-iq4)"
-    say "  [4] HauhauCS Q8_K_P + DFlash2 Q4 n=${DFLASH_N_MAX} (text-only, experimental)  |  speed: $(speed_display hauhau-q8-dflash2)"
+    say "  [3] Flash-Next Uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV + ${FLASH_SLOTS} slots / qwen4exp b10731  |  speed: $(speed_display flash-iq4)"
+    say "  [4] Flash-Next Uncensored IQ4XS-NGQ4 + ngram-mod (experimental, warm structured output)  |  speed: $(speed_display flash-iq4)"
+    say "  [5] HauhauCS Q8_K_P + DFlash2 Q4 n=${DFLASH_N_MAX} (text-only, experimental)  |  speed: $(speed_display hauhau-q8-dflash2)"
     say "  [s] Run short speed tests for all standard profiles"
     say "      DFlash2 is opt-in and text-only on this host; use --speed-test --profile hauhau-q8-dflash2"
 
@@ -1315,7 +1336,8 @@ choose_profile() {
         1) PROFILE="hauhau-q8" ;;
         2) PROFILE="hauhau-q8-fastmtp" ;;
         3) PROFILE="flash-iq4" ;;
-        4) PROFILE="hauhau-q8-dflash2" ;;
+        4) PROFILE="flash-iq4"; SPEC_OVERRIDE="ngram" ;;
+        5) PROFILE="hauhau-q8-dflash2" ;;
         s|S)
             PROFILE="hauhau-q8"
             MODE="speed-all"
