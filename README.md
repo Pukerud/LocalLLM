@@ -65,13 +65,13 @@ telemetry remain visible in HiveOS. Remove it with `./uninstall-hive-llm-miner.s
 
 ## Tested Qwen3.8 profiles
 
-Measured on 2026-08-27–2026-09-01 using short coding and prose prompts. These are lightweight generation measurements, not full-context benchmarks; the current rows use the configured multi-GPU slot profiles.
+Measured on 2026-08-27–2026-09-04 using short coding and prose prompts. These are lightweight generation measurements, not full-context benchmarks; the current rows use the configured multi-GPU slot profiles.
 
 | Profile | Coding | Story | Average | Notes |
 |---|---:|---:|---:|---|
 | Hauhau Q8 native MTP | 56.87 tok/s | 40.62 tok/s | **48.74 tok/s** | BF16 vision projector |
 | Hauhau Q8 FastMTP | 83.50 tok/s | 43.70 tok/s | **63.60 tok/s** | current 4-GPU production; FastMTP n=4, 3 slots / 262K each / Q8 KV; 3-run medians, 2026-09-01 |
-| Flash IQ4 Uncensored | pending refresh | pending refresh | **pending refresh** | cygnal IQ4XS-NGQ4; current upstream 4cbe8b070, 2 slots / 262K each / Q8 K/V; menu speed test refreshed during the 2026-09-04 upgrade |
+| Flash IQ4 Uncensored | 67.28 tok/s | 67.12 tok/s | **67.20 tok/s** | cygnal IQ4XS-NGQ4; current upstream 4cbe8b070, 2 slots / 262K each / Q8 K/V; menu speed test, 2026-09-04 |
 | Hauhau Q8 + DFlash2 Q4 n=5 | 86.52 tok/s | 38.67 tok/s | **62.59 tok/s** | upstream master `4e97ac86`; text-only; reversed layer-device order; opt-in candidate |
 
 The DFlash2 row is not a replacement for the vision-capable profiles. The Q4
