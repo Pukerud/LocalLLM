@@ -5,15 +5,15 @@ an ordinary HiveOS miner. It uses every detected NVIDIA GPU, the official
 `hive-miners-custom` control package, and the normal `miner start` / `miner stop`
 lifecycle.
 
-The miner starts:
+The miner starts the current Q4-KV production profile:
 
 ```text
-/home/user/LocalLLM/v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp --no-dashboard
+/home/user/LocalLLM/v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q4kv-xhigh --no-dashboard
 ```
 
 It deliberately does **not** stop or start `osn.service`. On the current
 4x RTX 3090 host, the launcher automatically uses FastMTP n=4 and three
-native-262K slots; on the original 3-GPU layout it uses n=3 and two slots. When OctaSpace rents the node, its
+native-262K slots with Q4_0 K/V and xhigh reasoning; on the original 3-GPU layout it uses n=3 and two slots. The Q8-KV `hauhau-q8-fastmtp` profile remains available as a fallback. When OctaSpace rents the node, its
 normal HiveOS `miner stop` command reaches the foreground wrapper, which stops
 the Qwen server. When the rental ends, `miner start` starts the wrapper again
 while `osn.service` remains running. Managed starts skip hashing already-present

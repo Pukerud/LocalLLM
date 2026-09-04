@@ -163,3 +163,9 @@ Completed 2026-09-04 — TURBO Q8 MTP replacement:
 - Validated embedded native MTP at `n=2`, equal four-GPU layer split, Q8 K/V, BF16 vision, three slots, and `n_ctx_slot=262144` without sending a long-context request. Text, tool calling, schema-valid JSON, vision, and launcher smoke/teardown passed.
 - The short menu speed test measured `58.13` coding / `42.23` story / `50.18` average tok/s at 4096-token smoke context. This is a lightweight generation result, not a full-context benchmark.
 - Removed the retired Flash model/projector from the host and replaced its numbered menu entry with `turbo-q8-mtp`; the DFlash2 profile remains explicit CLI-only.
+
+Completed 2026-09-04 — Q4-KV Hauhau production promotion:
+
+- Promoted menu option [4], `hauhau-q8-fastmtp-q4kv-xhigh`, to the default Qwen3.8 profile after the latest operator comparison found better output and speed.
+- The production profile keeps FastMTP n=4, three native-262K slots, BF16 vision, and maximum supported `xhigh` reasoning while changing both K and V caches to `q4_0`.
+- Updated the Hive custom miner default and launcher default. `hauhau-q8-fastmtp` remains available as the Q8-KV fallback; TURBO and DFlash2 settings remain unchanged.

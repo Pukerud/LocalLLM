@@ -69,7 +69,7 @@ sync
 printf '\nHiveOS LLM miner installed.\n'
 printf '  MINER=custom\n'
 printf '  CUSTOM_MINER=%s\n' "$CUSTOM_NAME"
-printf '  Profile: hauhau-q8-fastmtp\n'
+printf '  Profile: hauhau-q8-fastmtp-q4kv-xhigh\n'
 printf '  osn.service was not stopped or modified.\n'
 printf '\nStart it with: miner start\n'
 printf 'Stop it with:  miner stop\n'

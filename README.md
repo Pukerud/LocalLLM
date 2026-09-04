@@ -2,9 +2,11 @@
 
 Local NVIDIA-GPU launchers for the current Qwen3.8 profiles, with a general llama.cpp fallback. Only one server should use port `8080` at a time.
 
-> **Current primary:** Qwen3.8-27B HauhauCS Q8 + vision + FastMTP, auto-scaled across all detected RTX GPUs. The current four-GPU host runs three native-262K slots with Q8 KV.
+> **Current primary:** Qwen3.8-27B HauhauCS Q8 + vision + FastMTP, auto-scaled across all detected RTX GPUs. The current four-GPU host runs three native-262K slots with Q4_0 K/V and xhigh reasoning.
 >
-> **Available alternative:** Qwen3.8-27B TURBO Fable/Cold-Fusion MTP Q8_0 + BF16 vision, three native-262K slots with Q8 KV.
+> **Q8 fallback:** The same Hauhau FastMTP deployment with Q8 K/V remains available as profile `hauhau-q8-fastmtp`.
+>
+> **Available alternative:** Qwen3.8-27B TURBO Fable/Cold-Fusion MTP Q8_0 + BF16 vision, three native-262K slots with Q8 K/V.
 
 ## Quick Start
 
@@ -20,24 +22,24 @@ llama.cpp profile menu.
 
 ```text
 HostLLM — Engine Picker
-  [1] Qwen3.8-27B — vision | auto-scaled native-262K slots | FastMTP + Q8 KV
+  [1] Qwen3.8-27B — vision | auto-scaled native-262K slots | FastMTP + Q4_0 K/V | xhigh reasoning
   [Q] Qwen3.8 profile menu (alias for [1])
   [2] llama.cpp — general GGUF fallback
 
 Qwen3.8 Quick Start (inside [Q]; choose by use case)
   Stable profiles:
   [1] Hauhau Q8 + native MTP | SAME model as [2] | vision | 1 slot / F16 KV / reference fallback | speed: cached result
-  [2] Hauhau Q8 + FastMTP | SAME model as [1] | stable production / multi-user | vision | 3 slots / Q8 KV | speed: cached result
+  [2] Hauhau Q8 + FastMTP | SAME model as [1] | Q8 KV fallback | vision | 3 slots | speed: cached result
   [3] Qwen3.8-27B TURBO MTP Q8_0 | new Q8 model | vision | thinking xhigh (model max; concise TURBO reasoning) | 3 slots / native 262K each / Q8 KV | speed: cached result
-  [4] Hauhau Q8 + FastMTP | same model/settings as [2] | vision | Q4_0 K/V | xhigh (maximum supported) reasoning | manual comparison test
+  [4] Hauhau Q8 + FastMTP | CURRENT production | vision | Q4_0 K/V | xhigh (maximum supported) reasoning | 3 slots
   [s] Run short speed tests for installed profiles (thinking off for measurement)
   DFlash2 is CLI-only: text-only/no vision, experimental
   [q] Cancel
 ```
 
-Normal menu starts keep thinking enabled. Stable profiles use `xhigh`; option
-[4] intentionally uses Q4_0 K/V and `xhigh`, the maximum supported reasoning
-level, for an isolated comparison.
+Normal menu starts keep thinking enabled at `xhigh`. Option [4] is the
+current production profile, using Q4_0 K/V and `xhigh`, the maximum supported
+reasoning level. Option [2] retains Q8 K/V as the fallback.
 TURBO uses `xhigh`, which is its maximum supported reasoning level; the model
 template does not support the literal `max` value. This selects the model's
 maximum mode but cannot override TURBO's trained short-reasoning behavior.
@@ -55,7 +57,7 @@ No full-context generation is used by the speed tests. The server may still star
 
 ## HiveOS LLM miner
 
-The retained Hauhau FastMTP profile can run as HiveOS's official custom miner,
+The current Hauhau Q4-KV FastMTP profile can run as HiveOS's official custom miner,
 so it appears in the HiveOS dashboard and follows the normal `miner start` /
 `miner stop` lifecycle. Install it from the repository root as root:
 
@@ -64,7 +66,7 @@ so it appears in the HiveOS dashboard and follows the normal `miner start` /
 miner start
 ```
 
-The custom miner launches `hauhau-q8-fastmtp` directly and deliberately leaves
+The custom miner launches `hauhau-q8-fastmtp-q4kv-xhigh` directly and deliberately leaves
 `osn.service` running. It auto-detects all available GPUs and uses three native
 262K slots on the current four-RTX-3090 host (two slots on the original
 three-GPU layout). When OctaSpace rents the node, its normal HiveOS `miner stop`
@@ -79,27 +81,28 @@ telemetry remain visible in HiveOS. Remove it with `./uninstall-hive-llm-miner.s
 
 Measured on 2026-08-27–2026-09-04 using short coding and prose prompts. These are lightweight generation measurements, not full-context benchmarks; the current rows use the configured multi-GPU slot profiles.
 
-### Manual Q4 KV / maximum-reasoning comparison
+### Current Q4 KV / maximum-reasoning production profile
 
-Menu option **[4]** (profile `hauhau-q8-fastmtp-q4kv-xhigh`) deliberately keeps
+Menu option **[4]** (profile `hauhau-q8-fastmtp-q4kv-xhigh`) is the current
+production profile and deliberately keeps
 the Hauhau Q8_K_P model, BF16 vision projector, FastMTP sidecar, detected GPU
 layout, slot count, native 262K context per slot, and sampling defaults from
 option **[2]**. It changes the KV cache to `q4_0` for both K and V while keeping
-normal reasoning at `xhigh`, the maximum supported level. It is opt-in, is not
-used by the Hive miner, and
-is excluded from the standard `--speed-test-all` run. Start it with:
+normal reasoning at `xhigh`, the maximum supported level. It is used by the
+Hive miner and included in the standard `--speed-test-all` run. Option [2]
+(`hauhau-q8-fastmtp`) remains the Q8-KV fallback. Start it manually with:
 
 ```bash
 ./v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q4kv-xhigh
 ```
 
 Smoke and speed modes intentionally disable reasoning; use `--quickstart` or
-the dashboard/API when comparing the medium-reasoning behavior.
+the dashboard/API when comparing the xhigh-reasoning behavior.
 
 | Profile | Coding | Story | Average | Notes |
 |---|---:|---:|---:|---|
 | Hauhau Q8 native MTP | 56.87 tok/s | 40.62 tok/s | **48.74 tok/s** | BF16 vision projector |
-| Hauhau Q8 FastMTP | 76.47 tok/s | 48.81 tok/s | **62.64 tok/s** | current 4-GPU production; FastMTP n=4, 3 slots / 262K each / Q8 KV; menu speed test, 2026-09-03 |
+| Hauhau Q8 FastMTP | 76.47 tok/s | 48.81 tok/s | **62.64 tok/s** | previous Q8-KV 4-GPU baseline and fallback; FastMTP n=4, 3 slots / 262K each; menu speed test, 2026-09-03 |
 | TURBO MTP Q8_0 | 58.13 tok/s | 42.23 tok/s | **50.18 tok/s** | DavidAU TURBO MTP Q8_0; current upstream 4cbe8b070, 3 slots / 262K each / Q8 K/V; short menu speed test, 2026-09-04 |
 | Hauhau Q8 + DFlash2 Q4 n=5 | 86.52 tok/s | 38.67 tok/s | **62.59 tok/s** | upstream master `4e97ac86`; text-only; reversed layer-device order; opt-in candidate |
 
@@ -224,8 +227,8 @@ Short 4096-token A/B checks using the same two prompts measured:
 
 These are lightweight single-request measurements, not full-context benchmarks.
 The 60.39 tok/s FastMTP figure is the historical single-slot F16-KV baseline;
-current four-GPU production uses FastMTP n=4, three slots with Q8 KV, and measures
-63.60 tok/s on the updated short benchmark (the original three-GPU layout used
+The current four-GPU production uses FastMTP n=4, three slots with Q4_0 K/V and
+xhigh reasoning; the Q8-KV profile remains the fallback. The original three-GPU layout used
 n=3 and two slots).
 
 The official Q4 DFlash2 draft was downloaded from
@@ -269,7 +272,7 @@ are retained under the host's `~/.local/share/localllm-qwen38/logs/` and
 - TURBO uses isolated current-upstream llama.cpp `4cbe8b070` (`4cbe8b070bb040f3b95845408f100fbf5fb746f1`), CUDA 12.9, and `sm_86`.
 - RTX 3090 builds use CUDA architecture `sm_86`.
 - Hauhau and TURBO use layer split across all detected GPUs with equal dynamic `--tensor-split` (currently `1,1,1,1`); this host reports PHB topology and no usable peer-to-peer link.
-- F16 KV cache is used by the single-slot native Hauhau profile; Hauhau FastMTP and TURBO use `q8_0` K/V with aggregate context `262144 × slots`, so every slot retains native 262144 context. TURBO defaults to embedded native MTP `n=2` and three slots on this four-GPU host.
+- F16 KV cache is used by the single-slot native Hauhau profile; the current Hauhau FastMTP profile uses `q4_0` K/V, while `hauhau-q8-fastmtp` remains the Q8-KV fallback. TURBO uses `q8_0` K/V. All retain aggregate context `262144 × slots`, so every slot retains native 262144 context. TURBO defaults to embedded native MTP `n=2` and three slots on this four-GPU host.
 - FastMTP uses the publisher sidecar and its pinned qwen35-compatible patch.
 - All Qwen3.8 data, runtimes, logs, and state live below:
 
@@ -288,7 +291,7 @@ After Quick Start finishes, the launcher shows a live dashboard. Press **[2]** t
 ==================================================================
   QWEN3.8 SERVER RUNNING
 ==================================================================
-  Profile:  Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP / 3 slots / 262K each / Q8 KV
+  Profile:  Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP / 3 slots / 262K each / Q4_0 K/V
   Model:    Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-Q8_K_P.gguf
   Context:  262144 per slot  |  Slots: 3  |  KV: Q8_0  |  Speculation: FastMTP (3-token draft)
   Vision:   ON (BF16 projector)
@@ -336,9 +339,9 @@ Direct dashboard/status commands:
 The active menu intentionally stays small:
 
 ```text
-  [1] Qwen3.8-27B        vision │ auto-scaled native 262K slots │ FastMTP + Q8 KV
+  [1] Qwen3.8-27B        vision │ auto-scaled native 262K slots │ FastMTP + Q4_0 K/V │ xhigh
       Uses all detected GPUs; 3 users + n=4 draft on 4x RTX 3090
-      HauhauCS and TURBO Q8 profiles with cached speed results
+      HauhauCS Q4 production, Q8 fallback, and TURBO profiles with cached speed results
   [Q] Qwen3.8 profile menu (alias for [1])
   [2] llama.cpp          general GGUF fallback
   [9] Kill All
@@ -422,7 +425,7 @@ The old launchers were built around Qwen3.6 model files, Qwen3.6 draft models, Q
 - BeeLlama DFlash benchmarks tested Qwen3.6 target/draft combinations at roughly 100K context with TurboQuant/TCQ KV settings.
 - The old benchmark scripts measured different prompts, models, contexts, KV types, and hardware. Their numbers are not directly comparable to the current Qwen3.8 smoke-speed results.
 
-The current comparable lightweight measurements are the Qwen3.8 table above: four-GPU Hauhau FastMTP averages **62.64 tok/s**, while the four-GPU TURBO MTP Q8_0 profile averages **50.18 tok/s**. These are short tests, not full-context benchmarks.
+The comparable lightweight measurements in the Qwen3.8 table include the historic four-GPU Hauhau Q8-KV fallback at **62.64 tok/s** and the four-GPU TURBO MTP Q8_0 profile at **50.18 tok/s**. The current Q4-KV production result is selected from the latest operator test; these are short tests, not full-context benchmarks.
 
 ### BeeLlama preview history
 
