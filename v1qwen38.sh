@@ -238,15 +238,19 @@ Usage:
 Profiles:
   hauhau-q8          HauhauCS Q8_K_P + BF16 vision, native 262K, embedded MTP
   hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, auto-scaled slots/draft length
+  hauhau-q8-fastmtp-q4kv-medium
+                     Same Hauhau FastMTP settings with Q4_0 K/V and medium reasoning (manual test)
   turbo-q8-mtp       Qwen3.8-27B TURBO MTP Q8_0 + BF16 vision, native 262K, Q8 KV
   hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K (explicit CLI-only experiment)
 
 --smoke uses a 4096-token context, one short text request, and one small PNG
 request. It never sends a long-context prompt. --quickstart uses the profile's
 configured native context and leaves the server running. Normal starts keep
-thinking enabled at xhigh; for TURBO, xhigh is the model's maximum supported
-reasoning level, but its training intentionally keeps the reasoning block short.
-Smoke and speed tests intentionally disable reasoning.
+thinking enabled: stable profiles use xhigh, while the opt-in
+hauhau-q8-fastmtp-q4kv-medium comparison profile uses medium reasoning.
+For TURBO, xhigh is the model's maximum supported reasoning level, but its
+training intentionally keeps the reasoning block short. Smoke and speed tests
+intentionally disable reasoning.
 EOF
 }
 
@@ -333,6 +337,7 @@ configure_profile() {
     SERVER_CTX=262144
     PARALLEL=1
     KV_TYPE="f16"
+    REASONING_EFFORT="xhigh"
     case "$PROFILE" in
         hauhau-q8)
             PROFILE_LABEL="Qwen3.8-27B HauhauCS Q8_K_P / vision / native 262K"
@@ -359,6 +364,24 @@ configure_profile() {
             SERVER_CTX=$((FULL_CTX * FAST_MTP_SLOTS))
             PARALLEL="$FAST_MTP_SLOTS"
             KV_TYPE="q8_0"
+            SPEC_MODE="fast"
+            ;;
+        hauhau-q8-fastmtp-q4kv-medium)
+            FAST_MTP_SLOTS="$(default_fast_mtp_slots)"
+            FAST_MTP_N_MAX="$(default_fast_mtp_n_max)"
+            [[ "$FAST_MTP_SLOTS" =~ ^[1-4]$ ]] || die "QWEN38_FASTMTP_SLOTS must be an integer from 1 to 4"
+            [[ "$FAST_MTP_N_MAX" =~ ^[1-7]$ ]] || die "QWEN38_FASTMTP_N_MAX must be an integer from 1 to 7"
+            PROFILE_LABEL="Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP n=${FAST_MTP_N_MAX} / ${FAST_MTP_SLOTS} slots / 262K each / Q4 KV / medium reasoning / manual test"
+            RUNTIME_KIND="hauhau"
+            RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen38-hauhau"
+            MODEL_PATH="${MODEL_ROOT}/hauhau/${HAUHAU_MODEL}"
+            MMPROJ_PATH="${MODEL_ROOT}/hauhau/${HAUHAU_MMPROJ}"
+            DRAFT_PATH="${MODEL_ROOT}/hauhau/${HAUHAU_DRAFT}"
+            FULL_CTX=262144
+            SERVER_CTX=$((FULL_CTX * FAST_MTP_SLOTS))
+            PARALLEL="$FAST_MTP_SLOTS"
+            KV_TYPE="q4_0"
+            REASONING_EFFORT="medium"
             SPEC_MODE="fast"
             ;;
         hauhau-q8-dflash2)
@@ -638,6 +661,7 @@ context=$FULL_CTX
 server_context=$SERVER_CTX
 parallel=$PARALLEL
 kv_cache=$KV_TYPE
+reasoning_effort=$REASONING_EFFORT
 speculation=$SPEC_MODE
 log=$SERVER_LOG
 EOF
@@ -752,7 +776,7 @@ make_server_args() {
     else
         SERVER_ARGS+=(
             --reasoning on
-            --reasoning-effort xhigh
+            --reasoning-effort "$REASONING_EFFORT"
             --reasoning-preserve
             --reasoning-format deepseek
         )
@@ -1297,7 +1321,7 @@ show_dashboard() {
         if [[ "$PROFILE" == "turbo-q8-mtp" ]]; then
             printf '  Reasoning: ON | effort: xhigh (model max; concise TURBO reasoning)\n'
         else
-            printf '  Reasoning: ON | effort: xhigh\n'
+            printf '  Reasoning: ON | effort: %s\n' "$REASONING_EFFORT"
         fi
         echo ""
         echo "  Connect from any device on your network:"
@@ -1349,6 +1373,7 @@ choose_profile() {
     say "  [1] Hauhau Q8 + native MTP | SAME Hauhau model as [2] | vision | 1 slot / F16 KV / reference fallback | speed: $(speed_display hauhau-q8)"
     say "  [2] Hauhau Q8 + FastMTP | SAME Hauhau model as [1] | stable production / multi-user | vision | ${FAST_MTP_SLOTS} slots / Q8 KV | speed: $(speed_display hauhau-q8-fastmtp)"
     say "  [3] Qwen3.8-27B TURBO MTP Q8_0 | new Q8 model | vision | thinking xhigh (model max; concise TURBO reasoning) | ${TURBO_SLOTS} slots / native 262K each / Q8 KV | speed: $(speed_display turbo-q8-mtp)"
+    say "  [4] Hauhau Q8 + FastMTP | SAME model/settings as [2] | vision | Q4_0 K/V | medium reasoning | manual comparison test | speed: $(speed_display hauhau-q8-fastmtp-q4kv-medium)"
     say "  [s] Run short speed tests for all standard profiles"
     say "      DFlash2 is hidden here; explicit CLI only: --profile hauhau-q8-dflash2 (text-only, no vision)"
 
@@ -1358,6 +1383,7 @@ choose_profile() {
         1) PROFILE="hauhau-q8" ;;
         2) PROFILE="hauhau-q8-fastmtp" ;;
         3) PROFILE="turbo-q8-mtp" ;;
+        4) PROFILE="hauhau-q8-fastmtp-q4kv-medium" ;;
         s|S)
             PROFILE="hauhau-q8"
             MODE="speed-all"
