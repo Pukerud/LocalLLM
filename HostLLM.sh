@@ -368,7 +368,7 @@ while true; do
     echo -e "  ${BOLD}[1]${RESET} Qwen3.8-27B  ⚡ vision │ auto-scaled native 262K slots │ FastMTP + Q8 KV"
     echo -e "      Uses all detected GPUs; 3 users + n=4 draft on 4x RTX 3090"
     echo -e "  ${BOLD}[Q]${RESET} Qwen3.8 profile menu (alias for [1])"
-    echo -e "      HauhauCS and uncensored Flash-Next profiles with cached speed results"
+    echo -e "      HauhauCS and Qwen3.8 TURBO profiles with cached speed results"
     echo ""
     echo "  Engines (manual):"
     echo "  ─────────────────"

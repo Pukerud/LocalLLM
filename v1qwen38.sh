@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Qwen3.8 / Qwen3.8-Flash-Next isolated LocalLLM launcher.
+# Qwen3.8 isolated LocalLLM launcher.
 # This script deliberately does not touch Hive, watchdog, or miner settings.
 
 set -Eeuo pipefail
@@ -44,6 +44,7 @@ NO_DASHBOARD=0
 SERVER_PID=""
 SERVER_LOG=""
 DFLASH_N_MAX="${QWEN38_DFLASH_N_MAX:-5}"
+TURBO_MTP_N_MAX="${QWEN38_TURBO_MTP_N_MAX:-2}"
 
 # Pinned/provenance data. Re-check PR head before intentionally updating it.
 readonly HAUHAU_REPO="HauhauCS/Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-MTP-GGUF"
@@ -54,12 +55,13 @@ readonly HAUHAU_DRAFT="Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-FastMTP-32K.gg
 readonly HAUHAU_MODEL_SHA="4e7735df4d1e2ec721f2551f531b815702a2f89123238c564797eda4b0304bc2"
 readonly HAUHAU_MMPROJ_SHA="5681b690bcb8eb10cd28d62d078cb4e01521a3ea4880a3fc7d54de72de2dd142"
 readonly HAUHAU_DRAFT_SHA="115e618e1f73cb50817ed5856f0551c6bf9c3d94df96f440eaca78dc63b8968b"
-readonly QWEN4EXP_COMMIT="4cbe8b070bb040f3b95845408f100fbf5fb746f1"
-readonly FLASH_REPO="cygnal/Qwen3.8-Flash-Next-Uncensored-IQ4XS-NGQ4-GGUF"
-readonly FLASH_MODEL="Qwen3.8-Flash-Next-Uncensored-IQ4XS-NGQ4.gguf"
-readonly FLASH_MODEL_SHA="cedf1e08063f6df77926e1169f67b327dcc6301b5b329589615bdf09d4895f7e"
-readonly FLASH_MMPROJ="mmproj-Qwen3.8-Flash-Next-Uncensored-BF16.gguf"
-readonly FLASH_MMPROJ_SHA="9c56f5aa2d30242325a91aa3e4c03348e9944648f4af6692a7a86db93aae7ffa"
+readonly TURBO_REPO="DavidAU/Qwen3.8-27B-TURBO-Fable-Cold-Fusion-735-882-Heretic-Uncensored-NEO-CODER-MAX-MTP-GGUF"
+readonly TURBO_REPO_COMMIT="6408ab122688c54ba5b7cea19084307ef153410f"
+readonly TURBO_LLAMA_COMMIT="4cbe8b070bb040f3b95845408f100fbf5fb746f1"
+readonly TURBO_MODEL="Qwen3.8-27B-TurboFCFusion-735-882-Here-Uncen-NEO-CODER-MAX-MTP-Q8_0.gguf"
+readonly TURBO_MODEL_SHA="54f27515edb20675f289f99b9c6d40d114fb634db21bae3fd4c901661aba85b9"
+readonly TURBO_MMPROJ="mmproj-BF16.gguf"
+readonly TURBO_MMPROJ_SHA="b0d8d89e9c9c90e0fb8ca74742d9d9bd7cc0f966a29b6f8c14227000ea6bd89e"
 readonly UPSTREAM_COMMIT="4e97ac86ebe2c4cb8212d98d2641ad6768810896"
 readonly DFLASH_REPO="incoai/Qwen3.8-27B-DFlash2-GGUF"
 readonly DFLASH_MODEL="Qwen3.8-27B-DFlash2-Q4_K_M.gguf"
@@ -87,9 +89,16 @@ GPU_DEVICE_LIST=""
 GPU_DEVICE_LIST_REVERSED=""
 GPU_TENSOR_SPLIT=""
 GPU_SUMMARY="GPU information unavailable"
-FLASH_SLOTS=1
+TURBO_SLOTS=1
 
 mkdir -p "$DATA_ROOT" "$STATE_ROOT" "$RUNTIME_ROOT" "$MODEL_ROOT" "$LOG_ROOT"
+if [[ "${EUID}" -eq 0 && -n "${qwen38_owner:-}" && "${qwen38_owner}" != "root" ]]; then
+    qwen38_group="$(id -gn "$qwen38_owner" 2>/dev/null || printf '%s' "$qwen38_owner")"
+    # Keep shared state writable after a root-shell invocation without
+    # recursively walking large model/runtime trees on every start.
+    chown "$qwen38_owner:$qwen38_group" "$DATA_ROOT" "$STATE_ROOT" "$RUNTIME_ROOT" "$MODEL_ROOT" "$LOG_ROOT" 2>/dev/null || true
+    find "$STATE_ROOT" "$LOG_ROOT" -maxdepth 1 -type f -exec chown "$qwen38_owner:$qwen38_group" {} + 2>/dev/null || true
+fi
 SPEED_CACHE="${STATE_ROOT}/speed-results.tsv"
 
 say() { printf '%s\n' "$*"; }
@@ -190,10 +199,12 @@ default_fast_mtp_slots() {
     fi
 }
 
-default_flash_slots() {
-    if [[ -n "${QWEN38_FLASH_SLOTS:-}" ]]; then
-        printf '%s' "$QWEN38_FLASH_SLOTS"
+default_turbo_slots() {
+    if [[ -n "${QWEN38_TURBO_SLOTS:-}" ]]; then
+        printf '%s' "$QWEN38_TURBO_SLOTS"
     elif (( GPU_COUNT >= 4 )); then
+        printf '3'
+    elif (( GPU_COUNT >= 3 )); then
         printf '2'
     else
         printf '1'
@@ -227,7 +238,7 @@ Usage:
 Profiles:
   hauhau-q8          HauhauCS Q8_K_P + BF16 vision, native 262K, embedded MTP
   hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, auto-scaled slots/draft length
-  flash-iq4          Flash-Next uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV/auto-fit, current upstream 4cbe8b070
+  turbo-q8-mtp       Qwen3.8-27B TURBO MTP Q8_0 + BF16 vision, native 262K, Q8 KV
   hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K (explicit CLI-only experiment)
 
 --smoke uses a 4096-token context, one short text request, and one small PNG
@@ -286,7 +297,7 @@ parse_args() {
                 SPEC_OVERRIDE="none"
                 ;;
             --spec)
-                [[ $# -ge 2 ]] || die "--spec requires none, native, fast, ngram, or dflash2"
+                [[ $# -ge 2 ]] || die "--spec requires none, native, fast, or dflash2"
                 SPEC_OVERRIDE="$2"
                 shift
                 ;;
@@ -316,7 +327,6 @@ parse_args() {
 }
 
 configure_profile() {
-    local qdir
     SERVER_CTX=262144
     PARALLEL=1
     KV_TYPE="f16"
@@ -359,21 +369,21 @@ configure_profile() {
             FULL_CTX=262144
             SPEC_MODE="dflash2"
             ;;
-        flash-iq4)
-            qdir="IQ4XS-NGQ4"
-            FLASH_SLOTS="$(default_flash_slots)"
-            [[ "$FLASH_SLOTS" =~ ^[1-2]$ ]] || die "QWEN38_FLASH_SLOTS must be 1 or 2"
-            PROFILE_LABEL="Qwen3.8-Flash-Next Uncensored ${qdir} / vision / Q8 KV / ${FLASH_SLOTS} slots / current upstream 4cbe8b070"
-            RUNTIME_KIND="flash"
-            RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen4exp-upstream-4cbe8b07"
-            MODEL_PATH="${MODEL_ROOT}/flash-uncensored/${qdir}/${FLASH_MODEL}"
-            MMPROJ_PATH="${MODEL_ROOT}/flash-uncensored/${qdir}/${FLASH_MMPROJ}"
+        turbo-q8-mtp)
+            TURBO_SLOTS="$(default_turbo_slots)"
+            [[ "$TURBO_SLOTS" =~ ^[1-4]$ ]] || die "QWEN38_TURBO_SLOTS must be an integer from 1 to 4"
+            [[ "$TURBO_MTP_N_MAX" =~ ^[1-7]$ ]] || die "QWEN38_TURBO_MTP_N_MAX must be an integer from 1 to 7"
+            PROFILE_LABEL="Qwen3.8-27B TURBO MTP Q8_0 / vision / native 262K / ${TURBO_SLOTS} slots / Q8 KV"
+            RUNTIME_KIND="turbo"
+            RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen38-turbo-upstream-4cbe8b07"
+            MODEL_PATH="${MODEL_ROOT}/turbo-fable/MTP-Q8_0/${TURBO_MODEL}"
+            MMPROJ_PATH="${MODEL_ROOT}/turbo-fable/MTP-Q8_0/${TURBO_MMPROJ}"
             DRAFT_PATH=""
             FULL_CTX=262144
-            SERVER_CTX=$((FULL_CTX * FLASH_SLOTS))
-            PARALLEL="$FLASH_SLOTS"
+            SERVER_CTX=$((FULL_CTX * TURBO_SLOTS))
+            PARALLEL="$TURBO_SLOTS"
             KV_TYPE="q8_0"
-            SPEC_MODE="none"
+            SPEC_MODE="native"
             ;;
         *)
             die "unknown profile '$PROFILE'"
@@ -382,7 +392,7 @@ configure_profile() {
 
     if [[ -n "$SPEC_OVERRIDE" ]]; then
         case "$SPEC_OVERRIDE" in
-            none|native|fast|ngram|dflash2) SPEC_MODE="$SPEC_OVERRIDE" ;;
+            none|native|fast|dflash2) SPEC_MODE="$SPEC_OVERRIDE" ;;
             *) die "invalid --spec '$SPEC_OVERRIDE'" ;;
         esac
     fi
@@ -508,12 +518,11 @@ ensure_dflash_assets() {
     download_file "$draft_base/$DFLASH_MODEL" "$draft_dir/$DFLASH_MODEL" "$DFLASH_MODEL_SHA"
 }
 
-ensure_flash_assets() {
-    local dir="${MODEL_ROOT}/flash-uncensored/IQ4XS-NGQ4"
-    local base="https://huggingface.co/${FLASH_REPO}/resolve/main"
-    mkdir -p "$dir"
-    download_file "$base/$FLASH_MODEL" "$dir/$FLASH_MODEL" "$FLASH_MODEL_SHA"
-    download_file "$base/$FLASH_MMPROJ" "$dir/$FLASH_MMPROJ" "$FLASH_MMPROJ_SHA"
+ensure_turbo_assets() {
+    local dir="${MODEL_ROOT}/turbo-fable/MTP-Q8_0"
+    local base="https://huggingface.co/${TURBO_REPO}/resolve/${TURBO_REPO_COMMIT}"
+    download_file "$base/$TURBO_MODEL" "$dir/$TURBO_MODEL" "$TURBO_MODEL_SHA"
+    download_file "$base/$TURBO_MMPROJ" "$dir/$TURBO_MMPROJ" "$TURBO_MMPROJ_SHA"
 }
 
 ensure_assets() {
@@ -521,9 +530,7 @@ ensure_assets() {
     case "$RUNTIME_KIND" in
         hauhau) ensure_hauhau_assets ;;
         upstream) ensure_dflash_assets ;;
-        flash)
-            ensure_flash_assets
-            ;;
+        turbo) ensure_turbo_assets ;;
         *) die "internal error: unknown runtime kind '$RUNTIME_KIND'" ;;
     esac
     say "Model assets ready for ${PROFILE}."
@@ -572,14 +579,14 @@ build_runtime() {
         git apply --check "$patch_file"
         git apply "$patch_file"
         say "Applied HauhauCS FastMTP patch to pinned qwen35 runtime"
-    elif [[ "$RUNTIME_KIND" == "flash" ]]; then
+    elif [[ "$RUNTIME_KIND" == "turbo" ]]; then
         git fetch --quiet origin master
-        if ! git cat-file -e "${QWEN4EXP_COMMIT}^{commit}" 2>/dev/null; then
-            git fetch --quiet origin "$QWEN4EXP_COMMIT"
+        if ! git cat-file -e "${TURBO_LLAMA_COMMIT}^{commit}" 2>/dev/null; then
+            git fetch --quiet origin "$TURBO_LLAMA_COMMIT"
         fi
-        git reset --hard --quiet "$QWEN4EXP_COMMIT"
+        git reset --hard --quiet "$TURBO_LLAMA_COMMIT"
         git clean -fdx >/dev/null
-        say "Using qwen4exp upstream commit $QWEN4EXP_COMMIT"
+        say "Using current upstream llama.cpp commit ${TURBO_LLAMA_COMMIT:0:9} for TURBO"
     else
         git fetch --quiet origin master
         if ! git cat-file -e "${UPSTREAM_COMMIT}^{commit}" 2>/dev/null; then
@@ -599,7 +606,7 @@ build_runtime() {
         -DCMAKE_BUILD_TYPE=Release
         -DCMAKE_CUDA_ARCHITECTURES=86
     )
-    if [[ ( "$RUNTIME_KIND" == "upstream" || "$RUNTIME_KIND" == "flash" ) && -x /usr/local/cuda-12.9/bin/nvcc ]]; then
+    if [[ ( "$RUNTIME_KIND" == "upstream" || "$RUNTIME_KIND" == "turbo" ) && -x /usr/local/cuda-12.9/bin/nvcc ]]; then
         cmake_args+=( -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.9/bin/nvcc )
     fi
     cmake -S . -B build "${cmake_args[@]}" \
@@ -688,7 +695,10 @@ check_port_free() {
 }
 
 make_server_args() {
-    local ctx="$SERVER_CTX" batch=512 ubatch=128
+    local ctx="$SERVER_CTX" batch=512 ubatch=128 native_mtp_n_max=2
+    if [[ "$PROFILE" == "turbo-q8-mtp" ]]; then
+        native_mtp_n_max="$TURBO_MTP_N_MAX"
+    fi
     if (( SMOKE )); then
         ctx=4096
         batch=256
@@ -703,7 +713,7 @@ make_server_args() {
     fi
     SERVER_ARGS+=(
         --ctx-size "$ctx"
-        --n-gpu-layers "$([[ "$RUNTIME_KIND" == "flash" ]] && echo auto || echo all)"
+        --n-gpu-layers all
         --split-mode layer
         --flash-attn on
         --batch-size "$batch"
@@ -731,13 +741,7 @@ make_server_args() {
     fi
     SERVER_ARGS+=(--device "$target_devices")
 
-    if [[ "$PROFILE" == "flash-iq4" ]]; then
-        # The larger IQ4 model needs quantized KV plus llama.cpp's automatic
-        # layer fitting to leave enough room for native 262K context.
-        SERVER_ARGS+=(--cache-type-k q8_0 --cache-type-v q8_0)
-    else
-        SERVER_ARGS+=(--tensor-split "$GPU_TENSOR_SPLIT" --cache-type-k "$KV_TYPE" --cache-type-v "$KV_TYPE")
-    fi
+    SERVER_ARGS+=(--tensor-split "$GPU_TENSOR_SPLIT" --cache-type-k "$KV_TYPE" --cache-type-v "$KV_TYPE")
 
     if (( SMOKE )); then
         # Keep the verification request short and deterministic enough to finish quickly.
@@ -751,9 +755,8 @@ make_server_args() {
         )
     fi
 
-    # The dense model card uses no-mmap for its FastMTP reference. Flash-Next
-    # must remain mmap-backed because its PLE/n-gram tables are much larger.
-    # Use the non-deprecated spelling supported by both pinned runtimes.
+    # FastMTP uses no-mmap; dense native-MTP targets use mmap. Use the
+    # non-deprecated spelling supported by the pinned runtime.
     if [[ "$SPEC_MODE" == "fast" || "$SPEC_MODE" == "dflash2" ]]; then
         SERVER_ARGS+=(--load-mode none)
     else
@@ -768,7 +771,7 @@ make_server_args() {
         none)
             ;;
         native)
-            SERVER_ARGS+=(--spec-type draft-mtp --spec-draft-n-max 2 --spec-draft-p-min 0)
+            SERVER_ARGS+=(--spec-type draft-mtp --spec-draft-n-max "$native_mtp_n_max" --spec-draft-p-min 0)
             ;;
         fast)
             [[ -n "$DRAFT_PATH" ]] || die "FastMTP profile has no draft path"
@@ -779,9 +782,6 @@ make_server_args() {
                 --spec-draft-n-max "$FAST_MTP_N_MAX"
                 --spec-draft-p-min 0
             )
-            ;;
-        ngram)
-            SERVER_ARGS+=(--spec-type ngram-mod)
             ;;
         dflash2)
             [[ -n "$DRAFT_PATH" ]] || die "DFlash2 profile has no draft path"
@@ -845,9 +845,7 @@ start_server() {
     SERVER_LOG="${LOG_ROOT}/${PROFILE}-$(date +%Y%m%d-%H%M%S).log"
     say "Starting: $PROFILE_LABEL"
     say "  context: ${FULL_CTX} per slot (server total ${SERVER_CTX}; ${PARALLEL} slots; smoke context: $([[ $SMOKE -eq 1 ]] && echo 4096 || echo no))"
-    if [[ "$PROFILE" == "flash-iq4" ]]; then
-        say "  GPUs: ${GPU_SUMMARY}, layer split auto-fit, Q8 KV, ${PARALLEL} slot(s)"
-    elif [[ "$PROFILE" == "hauhau-q8-dflash2" ]]; then
+    if [[ "$PROFILE" == "hauhau-q8-dflash2" ]]; then
         say "  GPUs: ${GPU_SUMMARY}, reversed layer split ${GPU_DEVICE_LIST_REVERSED}, ${KV_TYPE^^} KV, ${PARALLEL} slot(s)"
         say "  Vision: OFF (DFlash2 text-only profile)"
     else
@@ -991,11 +989,7 @@ speed_cache_row() {
 }
 
 speed_cache_key() {
-    if [[ "$PROFILE" == "flash-iq4" && "$SPEC_MODE" == "ngram" ]]; then
-        printf 'flash-iq4-ngram'
-    else
-        printf '%s' "$PROFILE"
-    fi
+    printf '%s' "$PROFILE"
 }
 
 speed_display() {
@@ -1131,7 +1125,7 @@ PY
 
 run_speed_test_all() {
     local original_profile="$PROFILE" original_smoke="$SMOKE" original_spec="$SPEC_OVERRIDE" rc=0 profile
-    for profile in hauhau-q8 hauhau-q8-fastmtp flash-iq4; do
+    for profile in hauhau-q8 hauhau-q8-fastmtp turbo-q8-mtp; do
         PROFILE="$profile"
         SPEC_OVERRIDE=""
         SMOKE=1
@@ -1278,7 +1272,6 @@ show_dashboard() {
         case "$SPEC_MODE" in
             native) spec_label="native MTP" ;;
             fast) spec_label="FastMTP (${FAST_MTP_N_MAX}-token draft)" ;;
-            ngram) spec_label="n-gram speculation" ;;
             dflash2) spec_label="DFlash2 Q4 (n=${DFLASH_N_MAX})" ;;
             *) spec_label="off" ;;
         esac
@@ -1341,16 +1334,14 @@ show_dashboard() {
 choose_profile() {
     FAST_MTP_SLOTS="$(default_fast_mtp_slots)"
     FAST_MTP_N_MAX="$(default_fast_mtp_n_max)"
-    FLASH_SLOTS="$(default_flash_slots)"
+    TURBO_SLOTS="$(default_turbo_slots)"
     say ""
     say "Qwen3.8 Quick Start (choose by use case)"
     say "  GPUs detected: ${GPU_SUMMARY}"
     say "  Stable profiles:"
     say "  [1] Hauhau Q8 + native MTP | SAME Hauhau model as [2] | vision | 1 slot / F16 KV / reference fallback | speed: $(speed_display hauhau-q8)"
     say "  [2] Hauhau Q8 + FastMTP | SAME Hauhau model as [1] | stable production / multi-user | vision | ${FAST_MTP_SLOTS} slots / Q8 KV | speed: $(speed_display hauhau-q8-fastmtp)"
-    say "  [3] Flash-Next Uncensored IQ4 | DIFFERENT IQ4 model | vision | speed-first | ${FLASH_SLOTS} slots / current upstream 4cbe8b070 | speed: $(speed_display flash-iq4)"
-    say "  Experimental:"
-    say "  [4] Flash-Next IQ4 + n-gram | SAME MODEL AS [3], NOT SMARTER | may be faster or slower on repetitive output | speed: $(speed_display flash-iq4-ngram)"
+    say "  [3] Qwen3.8-27B TURBO MTP Q8_0 | new Q8 model | vision | ${TURBO_SLOTS} slots / native 262K each / Q8 KV | speed: $(speed_display turbo-q8-mtp)"
     say "  [s] Run short speed tests for all standard profiles"
     say "      DFlash2 is hidden here; explicit CLI only: --profile hauhau-q8-dflash2 (text-only, no vision)"
 
@@ -1359,8 +1350,7 @@ choose_profile() {
     case "$choice" in
         1) PROFILE="hauhau-q8" ;;
         2) PROFILE="hauhau-q8-fastmtp" ;;
-        3) PROFILE="flash-iq4" ;;
-        4) PROFILE="flash-iq4"; SPEC_OVERRIDE="ngram" ;;
+        3) PROFILE="turbo-q8-mtp" ;;
         s|S)
             PROFILE="hauhau-q8"
             MODE="speed-all"
