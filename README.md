@@ -22,13 +22,15 @@ HostLLM — Engine Picker
   [Q] Qwen3.8 profile menu (alias for [1])
   [2] llama.cpp — general GGUF fallback
 
-Qwen3.8 Quick Start (inside [Q])
-  [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K       | speed: cached result
-  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + auto-scaled slots / 262K each / Q8 KV | speed: cached result
-  [3] Flash-Next Uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV + 2 slots / current upstream 4cbe8b070 | speed: cached result
-  [4] Flash-Next Uncensored IQ4XS-NGQ4 + ngram-mod (experimental, warm structured output) | speed: cached result
-  [5] HauhauCS Q8_K_P + DFlash2 Q4 n=5 (text-only, experimental) | speed: cached result
+Qwen3.8 Quick Start (inside [Q]; choose by use case)
+  Stable profiles:
+  [1] Hauhau Q8 + native MTP | SAME model as [2] | vision | 1 slot / F16 KV / reference fallback | speed: cached result
+  [2] Hauhau Q8 + FastMTP | SAME model as [1] | stable production / multi-user | vision | 3 slots / Q8 KV | speed: cached result
+  [3] Flash-Next Uncensored IQ4 | DIFFERENT IQ4 model | vision | speed-first | current upstream 4cbe8b070 | speed: cached result
+  Experimental:
+  [4] Flash-Next IQ4 + n-gram | SAME MODEL AS [3], NOT SMARTER | may be faster or slower | speed: cached result
   [s] Run short speed tests for installed profiles
+  DFlash2 is CLI-only: text-only/no vision, experimental
   [q] Cancel
 ```
 
@@ -118,11 +120,15 @@ The b10731 target loaded successfully with two native-262K slots
 text requests, vision, tool calling, and repeated JSON output all passed. The
 configured two-slot profile measured `60.46` tok/s coding and `60.33` prose.
 
-The optional `--spec ngram` / menu entry [4] is highly workload-dependent. After
-its warm-up, repeated JSON reached about `129–136` tok/s versus `58–64` tok/s
-without speculation; code reached about `90–145` tok/s, while prose varied from
-roughly `59–71` tok/s and can be slower. It remains opt-in rather than the
-normal Flash default.
+The optional `--spec ngram` / menu entry [4] uses the **same Flash IQ4 model as
+[3]**; it is not a smarter or different model. It is workload-dependent
+speculation: after warm-up, repeated JSON reached about `129–136` tok/s versus
+`58–64` tok/s without speculation in earlier tests; code reached about
+`90–145` tok/s, while prose varied from roughly `59–71` tok/s and can be
+slower. The fresh current-upstream menu test measured `66.30` coding / `65.69`
+story / `66.00` average versus `67.20` for normal Flash, while tool, vision,
+and schema-valid JSON checks passed. It remains opt-in rather than the normal
+Flash default.
 
 ### 2026-09-04 current-upstream Flash menu upgrade
 
@@ -210,8 +216,8 @@ acceptance, while the story prompt was about 0.26–0.44. Three short greedy
 parity prompts matched the non-speculative target exactly. Native-262144 health
 checks passed for both n=3 and n=5 without sending a long-context request.
 
-The DFlash2 candidate is exposed only as the explicit
-`hauhau-q8-dflash2` profile. It defaults to `n=5`, is text-only, and does not
+The DFlash2 candidate is exposed only as the explicit CLI
+`hauhau-q8-dflash2` profile and is intentionally hidden from the normal menu. It defaults to `n=5`, is text-only, and does not
 participate in the normal `--speed-test-all` set. Use:
 
 ```bash

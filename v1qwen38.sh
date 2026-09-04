@@ -228,7 +228,7 @@ Profiles:
   hauhau-q8          HauhauCS Q8_K_P + BF16 vision, native 262K, embedded MTP
   hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, auto-scaled slots/draft length
   flash-iq4          Flash-Next uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV/auto-fit, current upstream 4cbe8b070
-  hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K
+  hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K (explicit CLI-only experiment)
 
 --smoke uses a 4096-token context, one short text request, and one small PNG
 request. It never sends a long-context prompt. --quickstart uses the profile's
@@ -1343,15 +1343,16 @@ choose_profile() {
     FAST_MTP_N_MAX="$(default_fast_mtp_n_max)"
     FLASH_SLOTS="$(default_flash_slots)"
     say ""
-    say "Qwen3.8 Quick Start"
+    say "Qwen3.8 Quick Start (choose by use case)"
     say "  GPUs detected: ${GPU_SUMMARY}"
-    say "  [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K  |  speed: $(speed_display hauhau-q8)"
-    say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP n=${FAST_MTP_N_MAX} + ${FAST_MTP_SLOTS} slots / 262K each / Q8 KV  |  speed: $(speed_display hauhau-q8-fastmtp)"
-    say "  [3] Flash-Next Uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV + ${FLASH_SLOTS} slots / current upstream 4cbe8b070  |  speed: $(speed_display flash-iq4)"
-    say "  [4] Flash-Next Uncensored IQ4XS-NGQ4 + ngram-mod (experimental, warm structured output)  |  speed: $(speed_display flash-iq4-ngram)"
-    say "  [5] HauhauCS Q8_K_P + DFlash2 Q4 n=${DFLASH_N_MAX} (text-only, experimental)  |  speed: $(speed_display hauhau-q8-dflash2)"
+    say "  Stable profiles:"
+    say "  [1] Hauhau Q8 + native MTP | SAME Hauhau model as [2] | vision | 1 slot / F16 KV / reference fallback | speed: $(speed_display hauhau-q8)"
+    say "  [2] Hauhau Q8 + FastMTP | SAME Hauhau model as [1] | stable production / multi-user | vision | ${FAST_MTP_SLOTS} slots / Q8 KV | speed: $(speed_display hauhau-q8-fastmtp)"
+    say "  [3] Flash-Next Uncensored IQ4 | DIFFERENT IQ4 model | vision | speed-first | ${FLASH_SLOTS} slots / current upstream 4cbe8b070 | speed: $(speed_display flash-iq4)"
+    say "  Experimental:"
+    say "  [4] Flash-Next IQ4 + n-gram | SAME MODEL AS [3], NOT SMARTER | may be faster or slower on repetitive output | speed: $(speed_display flash-iq4-ngram)"
     say "  [s] Run short speed tests for all standard profiles"
-    say "      DFlash2 is opt-in and text-only on this host; use --speed-test --profile hauhau-q8-dflash2"
+    say "      DFlash2 is hidden here; explicit CLI only: --profile hauhau-q8-dflash2 (text-only, no vision)"
 
     say "  [q] Cancel"
     read -r -p "Select: " choice
@@ -1360,7 +1361,6 @@ choose_profile() {
         2) PROFILE="hauhau-q8-fastmtp" ;;
         3) PROFILE="flash-iq4" ;;
         4) PROFILE="flash-iq4"; SPEC_OVERRIDE="ngram" ;;
-        5) PROFILE="hauhau-q8-dflash2" ;;
         s|S)
             PROFILE="hauhau-q8"
             MODE="speed-all"

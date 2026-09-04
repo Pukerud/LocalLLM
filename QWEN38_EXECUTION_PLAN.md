@@ -147,3 +147,9 @@ Completed 2026-09-04 — current-upstream Flash menu upgrade:
 - Replaced the Flash menu profile's b10731 pin with current upstream `4cbe8b070bb040f3b95845408f100fbf5fb746f1` and moved it to the versioned `llama-qwen4exp-upstream-4cbe8b07` runtime directory. Fresh Flash builds explicitly use CUDA Toolkit 12.9 and `sm_86`; the old b10731 runtime remains available for rollback.
 - Same-flag isolated testing measured approximately 486 versus 14.4 tok/s prompt processing at 512 tokens and 521 versus 13.5 tok/s at 2048 tokens compared with b10731. Current upstream loaded four native 262144-token slots and passed short text, JSON, tool, and BF16 vision checks.
 - Stopped the miner and `osn.service` for the deployment window, then verified the menu's download/build/smoke path, native-context health, and Flash API checks. The menu speed test measured `67.28` coding / `67.12` story / `67.20` average tok/s. Restored the existing Hauhau FastMTP profile afterward; `/health`, thinking, tool behavior, and the normal Hive custom-miner lifecycle passed.
+
+Completed 2026-09-04 — menu clarity and n-gram validation:
+
+- Clarified the choices by use case: [1] is the one-slot F16-KV Hauhau reference/fallback, [2] is the stable multi-user Hauhau FastMTP production profile, [3] is the different uncensored Flash IQ4 model, and [4] is the same Flash model as [3] with experimental speculation rather than a smarter model.
+- Removed DFlash2 from the normal numbered menu. The text-only experiment remains available explicitly as `--profile hauhau-q8-dflash2`.
+- Retested [4] on current upstream: `66.30` coding / `65.69` story / `66.00` average tok/s versus `67.20` normal Flash. Tool calling, BF16 vision, and schema-valid JSON passed, so n-gram remains an opt-in workload-specific experiment.
