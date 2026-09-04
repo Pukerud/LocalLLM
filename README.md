@@ -29,14 +29,15 @@ Qwen3.8 Quick Start (inside [Q]; choose by use case)
   [1] Hauhau Q8 + native MTP | SAME model as [2] | vision | 1 slot / F16 KV / reference fallback | speed: cached result
   [2] Hauhau Q8 + FastMTP | SAME model as [1] | stable production / multi-user | vision | 3 slots / Q8 KV | speed: cached result
   [3] Qwen3.8-27B TURBO MTP Q8_0 | new Q8 model | vision | thinking xhigh (model max; concise TURBO reasoning) | 3 slots / native 262K each / Q8 KV | speed: cached result
-  [4] Hauhau Q8 + FastMTP | same model/settings as [2] | vision | Q8_0 K/V | medium reasoning | manual comparison test
+  [4] Hauhau Q8 + FastMTP | same model/settings as [2] | vision | Q4_0 K/V | xhigh (maximum supported) reasoning | manual comparison test
   [s] Run short speed tests for installed profiles (thinking off for measurement)
   DFlash2 is CLI-only: text-only/no vision, experimental
   [q] Cancel
 ```
 
 Normal menu starts keep thinking enabled. Stable profiles use `xhigh`; option
-[4] intentionally uses `medium` reasoning for an isolated Q8_0 K/V comparison.
+[4] intentionally uses Q4_0 K/V and `xhigh`, the maximum supported reasoning
+level, for an isolated comparison.
 TURBO uses `xhigh`, which is its maximum supported reasoning level; the model
 template does not support the literal `max` value. This selects the model's
 maximum mode but cannot override TURBO's trained short-reasoning behavior.
@@ -78,17 +79,18 @@ telemetry remain visible in HiveOS. Remove it with `./uninstall-hive-llm-miner.s
 
 Measured on 2026-08-27–2026-09-04 using short coding and prose prompts. These are lightweight generation measurements, not full-context benchmarks; the current rows use the configured multi-GPU slot profiles.
 
-### Manual Q8 KV / medium-reasoning comparison
+### Manual Q4 KV / maximum-reasoning comparison
 
-Menu option **[4]** (profile `hauhau-q8-fastmtp-q8kv-medium`) deliberately keeps
+Menu option **[4]** (profile `hauhau-q8-fastmtp-q4kv-xhigh`) deliberately keeps
 the Hauhau Q8_K_P model, BF16 vision projector, FastMTP sidecar, detected GPU
 layout, slot count, native 262K context per slot, and sampling defaults from
-option **[2]**. It keeps Q8_0 for both K and V and changes only normal reasoning
-to `medium`. It is opt-in, is not used by the Hive miner, and
+option **[2]**. It changes the KV cache to `q4_0` for both K and V while keeping
+normal reasoning at `xhigh`, the maximum supported level. It is opt-in, is not
+used by the Hive miner, and
 is excluded from the standard `--speed-test-all` run. Start it with:
 
 ```bash
-./v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q8kv-medium
+./v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q4kv-xhigh
 ```
 
 Smoke and speed modes intentionally disable reasoning; use `--quickstart` or
@@ -202,7 +204,7 @@ Run a profile-specific test with:
 
 ```bash
 ./v1qwen38.sh --speed-test --profile hauhau-q8-fastmtp
-./v1qwen38.sh --speed-test --profile hauhau-q8-fastmtp-q8kv-medium
+./v1qwen38.sh --speed-test --profile hauhau-q8-fastmtp-q4kv-xhigh
 ./v1qwen38.sh --speed-test-all
 ```
 
