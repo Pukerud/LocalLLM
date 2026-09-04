@@ -28,11 +28,16 @@ Qwen3.8 Quick Start (inside [Q]; choose by use case)
   Stable profiles:
   [1] Hauhau Q8 + native MTP | SAME model as [2] | vision | 1 slot / F16 KV / reference fallback | speed: cached result
   [2] Hauhau Q8 + FastMTP | SAME model as [1] | stable production / multi-user | vision | 3 slots / Q8 KV | speed: cached result
-  [3] Qwen3.8-27B TURBO MTP Q8_0 | new Q8 model | vision | 3 slots / native 262K each / Q8 KV | speed: cached result
-  [s] Run short speed tests for installed profiles
+  [3] Qwen3.8-27B TURBO MTP Q8_0 | new Q8 model | vision | thinking xhigh (MAX) | 3 slots / native 262K each / Q8 KV | speed: cached result
+  [s] Run short speed tests for installed profiles (thinking off for measurement)
   DFlash2 is CLI-only: text-only/no vision, experimental
   [q] Cancel
 ```
+
+Normal menu starts keep thinking enabled. TURBO uses `xhigh`, which is its
+maximum supported reasoning level; the model template does not support the
+literal `max` value. Smoke and speed tests intentionally turn reasoning off so
+they remain short and comparable.
 
 The launcher visibly reports:
 
@@ -265,7 +270,7 @@ After Quick Start finishes, the launcher shows a live dashboard. Press **[2]** t
   Context:  262144 per slot  |  Slots: 3  |  KV: Q8_0  |  Speculation: FastMTP (3-token draft)
   Vision:   ON (BF16 projector)
   GPUs:     4x RTX 3090 (24 GB each)
-  Reasoning: ON
+  Reasoning: ON | effort: xhigh (MAX)
 
   Connect from any device on your network:
 
