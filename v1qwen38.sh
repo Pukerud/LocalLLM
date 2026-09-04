@@ -1378,7 +1378,8 @@ choose_profile() {
     say "      DFlash2 is hidden here; explicit CLI only: --profile hauhau-q8-dflash2 (text-only, no vision)"
 
     say "  [q] Cancel"
-    read -r -p "Select: " choice
+    read -r -p "Select [4]: " choice
+    choice="${choice:-4}"
     case "$choice" in
         1) PROFILE="hauhau-q8" ;;
         2) PROFILE="hauhau-q8-fastmtp" ;;
