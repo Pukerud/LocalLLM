@@ -54,7 +54,7 @@ readonly HAUHAU_DRAFT="Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-FastMTP-32K.gg
 readonly HAUHAU_MODEL_SHA="4e7735df4d1e2ec721f2551f531b815702a2f89123238c564797eda4b0304bc2"
 readonly HAUHAU_MMPROJ_SHA="5681b690bcb8eb10cd28d62d078cb4e01521a3ea4880a3fc7d54de72de2dd142"
 readonly HAUHAU_DRAFT_SHA="115e618e1f73cb50817ed5856f0551c6bf9c3d94df96f440eaca78dc63b8968b"
-readonly QWEN4EXP_COMMIT="0eadefebd3f8f92a86d634a0e5b8fffc9dc792c0"
+readonly QWEN4EXP_COMMIT="4cbe8b070bb040f3b95845408f100fbf5fb746f1"
 readonly FLASH_REPO="cygnal/Qwen3.8-Flash-Next-Uncensored-IQ4XS-NGQ4-GGUF"
 readonly FLASH_MODEL="Qwen3.8-Flash-Next-Uncensored-IQ4XS-NGQ4.gguf"
 readonly FLASH_MODEL_SHA="cedf1e08063f6df77926e1169f67b327dcc6301b5b329589615bdf09d4895f7e"
@@ -227,7 +227,7 @@ Usage:
 Profiles:
   hauhau-q8          HauhauCS Q8_K_P + BF16 vision, native 262K, embedded MTP
   hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, auto-scaled slots/draft length
-  flash-iq4          Flash-Next uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV/auto-fit, qwen4exp b10731
+  flash-iq4          Flash-Next uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV/auto-fit, current upstream 4cbe8b070
   hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K
 
 --smoke uses a 4096-token context, one short text request, and one small PNG
@@ -363,9 +363,9 @@ configure_profile() {
             qdir="IQ4XS-NGQ4"
             FLASH_SLOTS="$(default_flash_slots)"
             [[ "$FLASH_SLOTS" =~ ^[1-2]$ ]] || die "QWEN38_FLASH_SLOTS must be 1 or 2"
-            PROFILE_LABEL="Qwen3.8-Flash-Next Uncensored ${qdir} / vision / Q8 KV / ${FLASH_SLOTS} slots / qwen4exp b10731"
+            PROFILE_LABEL="Qwen3.8-Flash-Next Uncensored ${qdir} / vision / Q8 KV / ${FLASH_SLOTS} slots / current upstream 4cbe8b070"
             RUNTIME_KIND="flash"
-            RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen4exp-b10731"
+            RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen4exp-upstream-4cbe8b07"
             MODEL_PATH="${MODEL_ROOT}/flash-uncensored/${qdir}/${FLASH_MODEL}"
             MMPROJ_PATH="${MODEL_ROOT}/flash-uncensored/${qdir}/${FLASH_MMPROJ}"
             DRAFT_PATH=""
@@ -599,7 +599,7 @@ build_runtime() {
         -DCMAKE_BUILD_TYPE=Release
         -DCMAKE_CUDA_ARCHITECTURES=86
     )
-    if [[ "$RUNTIME_KIND" == "upstream" && -x /usr/local/cuda-12.9/bin/nvcc ]]; then
+    if [[ ( "$RUNTIME_KIND" == "upstream" || "$RUNTIME_KIND" == "flash" ) && -x /usr/local/cuda-12.9/bin/nvcc ]]; then
         cmake_args+=( -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.9/bin/nvcc )
     fi
     cmake -S . -B build "${cmake_args[@]}" \
@@ -1347,7 +1347,7 @@ choose_profile() {
     say "  GPUs detected: ${GPU_SUMMARY}"
     say "  [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K  |  speed: $(speed_display hauhau-q8)"
     say "  [2] HauhauCS Q8_K_P + BF16 vision + FastMTP n=${FAST_MTP_N_MAX} + ${FAST_MTP_SLOTS} slots / 262K each / Q8 KV  |  speed: $(speed_display hauhau-q8-fastmtp)"
-    say "  [3] Flash-Next Uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV + ${FLASH_SLOTS} slots / qwen4exp b10731  |  speed: $(speed_display flash-iq4)"
+    say "  [3] Flash-Next Uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV + ${FLASH_SLOTS} slots / current upstream 4cbe8b070  |  speed: $(speed_display flash-iq4)"
     say "  [4] Flash-Next Uncensored IQ4XS-NGQ4 + ngram-mod (experimental, warm structured output)  |  speed: $(speed_display flash-iq4-ngram)"
     say "  [5] HauhauCS Q8_K_P + DFlash2 Q4 n=${DFLASH_N_MAX} (text-only, experimental)  |  speed: $(speed_display hauhau-q8-dflash2)"
     say "  [s] Run short speed tests for all standard profiles"

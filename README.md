@@ -25,7 +25,7 @@ HostLLM — Engine Picker
 Qwen3.8 Quick Start (inside [Q])
   [1] HauhauCS Q8_K_P + BF16 vision + native MTP + 262K       | speed: cached result
   [2] HauhauCS Q8_K_P + BF16 vision + FastMTP + auto-scaled slots / 262K each / Q8 KV | speed: cached result
-  [3] Flash-Next Uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV + 2 slots / qwen4exp b10731 | speed: cached result
+  [3] Flash-Next Uncensored IQ4XS-NGQ4 + BF16 vision + Q8 KV + 2 slots / current upstream 4cbe8b070 | speed: cached result
   [4] Flash-Next Uncensored IQ4XS-NGQ4 + ngram-mod (experimental, warm structured output) | speed: cached result
   [5] HauhauCS Q8_K_P + DFlash2 Q4 n=5 (text-only, experimental) | speed: cached result
   [s] Run short speed tests for installed profiles
@@ -71,7 +71,7 @@ Measured on 2026-08-27–2026-09-01 using short coding and prose prompts. These 
 |---|---:|---:|---:|---|
 | Hauhau Q8 native MTP | 56.87 tok/s | 40.62 tok/s | **48.74 tok/s** | BF16 vision projector |
 | Hauhau Q8 FastMTP | 83.50 tok/s | 43.70 tok/s | **63.60 tok/s** | current 4-GPU production; FastMTP n=4, 3 slots / 262K each / Q8 KV; 3-run medians, 2026-09-01 |
-| Flash IQ4 Uncensored | 60.46 tok/s | 60.33 tok/s | **60.40 tok/s** | cygnal IQ4XS-NGQ4; qwen4exp b10731, 2 slots / 262K each / Q8 K/V; 3-run medians, 2026-09-01 |
+| Flash IQ4 Uncensored | pending refresh | pending refresh | **pending refresh** | cygnal IQ4XS-NGQ4; current upstream 4cbe8b070, 2 slots / 262K each / Q8 K/V; menu speed test refreshed during the 2026-09-04 upgrade |
 | Hauhau Q8 + DFlash2 Q4 n=5 | 86.52 tok/s | 38.67 tok/s | **62.59 tok/s** | upstream master `4e97ac86`; text-only; reversed layer-device order; opt-in candidate |
 
 The DFlash2 row is not a replacement for the vision-capable profiles. The Q4
@@ -97,7 +97,7 @@ direct technical answer to the uncensoring probe and emitted a valid `get_weathe
 tool call. Its model and projector SHA-256 checks passed. The launcher now uses
 this uncensored target; the previous Flash weights were removed after validation.
 
-### 2026-09-01 runtime and speed update
+### 2026-09-01 historical b10731 runtime and speed update
 
 Upstream llama.cpp build `b10731` (`0eadefebd`) was released today. It includes
 qwen4exp graph/GDN changes from #27877 and #27880, the indexer-head reduction
@@ -123,6 +123,23 @@ its warm-up, repeated JSON reached about `129–136` tok/s versus `58–64` tok/
 without speculation; code reached about `90–145` tok/s, while prose varied from
 roughly `59–71` tok/s and can be slower. It remains opt-in rather than the
 normal Flash default.
+
+### 2026-09-04 current-upstream Flash menu upgrade
+
+The Flash menu profile is now pinned to current upstream llama.cpp commit
+`4cbe8b070bb040f3b95845408f100fbf5fb746f1` instead of the older b10731
+runtime. It uses a versioned runtime directory and explicitly selects CUDA
+12.9 for fresh builds. The previously installed b10731 runtime remains on the
+host as a rollback artifact but is no longer selected by the menu.
+
+Before this menu update, isolated same-flag server A/B testing on all four
+RTX 3090s measured approximately 486 versus 14.4 tok/s prompt processing at
+512 tokens and 521 versus 13.5 tok/s at 2048 tokens, with current upstream
+also decoding substantially faster. Current upstream loaded four native
+262144-token slots, and short text, JSON, tool, and BF16 vision checks passed.
+The menu-specific build, smoke, native-context health, and active-profile
+restoration were revalidated during this upgrade; no full-context generation
+was used.
 
 ### Two-user maximum-context check
 
@@ -212,7 +229,7 @@ are retained under the host's `~/.local/share/localllm-qwen38/logs/` and
 ## Qwen3.8 runtime details
 
 - HauhauCS Q8_K_P GGUF with matching BF16 vision projector.
-- Flash-Next Uncensored IQ4XS-NGQ4 GGUF uses isolated qwen4exp llama.cpp `b10731` (`0eadefebd`), with the older PR #27742 runtime retained for rollback.
+- Flash-Next Uncensored IQ4XS-NGQ4 GGUF uses isolated qwen4exp llama.cpp current upstream `4cbe8b070` (`4cbe8b070bb040f3b95845408f100fbf5fb746f1`), with the older b10731 and PR #27742 runtimes retained for rollback.
 - RTX 3090 builds use CUDA architecture `sm_86`.
 - Hauhau uses layer split across all detected GPUs with an equal dynamic `--tensor-split` (currently `1,1,1,1`); this host reports PHB topology and no usable peer-to-peer link. The uncensored Flash IQ4 target uses layer split with automatic fitting because its larger weights need a rebalanced placement.
 - F16 KV cache is used by the single-slot native profiles; FastMTP uses `q8_0` K/V with auto-scaled slots and an aggregate context equal to `262144 × slots`, so every slot retains native 262144 context. Flash uses the same Q8 K/V policy and selects two slots on this four-GPU host.

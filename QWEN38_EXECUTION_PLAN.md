@@ -32,7 +32,7 @@ Target: `/home/user/LocalLLM` on `192.168.1.69`
 
 ### Experimental Qwen3.8-Flash-Next
 
-- Build a separate pinned upstream `qwen4exp` runtime at `b10731` / `0eadefebd` (tested 2026-09-01); retain the older PR #27742 runtime for rollback.
+- Build the Flash menu profile from current upstream `4cbe8b070bb040f3b95845408f100fbf5fb746f1` (validated 2026-09-04); retain the older b10731 and PR #27742 runtimes for rollback.
 - Use mmap/host handling for the large PLE/n-gram tables; the uncensored Flash IQ4 profile uses `q8_0` K/V and automatic layer fitting at native context.
 - The selected uncensored IQ4XS-NGQ4 GGUF intentionally omits its MTP head; keep MTP disabled, with `ngram-mod` available as an opt-in experiment.
 - Use the supplied BF16 vision projector and validate text, vision, and tool behavior before promotion.
@@ -141,3 +141,9 @@ Completed 2026-09-01 — engine retirement and Flash follow-up experiments:
 - Built an isolated CUDA/sm_86 llama.cpp runtime from current upstream plus PR #27941 and PR #27977 (`d24c7ae73`, build 10747). Unit architecture checks passed; short no-speculation, n-gram, two-slot concurrency, and n-gram vision checks passed. The short decode A/B was effectively neutral, and a long-context A/B was not completed because an approximately 8.4K-token prefill already took about 503 seconds on this host; no long-context speed claim was promoted.
 - Tested the `dzannotti/Qwen3.8-Flash-Next-MTP-Q4_K_M.gguf` sidecar with the current uncensored Flash target using the experimental PR #28104 MTP stack and the merged recurrent rollback code. Native 262K one-slot allocation required `--fit-target 4096`; at that margin the text server loaded and achieved approximately 96 code / 48 prose / 102 JSON tok/s at n=3, with draft acceptance approximately 1.00 / 0.81 / 1.00. The target vision request completed, but draft acceptance was zero.
 - Greedy code and JSON matched the no-draft target, while the prose continuation diverged reproducibly even at n=1. The sidecar was therefore rejected for this uncensored target and deleted; MTP remains disabled and the existing n-gram profile is retained.
+
+Completed 2026-09-04 — current-upstream Flash menu upgrade:
+
+- Replaced the Flash menu profile's b10731 pin with current upstream `4cbe8b070bb040f3b95845408f100fbf5fb746f1` and moved it to the versioned `llama-qwen4exp-upstream-4cbe8b07` runtime directory. Fresh Flash builds explicitly use CUDA Toolkit 12.9 and `sm_86`; the old b10731 runtime remains available for rollback.
+- Same-flag isolated testing measured approximately 486 versus 14.4 tok/s prompt processing at 512 tokens and 521 versus 13.5 tok/s at 2048 tokens compared with b10731. Current upstream loaded four native 262144-token slots and passed short text, JSON, tool, and BF16 vision checks.
+- Stopped the miner and `osn.service` for the deployment window, then verified the menu's download/build/smoke path, native-context health, and Flash API checks. Restored the existing Hauhau FastMTP profile afterward; `/health`, thinking, tool behavior, and the normal Hive custom-miner lifecycle passed.
