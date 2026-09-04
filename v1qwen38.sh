@@ -245,7 +245,8 @@ Profiles:
 request. It never sends a long-context prompt. --quickstart uses the profile's
 configured native context and leaves the server running. Normal starts keep
 thinking enabled at xhigh; for TURBO, xhigh is the model's maximum supported
-reasoning level. Smoke and speed tests intentionally disable reasoning.
+reasoning level, but its training intentionally keeps the reasoning block short.
+Smoke and speed tests intentionally disable reasoning.
 EOF
 }
 
@@ -1293,7 +1294,11 @@ show_dashboard() {
             printf '  Vision:   ON (BF16 projector)\n'
         fi
         printf '  GPUs:     %s\n' "$GPU_SUMMARY"
-        printf '  Reasoning: ON | effort: xhigh (MAX)\n'
+        if [[ "$PROFILE" == "turbo-q8-mtp" ]]; then
+            printf '  Reasoning: ON | effort: xhigh (model max; concise TURBO reasoning)\n'
+        else
+            printf '  Reasoning: ON | effort: xhigh\n'
+        fi
         echo ""
         echo "  Connect from any device on your network:"
         echo ""
@@ -1343,7 +1348,7 @@ choose_profile() {
     say "  Stable profiles:"
     say "  [1] Hauhau Q8 + native MTP | SAME Hauhau model as [2] | vision | 1 slot / F16 KV / reference fallback | speed: $(speed_display hauhau-q8)"
     say "  [2] Hauhau Q8 + FastMTP | SAME Hauhau model as [1] | stable production / multi-user | vision | ${FAST_MTP_SLOTS} slots / Q8 KV | speed: $(speed_display hauhau-q8-fastmtp)"
-    say "  [3] Qwen3.8-27B TURBO MTP Q8_0 | new Q8 model | vision | thinking xhigh (MAX) | ${TURBO_SLOTS} slots / native 262K each / Q8 KV | speed: $(speed_display turbo-q8-mtp)"
+    say "  [3] Qwen3.8-27B TURBO MTP Q8_0 | new Q8 model | vision | thinking xhigh (model max; concise TURBO reasoning) | ${TURBO_SLOTS} slots / native 262K each / Q8 KV | speed: $(speed_display turbo-q8-mtp)"
     say "  [s] Run short speed tests for all standard profiles"
     say "      DFlash2 is hidden here; explicit CLI only: --profile hauhau-q8-dflash2 (text-only, no vision)"
 
