@@ -24,6 +24,7 @@ if [[ "${EUID}" -eq 0 ]]; then
     fi
 fi
 QWEN38_STATE_ROOT="${QWEN38_STATE_ROOT:-${qwen38_home}/.local/state/locallm-qwen38}"
+GLM53_STATE_ROOT="${GLM53_STATE_ROOT:-${qwen38_home}/.local/state/locallm-glm53}"
 
 # OctaSpace uses the osn.service unit and shares the same detected GPUs.
 # HostLLM temporarily pauses it while an inference engine is being started, then
@@ -208,8 +209,15 @@ qwen_server_pid_running() {
     [[ "$cmdline" == *llama-server* ]]
 }
 
+glm53_server_pid_running() {
+    local pid="$1" cmdline=""
+    [[ -r "/proc/${pid}/cmdline" ]] || return 1
+    cmdline="$(tr '\0' ' ' < "/proc/${pid}/cmdline")"
+    [[ "$cmdline" == *"/glm53-tabby/tabbyAPI/main.py"* ]]
+}
+
 detect_engine() {
-    local qwen_pid=""
+    local qwen_pid="" glm53_pid=""
     if [[ -s "${QWEN38_STATE_ROOT}/server.pid" ]]; then
         qwen_pid=$(cat "${QWEN38_STATE_ROOT}/server.pid" 2>/dev/null || true)
     fi
@@ -217,6 +225,13 @@ detect_engine() {
         echo "qwen38"
     elif pgrep -f "llama-server" > /dev/null 2>&1; then
         echo "llamacpp"
+    elif [[ -s "${GLM53_STATE_ROOT}/server.pid" ]]; then
+        glm53_pid=$(cat "${GLM53_STATE_ROOT}/server.pid" 2>/dev/null || true)
+        if [[ "$glm53_pid" =~ ^[0-9]+$ ]] && glm53_server_pid_running "$glm53_pid"; then
+            echo "glm53"
+        else
+            echo "none"
+        fi
     else
         echo "none"
     fi
@@ -246,6 +261,9 @@ get_server_info() {
             ;;
         llamacpp)
             [[ -f "${SCRIPT_DIR}/.server_info" ]] && cat "${SCRIPT_DIR}/.server_info"
+            ;;
+        glm53)
+            [[ -f "${GLM53_STATE_ROOT}/server.info" ]] && cat "${GLM53_STATE_ROOT}/server.info"
             ;;
         *)
             echo ""
@@ -322,6 +340,9 @@ stop_all() {
     if [[ -x "${SCRIPT_DIR}/v1qwen38.sh" ]]; then
         "${SCRIPT_DIR}/v1qwen38.sh" --stop >/dev/null 2>&1 || true
     fi
+    if [[ -x "${SCRIPT_DIR}/v1glm53.sh" ]]; then
+        "${SCRIPT_DIR}/v1glm53.sh" --stop >/dev/null 2>&1 || true
+    fi
     echo " Stopping llama-server..."
     pkill -f "llama-server" 2>/dev/null && echo "   llama-server killed." || echo "   (not running)"
     rm -f "${SCRIPT_DIR}/.server_info" "${SCRIPT_DIR}/.server_compose"
@@ -344,7 +365,10 @@ while true; do
     echo "=========================================================="
     echo ""
 
-    if [[ "$active" == "qwen38" ]]; then
+    if [[ "$active" == "glm53" ]]; then
+        echo -e "  Status:  ${GREEN}GLM-5.3-Flash RUNNING${RESET}"
+        if [[ -n "$info" ]]; then echo "  Server:  $info"; fi
+    elif [[ "$active" == "qwen38" ]]; then
         if hive_llm_miner_active; then
             echo -e "  Status:  ${GREEN}Qwen3.8 server RUNNING (HiveOS LLM miner)${RESET}"
         else
@@ -369,6 +393,9 @@ while true; do
     echo -e "      Uses all detected GPUs; 3 users + n=4 draft on 4x RTX 3090 (current production)"
     echo -e "  ${BOLD}[Q]${RESET} Qwen3.8 profile menu (alias for [1])"
     echo -e "      HauhauCS and Qwen3.8 TURBO profiles with cached speed results"
+    echo ""
+    echo -e "  ${BOLD}[3]${RESET} GLM-5.3-Flash  ⚡ vision │ EXL3 2.05bpw │ 262K GPU context │ reasoning"
+    echo -e "      TabbyAPI/ExLlamaV3; model-native 1M context needs CPU MoE offload"
     echo ""
     echo "  Engines (manual):"
     echo "  ─────────────────"
@@ -426,6 +453,26 @@ while true; do
             run_engine_with_octaspace "${SCRIPT_DIR}/v1llama_cpp.sh"
             llama_rc=$?
             [[ "$llama_rc" -eq 42 ]] && exit 0
+            ;;
+        3)
+            if [[ "$active" == "glm53" ]]; then
+                cd "${SCRIPT_DIR}"
+                "${SCRIPT_DIR}/v1glm53.sh" --status
+                sleep 2
+            elif [[ "$active" != "none" ]]; then
+                echo ""
+                echo -e "  ${RED}${active} is running on port 8080. Stop it first with [9].${RESET}"
+                sleep 2
+            elif [[ ! -x "${SCRIPT_DIR}/v1glm53.sh" ]]; then
+                echo ""
+                echo -e "  ${RED}v1glm53.sh not found or not executable.${RESET}"
+                sleep 2
+            else
+                cd "${SCRIPT_DIR}"
+                run_engine_with_octaspace "${SCRIPT_DIR}/v1glm53.sh" --quickstart
+                glm_rc=$?
+                [[ "$glm_rc" -eq 42 ]] && exit 0
+            fi
             ;;
         9)
             stop_all
