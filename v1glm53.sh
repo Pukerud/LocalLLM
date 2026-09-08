@@ -45,10 +45,12 @@ warn() { printf 'WARNING: %s\n' "$*" >&2; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 pid_is_glm() {
-    local pid="${1:-}" cmdline=""
+    local pid="${1:-}"
     [[ "$pid" =~ ^[0-9]+$ && -r "/proc/${pid}/cmdline" ]] || return 1
-    cmdline="$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null || true)"
-    [[ "$cmdline" == *"${TABBY_ROOT}/main.py"* ]]
+    # Match a complete argv entry, not an arbitrary shell command containing
+    # the path. This avoids killing HostLLM's own shell during [9].
+    tr '\0' '\n' < "/proc/${pid}/cmdline" 2>/dev/null |
+        grep -Fqx -- "${TABBY_ROOT}/main.py"
 }
 
 read_pid() {
@@ -57,13 +59,37 @@ read_pid() {
     [[ "$pid" =~ ^[0-9]+$ ]] && printf '%s' "$pid"
 }
 
+all_glm_pids() {
+    local proc pid
+    for proc in /proc/[0-9]*; do
+        pid="${proc##*/}"
+        if pid_is_glm "$pid"; then
+            printf '%s\n' "$pid"
+        fi
+    done
+}
+
 glm_pid() {
     local pid="$(read_pid)"
     if pid_is_glm "$pid"; then
         printf '%s' "$pid"
         return 0
     fi
+    # Also discover orphaned/manual TabbyAPI processes so status and [9]
+    # still work when the launcher PID file is stale or missing.
+    while read -r pid; do
+        if [[ -n "$pid" ]]; then
+            printf '%s' "$pid"
+            return 0
+        fi
+    done < <(all_glm_pids)
     return 1
+}
+
+send_glm_signal() {
+    local signal="$1" pid="$2"
+    kill "-${signal}" "$pid" 2>/dev/null || \
+        sudo -n kill "-${signal}" "$pid" 2>/dev/null || true
 }
 
 health_ok() {
@@ -100,18 +126,44 @@ status() {
 }
 
 stop_server() {
-    local pid="" deadline=$((SECONDS + 45))
-    if pid="$(glm_pid)"; then
+    local pid="" deadline=$((SECONDS + 45)) remaining=0
+    local -a pids=()
+    local seen=" "
+
+    # Stop every TabbyAPI process for this GLM installation, including
+    # manually-started/orphaned servers that do not have our PID file.
+    while read -r pid; do
+        [[ -n "$pid" ]] || continue
+        [[ "$seen" == *" $pid "* ]] && continue
+        pids+=("$pid")
+        seen+="$pid "
+    done < <(all_glm_pids)
+
+    for pid in "${pids[@]}"; do
         say "Stopping GLM-5.3-Flash server PID $pid"
-        kill "$pid" 2>/dev/null || true
-        while (( SECONDS < deadline )) && pid_is_glm "$pid"; do
-            sleep 1
+        send_glm_signal TERM "$pid"
+    done
+
+    while (( SECONDS < deadline )); do
+        remaining=0
+        for pid in "${pids[@]}"; do
+            if pid_is_glm "$pid"; then
+                remaining=1
+                break
+            fi
         done
-        if pid_is_glm "$pid"; then
-            warn "GLM server did not stop cleanly; sending SIGKILL"
-            kill -KILL "$pid" 2>/dev/null || true
+        if (( remaining == 0 )); then
+            break
         fi
-    fi
+        sleep 1
+    done
+
+    for pid in "${pids[@]}"; do
+        if pid_is_glm "$pid"; then
+            warn "GLM server PID $pid did not stop cleanly; sending SIGKILL"
+            send_glm_signal KILL "$pid"
+        fi
+    done
     rm -f "$PID_FILE" "$INFO_FILE"
 }
 
