@@ -23,7 +23,7 @@ fi
 GLM53_ROOT="${GLM53_ROOT:-${glm_home}/glm53-tabby}"
 TABBY_ROOT="${GLM53_TABBY_ROOT:-${GLM53_ROOT}/tabbyAPI}"
 PYTHON="${GLM53_PYTHON:-${glm_home}/glm205-exllama-test/venv2/bin/python}"
-CONFIG="${GLM53_CONFIG:-${GLM53_ROOT}/config.yml}"
+CONFIG="${GLM53_CONFIG:-${SCRIPT_DIR}/glm53-tabby-config.yml}"
 MODEL_DIR="${GLM53_MODEL_DIR:-${glm_home}/GLM-5.3-Flash-exl3-2.05bpw}"
 STATE_ROOT="${GLM53_STATE_ROOT:-${glm_home}/.local/state/locallm-glm53}"
 LOG_ROOT="${GLM53_LOG_ROOT:-${GLM53_ROOT}/logs}"

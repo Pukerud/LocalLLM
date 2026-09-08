@@ -1,0 +1,57 @@
+network:
+  host: 0.0.0.0
+  port: 8080
+  disable_auth: true
+  allowed_origins: ["*"]
+  disable_fetch_requests: false
+  api_servers: ["OAI"]
+  sse_ping_interval: 15
+  access_log: false
+logging:
+  log_prompt: false
+  log_generation_params: false
+  log_requests: false
+  log_live_status: true
+  log_timestamps: true
+  log_chat_completion_requests: false
+model:
+  model_dir: /home/user
+  model_name: GLM-5.3-Flash-exl3-2.05bpw
+  backend: exllamav3
+  max_seq_len: 262144
+  cache_size: 262144
+  cache_mode: 2,2
+  tensor_parallel: false
+  tensor_parallel_backend: native
+  gpu_split_auto: true
+  autosplit_reserve: [96]
+  gpu_split: []
+  cpu_moe_offload_layers: 0
+  cpu_moe_split_experts: 0
+  chunk_size: 2048
+  output_chunking: true
+  max_batch_size: 1
+  vision: true
+  vision_offload: true
+  template_vars_default: {}
+  template_vars_force: {}
+  reasoning: true
+  reasoning_start_token: "<think>"
+  reasoning_end_token: "</think>"
+  start_in_reasoning: auto
+  tool_calls_in_reasoning: true
+  tool_format: glm4_5
+  prompt_template:
+sampling:
+  override_preset: safe_defaults
+draft_model:
+  draft_mode: disabled
+memory:
+  sysmem_recurrent_cache: 4096
+  sysmem_kv_cache: 0
+  sysmem_multimodal_cache: 1024
+  cuda_malloc_async: false
+developer:
+  unsafe_launch: false
+  disable_request_streaming: false
+  realtime_process_priority: false
