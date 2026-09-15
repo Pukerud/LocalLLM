@@ -392,7 +392,7 @@ while true; do
     echo -e "  ${BOLD}[1]${RESET} Qwen3.8-27B  ⚡ vision │ auto-scaled native 262K slots │ FastMTP + Q4_0 K/V │ xhigh reasoning"
     echo -e "      Uses all detected GPUs; 3 users + n=4 draft on 4x RTX 3090 (current production)"
     echo -e "  ${BOLD}[Q]${RESET} Qwen3.8 profile menu (alias for [1])"
-    echo -e "      HauhauCS and Qwen3.8 TURBO profiles with cached speed results"
+    echo -e "      HauhauCS, Swift BF16, and Qwen3.8 TURBO profiles with cached speed results"
     echo ""
     echo -e "  ${BOLD}[3]${RESET} GLM-5.3-Flash  ⚡ vision │ EXL3 2.05bpw │ 262K GPU context │ reasoning"
     echo -e "      TabbyAPI/ExLlamaV3; model-native 1M context needs CPU MoE offload"

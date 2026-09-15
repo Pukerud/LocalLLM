@@ -7,6 +7,8 @@ Local NVIDIA-GPU launchers for the current Qwen3.8 profiles, with a general llam
 > **Q8 fallback:** The same Hauhau FastMTP deployment with Q8 K/V remains available as profile `hauhau-q8-fastmtp`.
 >
 > **Available alternative:** Qwen3.8-27B TURBO Fable/Cold-Fusion MTP Q8_0 + BF16 vision, three native-262K slots with Q8 K/V.
+>
+> **Swift preview:** the profile menu now exposes a full-precision Swift-Qwen3.8 uncensored BF16 GGUF conversion with BF16 vision and native 262K context. It defaults to three native-262K slots on this four-RTX-3090 host with Q4 K/V; the launcher scales down on smaller GPU inventories because the BF16 weights consume substantially more VRAM.
 
 ## Quick Start
 
@@ -32,6 +34,7 @@ Qwen3.8 Quick Start (inside [Q]; choose by use case)
   [2] Hauhau Q8 + FastMTP | SAME model as [1] | Q8 KV fallback | vision | 3 slots | speed: cached result
   [3] Qwen3.8-27B TURBO MTP Q8_0 | new Q8 model | vision | thinking xhigh (model max; concise TURBO reasoning) | 3 slots / native 262K each / Q8 KV | speed: cached result
   [4] Hauhau Q8 + FastMTP | CURRENT production | vision | Q4_0 K/V | xhigh (maximum supported) reasoning | 3 slots
+  [5] Swift-Qwen3.8 Uncensored BF16 GGUF | vision | native 262K | Q4 K/V | 3 slots on this host
   [s] Run short speed tests for installed profiles (thinking off for measurement)
   DFlash2 is CLI-only: text-only/no vision, experimental
   [q] Cancel
@@ -45,6 +48,7 @@ template does not support the literal `max` value. This selects the model's
 maximum mode but cannot override TURBO's trained short-reasoning behavior.
 Smoke and speed tests intentionally turn reasoning off so they remain short and
 comparable.
+The Swift option uses the public ajgazin/Swift-Qwen3.8-27B-Uncensored-Dynamic-MTP-GGUF BF16 conversion because the linked d0xin/Swift-Qwen3.8-27B-Uncensored-BF16 repository is gated. It is not claimed byte-identical to the gated repository; its revision and SHA-256 checksums are pinned in v1qwen38.sh.
 
 The launcher visibly reports:
 
@@ -104,8 +108,13 @@ the dashboard/API when comparing the xhigh-reasoning behavior.
 | Hauhau Q8 native MTP | 56.87 tok/s | 40.62 tok/s | **48.74 tok/s** | BF16 vision projector |
 | Hauhau Q8 FastMTP | 76.47 tok/s | 48.81 tok/s | **62.64 tok/s** | previous Q8-KV 4-GPU baseline and fallback; FastMTP n=4, 3 slots / 262K each; menu speed test, 2026-09-03 |
 | TURBO MTP Q8_0 | 58.13 tok/s | 42.23 tok/s | **50.18 tok/s** | DavidAU TURBO MTP Q8_0; current upstream 4cbe8b070, 3 slots / 262K each / Q8 K/V; short menu speed test, 2026-09-04 |
+| Swift BF16 (3 native slots) | 34.99 tok/s | 25.09 tok/s | **30.04 tok/s** | Public BF16 conversion; 3-slot native-262K health passed; short text + vision passed; same 4096-token A/B run on 2026-09-15 |
 | Hauhau Q8 + DFlash2 Q4 n=5 | 86.52 tok/s | 38.67 tok/s | **62.59 tok/s** | upstream master `4e97ac86`; text-only; reversed layer-device order; opt-in candidate |
 
+
+### Swift BF16 A/B result (2026-09-15)
+
+The current Hauhau Q4-KV production profile measured 75.52 coding / 41.19 story / **58.35 tok/s** in the same short run. Swift BF16 measured 34.99 / 25.09 / **30.04 tok/s**. Native-context health passed at one, two, and three slots; a four-slot probe failed cleanly during KV allocation, so three slots is the default on four RTX 3090s.
 The DFlash2 row is not a replacement for the vision-capable profiles. The Q4
 DFlash2 drafter currently fails to process multimodal embedding chunks in this
 llama.cpp build, so the opt-in profile deliberately does not load a projector.
@@ -270,6 +279,7 @@ are retained under the host's `~/.local/share/localllm-qwen38/logs/` and
 - HauhauCS Q8_K_P GGUF with matching BF16 vision projector.
 - TURBO MTP Q8_0 GGUF from `DavidAU/Qwen3.8-27B-TURBO-Fable-Cold-Fusion-735-882-Heretic-Uncensored-NEO-CODER-MAX-MTP-GGUF` at repository revision `6408ab122`; matching `mmproj-BF16.gguf` projector.
 - TURBO uses isolated current-upstream llama.cpp `4cbe8b070` (`4cbe8b070bb040f3b95845408f100fbf5fb746f1`), CUDA 12.9, and `sm_86`.
+- Swift preview BF16 GGUF and BF16 projector come from ajgazin/Swift-Qwen3.8-27B-Uncensored-Dynamic-MTP-GGUF at revision fc14798df8ff4281c903446ad96ff24d489defaa; this is the publicly accessible Swift-Qwen3.8 uncensored BF16 conversion selected while the gated d0xin repository remains unavailable; it retains the native MTP head plus vision projector.
 - RTX 3090 builds use CUDA architecture `sm_86`.
 - Hauhau and TURBO use layer split across all detected GPUs with equal dynamic `--tensor-split` (currently `1,1,1,1`); this host reports PHB topology and no usable peer-to-peer link.
 - F16 KV cache is used by the single-slot native Hauhau profile; the current Hauhau FastMTP profile uses `q4_0` K/V, while `hauhau-q8-fastmtp` remains the Q8-KV fallback. TURBO uses `q8_0` K/V. All retain aggregate context `262144 × slots`, so every slot retains native 262144 context. TURBO defaults to embedded native MTP `n=2` and three slots on this four-GPU host.
@@ -342,6 +352,7 @@ The active menu intentionally stays small:
   [1] Qwen3.8-27B        vision │ auto-scaled native 262K slots │ FastMTP + Q4_0 K/V │ xhigh
       Uses all detected GPUs; 3 users + n=4 draft on 4x RTX 3090
       HauhauCS Q4 production, Q8 fallback, and TURBO profiles with cached speed results
+      Swift BF16 is available from the Qwen profile submenu as [5].
   [Q] Qwen3.8 profile menu (alias for [1])
   [2] llama.cpp          general GGUF fallback
   [9] Kill All

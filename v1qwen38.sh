@@ -45,6 +45,7 @@ SERVER_PID=""
 SERVER_LOG=""
 DFLASH_N_MAX="${QWEN38_DFLASH_N_MAX:-5}"
 TURBO_MTP_N_MAX="${QWEN38_TURBO_MTP_N_MAX:-2}"
+SWIFT_MTP_N_MAX="${QWEN38_SWIFT_MTP_N_MAX:-2}"
 
 # Pinned/provenance data. Re-check PR head before intentionally updating it.
 readonly HAUHAU_REPO="HauhauCS/Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-MTP-GGUF"
@@ -66,6 +67,12 @@ readonly UPSTREAM_COMMIT="4e97ac86ebe2c4cb8212d98d2641ad6768810896"
 readonly DFLASH_REPO="incoai/Qwen3.8-27B-DFlash2-GGUF"
 readonly DFLASH_MODEL="Qwen3.8-27B-DFlash2-Q4_K_M.gguf"
 readonly DFLASH_MODEL_SHA="18a380efc9b7ed8d88677fc895f5c11ae170653434ee378f7348f715c14d0594"
+readonly SWIFT_REPO="ajgazin/Swift-Qwen3.8-27B-Uncensored-Dynamic-MTP-GGUF"
+readonly SWIFT_REPO_COMMIT="fc14798df8ff4281c903446ad96ff24d489defaa"
+readonly SWIFT_MODEL="Swift-Qwen3.8-27B-Uncensored-MTP-BF16.gguf"
+readonly SWIFT_MMPROJ="mmproj-BF16.gguf"
+readonly SWIFT_MODEL_SHA="53da4d4c71cc2d8c42f731dda093ddd7eb0bf26069216c5b02b89e51805b978f"
+readonly SWIFT_MMPROJ_SHA="b343ceeb860cf802b16a5f9f3d048d61374bf0807caa86f9e61c221e744826ad"
 
 # Set by configure_profile.
 PROFILE_LABEL=""
@@ -90,6 +97,7 @@ GPU_DEVICE_LIST_REVERSED=""
 GPU_TENSOR_SPLIT=""
 GPU_SUMMARY="GPU information unavailable"
 TURBO_SLOTS=1
+SWIFT_SLOTS=1
 
 mkdir -p "$DATA_ROOT" "$STATE_ROOT" "$RUNTIME_ROOT" "$MODEL_ROOT" "$LOG_ROOT"
 if [[ "${EUID}" -eq 0 && -n "${qwen38_owner:-}" && "${qwen38_owner}" != "root" ]]; then
@@ -211,6 +219,21 @@ default_turbo_slots() {
     fi
 }
 
+default_swift_slots() {
+    if [[ -n "${QWEN38_SWIFT_SLOTS:-}" ]]; then
+        printf '%s' "$QWEN38_SWIFT_SLOTS"
+    elif (( GPU_COUNT >= 4 )); then
+        # Three native-262K slots passed full-context health plus short text
+        # and vision requests on the four-3090 host. Four slots OOMs the
+        # fullest GPU while creating the native MTP KV cache.
+        printf '3'
+    elif (( GPU_COUNT >= 3 )); then
+        printf '2'
+    else
+        printf '1'
+    fi
+}
+
 default_fast_mtp_n_max() {
     if [[ -n "${QWEN38_FASTMTP_N_MAX:-}" ]]; then
         printf '%s' "$QWEN38_FASTMTP_N_MAX"
@@ -241,6 +264,7 @@ Profiles:
   hauhau-q8-fastmtp-q4kv-xhigh
                      Hauhau FastMTP production profile with Q4_0 K/V and maximum xhigh reasoning
   turbo-q8-mtp       Qwen3.8-27B TURBO MTP Q8_0 + BF16 vision, native 262K, Q8 KV
+  swift-bf16         Swift-Qwen3.8 uncensored BF16 GGUF + BF16 vision, native 262K, Q4 KV
   hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K (explicit CLI-only experiment)
 
 --smoke uses a 4096-token context, one short text request, and one small PNG
@@ -411,6 +435,22 @@ configure_profile() {
             KV_TYPE="q8_0"
             SPEC_MODE="native"
             ;;
+        swift-bf16)
+            SWIFT_SLOTS=$(default_swift_slots)
+            [[ "$SWIFT_SLOTS" =~ ^[1-4]$ ]] || die "QWEN38_SWIFT_SLOTS must be an integer from 1 to 4"
+            [[ "$SWIFT_MTP_N_MAX" =~ ^[1-7]$ ]] || die "QWEN38_SWIFT_MTP_N_MAX must be an integer from 1 to 7"
+            PROFILE_LABEL="Swift-Qwen3.8-27B uncensored BF16 GGUF / vision / native 262K / ${SWIFT_SLOTS} slot(s) / Q4 KV"
+            RUNTIME_KIND="swift"
+            RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen38-turbo-upstream-4cbe8b07"
+            MODEL_PATH="${MODEL_ROOT}/swift-bf16/${SWIFT_MODEL}"
+            MMPROJ_PATH="${MODEL_ROOT}/swift-bf16/${SWIFT_MMPROJ}"
+            DRAFT_PATH=""
+            FULL_CTX=262144
+            SERVER_CTX=$((FULL_CTX * SWIFT_SLOTS))
+            PARALLEL="$SWIFT_SLOTS"
+            KV_TYPE="q4_0"
+            SPEC_MODE="native"
+            ;;
         *)
             die "unknown profile '$PROFILE'"
             ;;
@@ -551,12 +591,20 @@ ensure_turbo_assets() {
     download_file "$base/$TURBO_MMPROJ" "$dir/$TURBO_MMPROJ" "$TURBO_MMPROJ_SHA"
 }
 
+ensure_swift_assets() {
+    local dir="${MODEL_ROOT}/swift-bf16"
+    local base="https://huggingface.co/${SWIFT_REPO}/resolve/${SWIFT_REPO_COMMIT}"
+    download_file "$base/$SWIFT_MODEL" "$dir/$SWIFT_MODEL" "$SWIFT_MODEL_SHA"
+    download_file "$base/$SWIFT_MMPROJ" "$dir/$SWIFT_MMPROJ" "$SWIFT_MMPROJ_SHA"
+}
+
 ensure_assets() {
     say "Checking model assets for ${PROFILE} (checksum progress will be shown)..."
     case "$RUNTIME_KIND" in
         hauhau) ensure_hauhau_assets ;;
         upstream) ensure_dflash_assets ;;
         turbo) ensure_turbo_assets ;;
+        swift) ensure_swift_assets ;;
         *) die "internal error: unknown runtime kind '$RUNTIME_KIND'" ;;
     esac
     say "Model assets ready for ${PROFILE}."
@@ -605,14 +653,14 @@ build_runtime() {
         git apply --check "$patch_file"
         git apply "$patch_file"
         say "Applied HauhauCS FastMTP patch to pinned qwen35 runtime"
-    elif [[ "$RUNTIME_KIND" == "turbo" ]]; then
+    elif [[ "$RUNTIME_KIND" == "turbo" || "$RUNTIME_KIND" == "swift" ]]; then
         git fetch --quiet origin master
         if ! git cat-file -e "${TURBO_LLAMA_COMMIT}^{commit}" 2>/dev/null; then
             git fetch --quiet origin "$TURBO_LLAMA_COMMIT"
         fi
         git reset --hard --quiet "$TURBO_LLAMA_COMMIT"
         git clean -fdx >/dev/null
-        say "Using current upstream llama.cpp commit ${TURBO_LLAMA_COMMIT:0:9} for TURBO"
+        say "Using current upstream llama.cpp commit ${TURBO_LLAMA_COMMIT:0:9} for ${RUNTIME_KIND}"
     else
         git fetch --quiet origin master
         if ! git cat-file -e "${UPSTREAM_COMMIT}^{commit}" 2>/dev/null; then
@@ -632,7 +680,7 @@ build_runtime() {
         -DCMAKE_BUILD_TYPE=Release
         -DCMAKE_CUDA_ARCHITECTURES=86
     )
-    if [[ ( "$RUNTIME_KIND" == "upstream" || "$RUNTIME_KIND" == "turbo" ) && -x /usr/local/cuda-12.9/bin/nvcc ]]; then
+    if [[ ( "$RUNTIME_KIND" == "upstream" || "$RUNTIME_KIND" == "turbo" || "$RUNTIME_KIND" == "swift" ) && -x /usr/local/cuda-12.9/bin/nvcc ]]; then
         cmake_args+=( -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.9/bin/nvcc )
     fi
     cmake -S . -B build "${cmake_args[@]}" \
@@ -725,6 +773,8 @@ make_server_args() {
     local ctx="$SERVER_CTX" batch=512 ubatch=128 native_mtp_n_max=2
     if [[ "$PROFILE" == "turbo-q8-mtp" ]]; then
         native_mtp_n_max="$TURBO_MTP_N_MAX"
+    elif [[ "$PROFILE" == "swift-bf16" ]]; then
+        native_mtp_n_max="$SWIFT_MTP_N_MAX"
     fi
     if (( SMOKE )); then
         ctx=4096
@@ -1152,7 +1202,7 @@ PY
 
 run_speed_test_all() {
     local original_profile="$PROFILE" original_smoke="$SMOKE" original_spec="$SPEC_OVERRIDE" rc=0 profile
-    for profile in hauhau-q8 hauhau-q8-fastmtp hauhau-q8-fastmtp-q4kv-xhigh turbo-q8-mtp; do
+    for profile in hauhau-q8 hauhau-q8-fastmtp hauhau-q8-fastmtp-q4kv-xhigh turbo-q8-mtp swift-bf16; do
         PROFILE="$profile"
         SPEC_OVERRIDE=""
         SMOKE=1
@@ -1366,6 +1416,7 @@ choose_profile() {
     FAST_MTP_SLOTS="$(default_fast_mtp_slots)"
     FAST_MTP_N_MAX="$(default_fast_mtp_n_max)"
     TURBO_SLOTS="$(default_turbo_slots)"
+    SWIFT_SLOTS="$(default_swift_slots)"
     say ""
     say "Qwen3.8 Quick Start (choose by use case)"
     say "  GPUs detected: ${GPU_SUMMARY}"
@@ -1374,6 +1425,7 @@ choose_profile() {
     say "  [2] Hauhau Q8 + FastMTP | SAME Hauhau model as [1] | Q8 KV fallback | vision | ${FAST_MTP_SLOTS} slots | speed: $(speed_display hauhau-q8-fastmtp)"
     say "  [3] Qwen3.8-27B TURBO MTP Q8_0 | new Q8 model | vision | thinking xhigh (model max; concise TURBO reasoning) | ${TURBO_SLOTS} slots / native 262K each / Q8 KV | speed: $(speed_display turbo-q8-mtp)"
     say "  [4] Hauhau Q8 + FastMTP | CURRENT production | vision | Q4_0 K/V | xhigh (maximum supported) reasoning | ${FAST_MTP_SLOTS} slots | speed: $(speed_display hauhau-q8-fastmtp-q4kv-xhigh)"
+    say "  [5] Swift-Qwen3.8 Uncensored BF16 GGUF | public BF16 conversion; gated d0xin source was unavailable | vision | native 262K | Q4 KV | ${SWIFT_SLOTS} slots by default | speed: $(speed_display swift-bf16)"
     say "  [s] Run short speed tests for all standard profiles"
     say "      DFlash2 is hidden here; explicit CLI only: --profile hauhau-q8-dflash2 (text-only, no vision)"
 
@@ -1385,6 +1437,7 @@ choose_profile() {
         2) PROFILE="hauhau-q8-fastmtp" ;;
         3) PROFILE="turbo-q8-mtp" ;;
         4) PROFILE="hauhau-q8-fastmtp-q4kv-xhigh" ;;
+        5) PROFILE="swift-bf16" ;;
         s|S)
             PROFILE="hauhau-q8"
             MODE="speed-all"
