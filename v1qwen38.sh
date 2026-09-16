@@ -366,6 +366,7 @@ configure_profile() {
     PARALLEL=1
     KV_TYPE="f16"
     REASONING_EFFORT="xhigh"
+    GSQ_TUNED=0
     case "$PROFILE" in
         hauhau-q8)
             PROFILE_LABEL="Qwen3.8-27B HauhauCS Q8_K_P / vision / native 262K"
@@ -446,15 +447,25 @@ configure_profile() {
                 gsq-iq2) quant=IQ2_XS ;;
                 gsq-iq3) quant=IQ3_XXS ;;
             esac
-            PROFILE_LABEL="EXPERIMENTAL Flash-Next GSQ-RCO ${quant} / vision / xhigh / 1 slot / 32K default / lazy PLE / no MTP"
+            # Measured on .69: two 3090s decode faster than four. Leave
+            # explicit GPU selection/split untouched and other quants conservative.
+            local gsq_default_ctx=32768
+            if [[ "$PROFILE" == gsq-q2 && "${QWEN38_GSQ_TUNED:-1}" == 1 && -z "${QWEN38_GPU_INDICES:-}" && -z "${QWEN38_TENSOR_SPLIT:-}" ]] &&
+               (( GPU_COUNT >= 2 )) && [[ "${GPU_NAMES[0]:-}" == *"RTX 3090"* && "${GPU_NAMES[1]:-}" == *"RTX 3090"* ]] &&
+               (( ${GPU_MEMORY_MIB[0]:-0} >= 23000 && ${GPU_MEMORY_MIB[1]:-0} >= 23000 )); then
+                GSQ_TUNED=1
+                gsq_default_ctx=262144
+            fi
             RUNTIME_KIND="gsq"
             RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen38-turbo-upstream-4cbe8b07"
             MODEL_PATH="${MODEL_ROOT}/gsq-flash-next/${quant}/Qwen3.8-Flash-Next-GSQ-RCO-${quant}-00001-of-00002.gguf"
             MMPROJ_PATH="${MODEL_ROOT}/gsq-flash-next/${GSQ_MMPROJ}"
             DRAFT_PATH=""
-            FULL_CTX="${QWEN38_GSQ_CTX:-32768}"
+            FULL_CTX="${QWEN38_GSQ_CTX:-$gsq_default_ctx}"
             [[ "$FULL_CTX" =~ ^[0-9]+$ ]] && (( FULL_CTX >= 4096 && FULL_CTX <= 262144 )) || die "QWEN38_GSQ_CTX must be 4096..262144"
             SERVER_CTX="$FULL_CTX"
+            PROFILE_LABEL="EXPERIMENTAL Flash-Next GSQ-RCO ${quant} / vision / xhigh / 1 slot / ${FULL_CTX} ctx / lazy PLE / no MTP"
+            if (( GSQ_TUNED )); then PROFILE_LABEL+=" / tuned 2-GPU 23:25 split"; fi
             KV_TYPE="q8_0"
             SPEC_MODE="none"
             ;;
@@ -852,7 +863,11 @@ make_server_args() {
         --port "$PORT"
     )
 
-    local target_devices="$GPU_DEVICE_LIST"
+    local target_devices="$GPU_DEVICE_LIST" target_split="$GPU_TENSOR_SPLIT"
+    if [[ "$RUNTIME_KIND" == gsq && "${GSQ_TUNED:-0}" == 1 ]]; then
+        target_devices="CUDA${GPU_INDICES[0]},CUDA${GPU_INDICES[1]}"
+        target_split="23,25"
+    fi
     if [[ "$PROFILE" == "hauhau-q8-dflash2" ]]; then
         # DFlash reuses the target output projection. Reverse the target
         # device order so that the target output and the one-device draft
@@ -862,7 +877,7 @@ make_server_args() {
     fi
     SERVER_ARGS+=(--device "$target_devices")
 
-    SERVER_ARGS+=(--tensor-split "$GPU_TENSOR_SPLIT" --cache-type-k "$KV_TYPE" --cache-type-v "$KV_TYPE")
+    SERVER_ARGS+=(--tensor-split "$target_split" --cache-type-k "$KV_TYPE" --cache-type-v "$KV_TYPE")
 
     if (( SMOKE )); then
         # Keep the verification request short and deterministic enough to finish quickly.
@@ -1474,7 +1489,7 @@ choose_profile() {
     say "  [3] Qwen3.8-27B TURBO MTP Q8_0 | new Q8 model | vision | thinking xhigh (model max; concise TURBO reasoning) | ${TURBO_SLOTS} slots / native 262K each / Q8 KV | speed: $(speed_display turbo-q8-mtp)"
     say "  [4] Hauhau Q8 + FastMTP | CURRENT production | vision | Q4_0 K/V | xhigh (maximum supported) reasoning | ${FAST_MTP_SLOTS} slots | speed: $(speed_display hauhau-q8-fastmtp-q4kv-xhigh)"
     say "  [5] Swift-Qwen3.8 Uncensored BF16 GGUF | public BF16 conversion; gated d0xin source was unavailable | vision | native 262K | Q4 KV | ${SWIFT_SLOTS} slots by default | speed: $(speed_display swift-bf16)"
-    say "  Experimental Flash-Next GSQ-RCO (separate MoE model; lazy PLE; no MTP; 32K default):"
+    say "  Experimental Flash-Next GSQ-RCO (lazy PLE; no MTP; Q2: tuned 2x3090/native 262K, otherwise 32K):"
     say "  [6] GSQ Q2_0 | speed-oriented | 66.4 GB download + vision | speed: $(speed_display gsq-q2)"
     say "  [7] GSQ IQ2_XS | compact quality | 68.0 GB download + vision | speed: $(speed_display gsq-iq2)"
     say "  [8] GSQ IQ3_XXS | publisher quality recommendation | 75.8 GB + vision | speed: $(speed_display gsq-iq3)"

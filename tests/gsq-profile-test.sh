@@ -15,6 +15,26 @@ for p in gsq-q2 gsq-iq2 gsq-iq3; do
     [[ "$args" == *' --lazy-mode on '* && "$args" == *' --load-mode mmap '* ]]
     [[ "$args" == *' --reasoning-effort xhigh '* && "$args" != *' --spec-type '* ]]
 done
+GPU_COUNT=4
+GPU_INDICES=(0 1 2 3)
+GPU_NAMES=('NVIDIA GeForce RTX 3090' 'NVIDIA GeForce RTX 3090' 'NVIDIA GeForce RTX 3090' 'NVIDIA GeForce RTX 3090')
+GPU_MEMORY_MIB=(24576 24576 24576 24576)
+PROFILE=gsq-q2
+configure_profile
+make_server_args
+args=" ${SERVER_ARGS[*]} "
+[[ "$SERVER_CTX" == 262144 && "$GSQ_TUNED" == 1 ]]
+[[ "$args" == *' --device CUDA0,CUDA1 '* && "$args" == *' --tensor-split 23,25 '* ]]
+[[ "$args" == *' --ctx-size 262144 '* && "$args" == *' --reasoning-effort xhigh '* ]]
+QWEN38_GSQ_TUNED=0 configure_profile
+[[ "$GSQ_TUNED" == 0 && "$SERVER_CTX" == 32768 ]]
+QWEN38_GPU_INDICES=0,1,2,3 configure_profile
+[[ "$GSQ_TUNED" == 0 ]]
+QWEN38_GSQ_CTX=131072 configure_profile
+[[ "$SERVER_CTX" == 131072 ]]
+PROFILE=gsq-iq3
+configure_profile
+[[ "$GSQ_TUNED" == 0 && "$SERVER_CTX" == 32768 ]]
 PROFILE=hauhau-q8-fastmtp-q4kv-xhigh
 configure_profile
 [[ "$RUNTIME_KIND" == hauhau && "$KV_TYPE" == q4_0 && "$SPEC_MODE" == fast ]]
