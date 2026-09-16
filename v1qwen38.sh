@@ -74,6 +74,10 @@ readonly SWIFT_MMPROJ="mmproj-BF16.gguf"
 readonly SWIFT_MODEL_SHA="53da4d4c71cc2d8c42f731dda093ddd7eb0bf26069216c5b02b89e51805b978f"
 readonly SWIFT_MMPROJ_SHA="b343ceeb860cf802b16a5f9f3d048d61374bf0807caa86f9e61c221e744826ad"
 
+readonly GSQ_REPO="ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF"
+readonly GSQ_REV="1c04b8102ca5346f1faf4d9914503e378d713021"
+readonly GSQ_MMPROJ="mmproj-Qwen3.8-Flash-Next-BF16.gguf"
+
 # Set by configure_profile.
 PROFILE_LABEL=""
 RUNTIME_KIND=""
@@ -435,6 +439,25 @@ configure_profile() {
             KV_TYPE="q8_0"
             SPEC_MODE="native"
             ;;
+        gsq-q2|gsq-iq2|gsq-iq3)
+            local quant
+            case "$PROFILE" in
+                gsq-q2) quant=Q2_0 ;;
+                gsq-iq2) quant=IQ2_XS ;;
+                gsq-iq3) quant=IQ3_XXS ;;
+            esac
+            PROFILE_LABEL="EXPERIMENTAL Flash-Next GSQ-RCO ${quant} / vision / xhigh / 1 slot / 32K default / lazy PLE / no MTP"
+            RUNTIME_KIND="gsq"
+            RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen38-turbo-upstream-4cbe8b07"
+            MODEL_PATH="${MODEL_ROOT}/gsq-flash-next/${quant}/Qwen3.8-Flash-Next-GSQ-RCO-${quant}-00001-of-00002.gguf"
+            MMPROJ_PATH="${MODEL_ROOT}/gsq-flash-next/${GSQ_MMPROJ}"
+            DRAFT_PATH=""
+            FULL_CTX="${QWEN38_GSQ_CTX:-32768}"
+            [[ "$FULL_CTX" =~ ^[0-9]+$ ]] && (( FULL_CTX >= 4096 && FULL_CTX <= 262144 )) || die "QWEN38_GSQ_CTX must be 4096..262144"
+            SERVER_CTX="$FULL_CTX"
+            KV_TYPE="q8_0"
+            SPEC_MODE="none"
+            ;;
         swift-bf16)
             SWIFT_SLOTS=$(default_swift_slots)
             [[ "$SWIFT_SLOTS" =~ ^[1-4]$ ]] || die "QWEN38_SWIFT_SLOTS must be an integer from 1 to 4"
@@ -456,6 +479,9 @@ configure_profile() {
             ;;
     esac
 
+    if [[ "$RUNTIME_KIND" == gsq && -n "$SPEC_OVERRIDE" && "$SPEC_OVERRIDE" != none ]]; then
+        die "GSQ Flash-Next has no validated MTP configuration; use --no-spec"
+    fi
     if [[ -n "$SPEC_OVERRIDE" ]]; then
         case "$SPEC_OVERRIDE" in
             none|native|fast|dflash2) SPEC_MODE="$SPEC_OVERRIDE" ;;
@@ -598,6 +624,23 @@ ensure_swift_assets() {
     download_file "$base/$SWIFT_MMPROJ" "$dir/$SWIFT_MMPROJ" "$SWIFT_MMPROJ_SHA"
 }
 
+ensure_gsq_assets() {
+    local quant first_sha dir base second
+    case "$PROFILE" in
+        gsq-q2) quant=Q2_0; first_sha=69820c02ec7d0b45ef2ebb19d6620299db749fe2aded7f39f93c6b88b199b720 ;;
+        gsq-iq2) quant=IQ2_XS; first_sha=92cee27ae5bbadcd732416a0f7a7f0acc092399dbbe8f5a5efa707c2ec0a49d7 ;;
+        gsq-iq3) quant=IQ3_XXS; first_sha=219ea929900dfa9ef091f3aa473fdba6874b65fcb36526d7d851ac9e95856d15 ;;
+    esac
+    dir="${MODEL_ROOT}/gsq-flash-next"
+    base="https://huggingface.co/${GSQ_REPO}/resolve/${GSQ_REV}"
+    second="Qwen3.8-Flash-Next-GSQ-RCO-${quant}-00002-of-00002.gguf"
+    download_file "$base/${quant}/$(basename "$MODEL_PATH")" "$MODEL_PATH" "$first_sha"
+    # The publisher's second shard is byte-identical across variants.
+    download_file "$base/${quant}/$second" "$dir/shared-ple.gguf" "316b46f3a2dbd68c900f43136ab9449f9dcc3725dfd8c794847c204bc161e113"
+    ln -sfn ../shared-ple.gguf "$dir/${quant}/$second"
+    download_file "$base/$GSQ_MMPROJ" "$MMPROJ_PATH" "b1a82259702816a5330d7bd7607cd9676b11780e79ff7348c21103ff3ce49bd0"
+}
+
 ensure_assets() {
     say "Checking model assets for ${PROFILE} (checksum progress will be shown)..."
     case "$RUNTIME_KIND" in
@@ -605,6 +648,7 @@ ensure_assets() {
         upstream) ensure_dflash_assets ;;
         turbo) ensure_turbo_assets ;;
         swift) ensure_swift_assets ;;
+        gsq) ensure_gsq_assets ;;
         *) die "internal error: unknown runtime kind '$RUNTIME_KIND'" ;;
     esac
     say "Model assets ready for ${PROFILE}."
@@ -653,7 +697,7 @@ build_runtime() {
         git apply --check "$patch_file"
         git apply "$patch_file"
         say "Applied HauhauCS FastMTP patch to pinned qwen35 runtime"
-    elif [[ "$RUNTIME_KIND" == "turbo" || "$RUNTIME_KIND" == "swift" ]]; then
+    elif [[ "$RUNTIME_KIND" == "turbo" || "$RUNTIME_KIND" == "swift" || "$RUNTIME_KIND" == "gsq" ]]; then
         git fetch --quiet origin master
         if ! git cat-file -e "${TURBO_LLAMA_COMMIT}^{commit}" 2>/dev/null; then
             git fetch --quiet origin "$TURBO_LLAMA_COMMIT"
@@ -838,6 +882,10 @@ make_server_args() {
         SERVER_ARGS+=(--load-mode none)
     else
         SERVER_ARGS+=(--load-mode mmap)
+    fi
+
+    if [[ "$RUNTIME_KIND" == gsq ]]; then
+        SERVER_ARGS+=(--lazy-mode on)
     fi
 
     if [[ "${QWEN38_CPU_MMPROJ:-0}" == "1" ]]; then
@@ -1426,6 +1474,10 @@ choose_profile() {
     say "  [3] Qwen3.8-27B TURBO MTP Q8_0 | new Q8 model | vision | thinking xhigh (model max; concise TURBO reasoning) | ${TURBO_SLOTS} slots / native 262K each / Q8 KV | speed: $(speed_display turbo-q8-mtp)"
     say "  [4] Hauhau Q8 + FastMTP | CURRENT production | vision | Q4_0 K/V | xhigh (maximum supported) reasoning | ${FAST_MTP_SLOTS} slots | speed: $(speed_display hauhau-q8-fastmtp-q4kv-xhigh)"
     say "  [5] Swift-Qwen3.8 Uncensored BF16 GGUF | public BF16 conversion; gated d0xin source was unavailable | vision | native 262K | Q4 KV | ${SWIFT_SLOTS} slots by default | speed: $(speed_display swift-bf16)"
+    say "  Experimental Flash-Next GSQ-RCO (separate MoE model; lazy PLE; no MTP; 32K default):"
+    say "  [6] GSQ Q2_0 | speed-oriented | 66.4 GB download + vision | speed: $(speed_display gsq-q2)"
+    say "  [7] GSQ IQ2_XS | compact quality | 68.0 GB download + vision | speed: $(speed_display gsq-iq2)"
+    say "  [8] GSQ IQ3_XXS | publisher quality recommendation | 75.8 GB + vision | speed: $(speed_display gsq-iq3)"
     say "  [s] Run short speed tests for all standard profiles"
     say "      DFlash2 is hidden here; explicit CLI only: --profile hauhau-q8-dflash2 (text-only, no vision)"
 
@@ -1438,6 +1490,9 @@ choose_profile() {
         3) PROFILE="turbo-q8-mtp" ;;
         4) PROFILE="hauhau-q8-fastmtp-q4kv-xhigh" ;;
         5) PROFILE="swift-bf16" ;;
+        6) PROFILE="gsq-q2" ;;
+        7) PROFILE="gsq-iq2" ;;
+        8) PROFILE="gsq-iq3" ;;
         s|S)
             PROFILE="hauhau-q8"
             MODE="speed-all"
