@@ -74,6 +74,9 @@ readonly SWIFT_MMPROJ="mmproj-BF16.gguf"
 readonly SWIFT_MODEL_SHA="53da4d4c71cc2d8c42f731dda093ddd7eb0bf26069216c5b02b89e51805b978f"
 readonly SWIFT_MMPROJ_SHA="b343ceeb860cf802b16a5f9f3d048d61374bf0807caa86f9e61c221e744826ad"
 
+readonly SWIFT15_REPO="ukisai/Swift-1.5-Qwen3.8-27B-GGUF"
+readonly SWIFT15_REV="a1614465cfa35d04d3e8575d713fa779662b5eab"
+readonly SWIFT15_MMPROJ="mmproj-Swift-1.5-Qwen3.8-27B-F16.gguf"
 readonly GSQ_REPO="ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF"
 readonly GSQ_REV="1c04b8102ca5346f1faf4d9914503e378d713021"
 readonly GSQ_MMPROJ="mmproj-Qwen3.8-Flash-Next-BF16.gguf"
@@ -269,6 +272,8 @@ Profiles:
                      Hauhau FastMTP production profile with Q4_0 K/V and maximum xhigh reasoning
   turbo-q8-mtp       Qwen3.8-27B TURBO MTP Q8_0 + BF16 vision, native 262K, Q8 KV
   swift-bf16         Swift-Qwen3.8 uncensored BF16 GGUF + BF16 vision, native 262K, Q4 KV
+  swift15-q8         UkisAI Swift 1.5 Q8_0 + F16 vision, native 262K, xhigh, no MTP
+  swift15-q4         UkisAI Swift 1.5 Q4_K_M + F16 vision, native 262K, xhigh, no MTP
   hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K (explicit CLI-only experiment)
 
 --smoke uses a 4096-token context, one short text request, and one small PNG
@@ -440,6 +445,21 @@ configure_profile() {
             KV_TYPE="q8_0"
             SPEC_MODE="native"
             ;;
+        swift15-q8|swift15-q4)
+            local swift15_quant=Q8_0
+            [[ "$PROFILE" == swift15-q4 ]] && swift15_quant=Q4_K_M
+            PROFILE_LABEL="Swift 1.5 Qwen3.8-27B ${swift15_quant} / F16 vision / native 262K / xhigh / 1 slot / Q8 KV / experimental no MTP"
+            RUNTIME_KIND="swift15"
+            RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen38-turbo-upstream-4cbe8b07"
+            MODEL_PATH="${MODEL_ROOT}/swift15/Swift-1.5-Qwen3.8-27B-${swift15_quant}.gguf"
+            MMPROJ_PATH="${MODEL_ROOT}/swift15/${SWIFT15_MMPROJ}"
+            DRAFT_PATH=""
+            FULL_CTX=262144
+            SERVER_CTX=262144
+            PARALLEL=1
+            KV_TYPE="q8_0"
+            SPEC_MODE="none"
+            ;;
         gsq-q2|gsq-iq2|gsq-iq3)
             local quant
             case "$PROFILE" in
@@ -490,6 +510,9 @@ configure_profile() {
             ;;
     esac
 
+    if [[ "$RUNTIME_KIND" == swift15 && -n "$SPEC_OVERRIDE" && "$SPEC_OVERRIDE" != none ]]; then
+        die "Swift 1.5 has no validated matching MTP configuration; use --no-spec"
+    fi
     if [[ "$RUNTIME_KIND" == gsq && -n "$SPEC_OVERRIDE" && "$SPEC_OVERRIDE" != none ]]; then
         die "GSQ Flash-Next has no validated MTP configuration; use --no-spec"
     fi
@@ -635,6 +658,18 @@ ensure_swift_assets() {
     download_file "$base/$SWIFT_MMPROJ" "$dir/$SWIFT_MMPROJ" "$SWIFT_MMPROJ_SHA"
 }
 
+ensure_swift15_assets() {
+    local sha base="https://huggingface.co/${SWIFT15_REPO}/resolve/${SWIFT15_REV}"
+    if [[ "$PROFILE" == swift15-q8 ]]; then
+        sha="0b3b4aa0e367c620756de4f9db77fc18f94fbeb256db208281cbb84c48e2a101"
+    else
+        sha="2ebba0ff1e63c1ac3fadd4e83efcea189f47f33ec72c91877af94de6ebe30590"
+    fi
+    download_file "$base/$(basename "$MODEL_PATH")" "$MODEL_PATH" "$sha"
+    download_file "$base/$SWIFT15_MMPROJ" "$MMPROJ_PATH" "daa1116c9422fa390cc8688495da0e91781f92841dfc3b31a378ff252571745a"
+    download_file "$base/LICENSE" "${MODEL_ROOT}/swift15/LICENSE"
+}
+
 ensure_gsq_assets() {
     local quant first_sha dir base second
     case "$PROFILE" in
@@ -659,6 +694,7 @@ ensure_assets() {
         upstream) ensure_dflash_assets ;;
         turbo) ensure_turbo_assets ;;
         swift) ensure_swift_assets ;;
+        swift15) ensure_swift15_assets ;;
         gsq) ensure_gsq_assets ;;
         *) die "internal error: unknown runtime kind '$RUNTIME_KIND'" ;;
     esac
@@ -708,7 +744,7 @@ build_runtime() {
         git apply --check "$patch_file"
         git apply "$patch_file"
         say "Applied HauhauCS FastMTP patch to pinned qwen35 runtime"
-    elif [[ "$RUNTIME_KIND" == "turbo" || "$RUNTIME_KIND" == "swift" || "$RUNTIME_KIND" == "gsq" ]]; then
+    elif [[ "$RUNTIME_KIND" == "turbo" || "$RUNTIME_KIND" == "swift" || "$RUNTIME_KIND" == "swift15" || "$RUNTIME_KIND" == "gsq" ]]; then
         git fetch --quiet origin master
         if ! git cat-file -e "${TURBO_LLAMA_COMMIT}^{commit}" 2>/dev/null; then
             git fetch --quiet origin "$TURBO_LLAMA_COMMIT"
@@ -735,7 +771,7 @@ build_runtime() {
         -DCMAKE_BUILD_TYPE=Release
         -DCMAKE_CUDA_ARCHITECTURES=86
     )
-    if [[ ( "$RUNTIME_KIND" == "upstream" || "$RUNTIME_KIND" == "turbo" || "$RUNTIME_KIND" == "swift" ) && -x /usr/local/cuda-12.9/bin/nvcc ]]; then
+    if [[ ( "$RUNTIME_KIND" == "upstream" || "$RUNTIME_KIND" == "turbo" || "$RUNTIME_KIND" == "swift" || "$RUNTIME_KIND" == "swift15" ) && -x /usr/local/cuda-12.9/bin/nvcc ]]; then
         cmake_args+=( -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.9/bin/nvcc )
     fi
     cmake -S . -B build "${cmake_args[@]}" \
@@ -1493,6 +1529,9 @@ choose_profile() {
     say "  [6] GSQ Q2_0 | speed-oriented | 66.4 GB download + vision | speed: $(speed_display gsq-q2)"
     say "  [7] GSQ IQ2_XS | compact quality | 68.0 GB download + vision | speed: $(speed_display gsq-iq2)"
     say "  [8] GSQ IQ3_XXS | publisher quality recommendation | 75.8 GB + vision | speed: $(speed_display gsq-iq3)"
+    say "  Swift 1.5 (new reasoning-efficient model; native 262K; F16 vision; xhigh; no MTP):"
+    say "  [9] Swift 1.5 Q8_0 | fidelity reference | ~30 GB with projector | speed: $(speed_display swift15-q8)"
+    say " [10] Swift 1.5 Q4_K_M | speed/memory comparison | ~18.4 GB with projector | speed: $(speed_display swift15-q4)"
     say "  [s] Run short speed tests for all standard profiles"
     say "      DFlash2 is hidden here; explicit CLI only: --profile hauhau-q8-dflash2 (text-only, no vision)"
 
@@ -1508,6 +1547,8 @@ choose_profile() {
         6) PROFILE="gsq-q2" ;;
         7) PROFILE="gsq-iq2" ;;
         8) PROFILE="gsq-iq3" ;;
+        9) PROFILE="swift15-q8" ;;
+        10) PROFILE="swift15-q4" ;;
         s|S)
             PROFILE="hauhau-q8"
             MODE="speed-all"
