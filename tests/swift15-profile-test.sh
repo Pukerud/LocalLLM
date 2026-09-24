@@ -17,20 +17,31 @@ download_file() { printf '%s|%s|%s\n' "$1" "$2" "${3:-}" >> "$scratch/downloads"
 for p in swift15-q8 swift15-q4; do
  PROFILE="$p";SMOKE=0;SPEC_OVERRIDE="";configure_profile;make_server_args
  [[ "$FULL_CTX" == 262144 && "$SERVER_CTX" == 262144 && "$PARALLEL" == 1 ]]
- [[ "$RUNTIME_KIND" == swift15 && "$SPEC_MODE" == none && -z "$DRAFT_PATH" ]]
+ [[ "$RUNTIME_KIND" == swift15 && "$SPEC_MODE" == native && -z "$DRAFT_PATH" ]]
  [[ "$MODEL_PATH" == *Swift-1.5-Qwen3.8-27B-*.gguf && "$MMPROJ_PATH" == *mmproj-Swift-1.5-Qwen3.8-27B-F16.gguf ]]
  args=" ${SERVER_ARGS[*]} "
  [[ "$args" == *' --ctx-size 262144 '* && "$args" == *' --reasoning-effort xhigh '* && "$args" == *' --reasoning on '* ]]
  [[ "$args" == *' --mmproj '* && "$args" == *' --load-mode mmap '* && "$args" == *' --cache-type-k q8_0 '* ]]
- [[ "$args" != *' --spec-type '* && "$args" != *' --lazy-mode '* ]]
+ [[ "$args" == *' --spec-type draft-mtp '* && "$args" == *' --spec-draft-n-max 3 '* ]]
+ [[ "$args" != *' --spec-draft-model '* && "$args" != *' --lazy-mode '* ]]
  : > "$scratch/downloads";ensure_swift15_assets
  [[ "$(wc -l < "$scratch/downloads")" -eq 3 ]]
  grep -q "$SWIFT15_REV" "$scratch/downloads"
  grep -q 'daa1116c9422fa390cc8688495da0e91781f92841dfc3b31a378ff252571745a' "$scratch/downloads"
  if [[ "$p" == swift15-q8 ]]; then grep -q '0b3b4aa0e367c620756de4f9db77fc18f94fbeb256db208281cbb84c48e2a101' "$scratch/downloads"; else grep -q '2ebba0ff1e63c1ac3fadd4e83efcea189f47f33ec72c91877af94de6ebe30590' "$scratch/downloads"; fi
  if (SPEC_OVERRIDE=fast;configure_profile); then echo 'Wrong-model sidecar accepted' >&2;exit 1;fi
- SPEC_OVERRIDE=none;configure_profile
- [[ "$SPEC_MODE" == none ]]
+ if (SPEC_OVERRIDE=dflash2;configure_profile); then echo 'Unrelated DFlash accepted' >&2;exit 1;fi
+ SPEC_OVERRIDE=native;configure_profile;make_server_args
+ [[ " ${SERVER_ARGS[*]} " == *' --spec-type draft-mtp '* ]]
+ SWIFT15_MTP_N_MAX=2;configure_profile;make_server_args
+ [[ " ${SERVER_ARGS[*]} " == *' --spec-draft-n-max 2 '* ]]
+ for invalid in 0 8 abc; do
+  if (SWIFT15_MTP_N_MAX="$invalid";configure_profile); then echo 'Invalid MTP depth accepted' >&2;exit 1;fi
+ done
+ SWIFT15_MTP_N_MAX=3
+ SPEC_OVERRIDE=none;configure_profile;make_server_args
+ [[ "$SPEC_MODE" == none && "$PROFILE_LABEL" == *'MTP disabled'* ]]
+ [[ " ${SERVER_ARGS[*]} " != *' --spec-type '* && " ${SERVER_ARGS[*]} " == *' --ctx-size 262144 '* ]]
 done
 SPEC_OVERRIDE=""
 choose_profile <<< 9 > "$scratch/menu"
@@ -41,4 +52,4 @@ choose_profile <<< '' > "$scratch/menu"
 [[ "$PROFILE" == hauhau-q8-fastmtp-q4kv-xhigh ]]
 configure_profile
 [[ "$SPEC_MODE" == fast && "$KV_TYPE" == q4_0 ]]
-echo 'Swift 1.5 menu, full-context vision arguments, pinned downloads, MTP rejection and production default: PASS'
+echo 'Swift 1.5 native MTP, draft-depth validation, no-spec fallback, full-context vision, pinned downloads and default: PASS'

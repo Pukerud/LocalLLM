@@ -46,6 +46,7 @@ SERVER_LOG=""
 DFLASH_N_MAX="${QWEN38_DFLASH_N_MAX:-5}"
 TURBO_MTP_N_MAX="${QWEN38_TURBO_MTP_N_MAX:-2}"
 SWIFT_MTP_N_MAX="${QWEN38_SWIFT_MTP_N_MAX:-2}"
+SWIFT15_MTP_N_MAX="${QWEN38_SWIFT15_MTP_N_MAX:-3}"
 
 # Pinned/provenance data. Re-check PR head before intentionally updating it.
 readonly HAUHAU_REPO="HauhauCS/Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-MTP-GGUF"
@@ -272,8 +273,8 @@ Profiles:
                      Hauhau FastMTP production profile with Q4_0 K/V and maximum xhigh reasoning
   turbo-q8-mtp       Qwen3.8-27B TURBO MTP Q8_0 + BF16 vision, native 262K, Q8 KV
   swift-bf16         Swift-Qwen3.8 uncensored BF16 GGUF + BF16 vision, native 262K, Q4 KV
-  swift15-q8         UkisAI Swift 1.5 Q8_0 + F16 vision, native 262K, xhigh, no MTP
-  swift15-q4         UkisAI Swift 1.5 Q4_K_M + F16 vision, native 262K, xhigh, no MTP
+  swift15-q8         UkisAI Swift 1.5 Q8_0 + F16 vision, native 262K, xhigh, embedded MTP
+  swift15-q4         UkisAI Swift 1.5 Q4_K_M + F16 vision, native 262K, xhigh, embedded MTP
   hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K (explicit CLI-only experiment)
 
 --smoke uses a 4096-token context, one short text request, and one small PNG
@@ -448,7 +449,8 @@ configure_profile() {
         swift15-q8|swift15-q4)
             local swift15_quant=Q8_0
             [[ "$PROFILE" == swift15-q4 ]] && swift15_quant=Q4_K_M
-            PROFILE_LABEL="Swift 1.5 Qwen3.8-27B ${swift15_quant} / F16 vision / native 262K / xhigh / 1 slot / Q8 KV / experimental no MTP"
+            [[ "$SWIFT15_MTP_N_MAX" =~ ^[1-7]$ ]] || die "QWEN38_SWIFT15_MTP_N_MAX must be an integer from 1 to 7"
+            PROFILE_LABEL="Swift 1.5 Qwen3.8-27B ${swift15_quant} / F16 vision / native 262K / xhigh / 1 slot / Q8 KV / native MTP n=${SWIFT15_MTP_N_MAX}"
             RUNTIME_KIND="swift15"
             RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen38-turbo-upstream-4cbe8b07"
             MODEL_PATH="${MODEL_ROOT}/swift15/Swift-1.5-Qwen3.8-27B-${swift15_quant}.gguf"
@@ -458,7 +460,7 @@ configure_profile() {
             SERVER_CTX=262144
             PARALLEL=1
             KV_TYPE="q8_0"
-            SPEC_MODE="none"
+            SPEC_MODE="native"
             ;;
         gsq-q2|gsq-iq2|gsq-iq3)
             local quant
@@ -510,8 +512,8 @@ configure_profile() {
             ;;
     esac
 
-    if [[ "$RUNTIME_KIND" == swift15 && -n "$SPEC_OVERRIDE" && "$SPEC_OVERRIDE" != none ]]; then
-        die "Swift 1.5 has no validated matching MTP configuration; use --no-spec"
+    if [[ "$RUNTIME_KIND" == swift15 && -n "$SPEC_OVERRIDE" && "$SPEC_OVERRIDE" != none && "$SPEC_OVERRIDE" != native ]]; then
+        die "Swift 1.5 uses its embedded native MTP head, not an external FastMTP/DFlash sidecar"
     fi
     if [[ "$RUNTIME_KIND" == gsq && -n "$SPEC_OVERRIDE" && "$SPEC_OVERRIDE" != none ]]; then
         die "GSQ Flash-Next has no validated MTP configuration; use --no-spec"
@@ -521,6 +523,9 @@ configure_profile() {
             none|native|fast|dflash2) SPEC_MODE="$SPEC_OVERRIDE" ;;
             *) die "invalid --spec '$SPEC_OVERRIDE'" ;;
         esac
+    fi
+    if [[ "$RUNTIME_KIND" == swift15 && "$SPEC_MODE" == none ]]; then
+        PROFILE_LABEL="${PROFILE_LABEL% / native MTP*} / MTP disabled (--no-spec)"
     fi
 }
 
@@ -866,6 +871,8 @@ make_server_args() {
         native_mtp_n_max="$TURBO_MTP_N_MAX"
     elif [[ "$PROFILE" == "swift-bf16" ]]; then
         native_mtp_n_max="$SWIFT_MTP_N_MAX"
+    elif [[ "$RUNTIME_KIND" == swift15 ]]; then
+        native_mtp_n_max="$SWIFT15_MTP_N_MAX"
     fi
     if (( SMOKE )); then
         ctx=4096
@@ -1529,7 +1536,7 @@ choose_profile() {
     say "  [6] GSQ Q2_0 | speed-oriented | 66.4 GB download + vision | speed: $(speed_display gsq-q2)"
     say "  [7] GSQ IQ2_XS | compact quality | 68.0 GB download + vision | speed: $(speed_display gsq-iq2)"
     say "  [8] GSQ IQ3_XXS | publisher quality recommendation | 75.8 GB + vision | speed: $(speed_display gsq-iq3)"
-    say "  Swift 1.5 (new reasoning-efficient model; native 262K; F16 vision; xhigh; no MTP):"
+    say "  Swift 1.5 (reasoning-efficient; native 262K; F16 vision; xhigh; embedded native MTP n=${SWIFT15_MTP_N_MAX}):"
     say "  [9] Swift 1.5 Q8_0 | fidelity reference | ~30 GB with projector | speed: $(speed_display swift15-q8)"
     say " [10] Swift 1.5 Q4_K_M | speed/memory comparison | ~18.4 GB with projector | speed: $(speed_display swift15-q4)"
     say "  [s] Run short speed tests for all standard profiles"
