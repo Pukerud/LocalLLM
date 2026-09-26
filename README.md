@@ -50,6 +50,29 @@ Smoke and speed tests intentionally turn reasoning off so they remain short and
 comparable.
 The Swift option uses the public ajgazin/Swift-Qwen3.8-27B-Uncensored-Dynamic-MTP-GGUF BF16 conversion because the linked d0xin/Swift-Qwen3.8-27B-Uncensored-BF16 repository is gated. It is not claimed byte-identical to the gated repository; its revision and SHA-256 checksums are pinned in v1qwen38.sh.
 
+### Swift 1.5 uncensored: Q8 selected on the four-3090 host
+
+Menu **[11]** selects `swift15u-q8` from
+[`ajgazin/Swift-1.5-Qwen3.8-27B-Uncensored-Dynamic-MTP-GGUF`](https://huggingface.co/ajgazin/Swift-1.5-Qwen3.8-27B-Uncensored-Dynamic-MTP-GGUF).
+The BF16 alternative remains available as `--profile swift15u-bf16` for comparison,
+but is not a menu entry. Both weights and the BF16 vision projector are pinned by
+repository revision and SHA-256 in `v1qwen38.sh`.
+
+On 2026-09-26, `.69` (4 x RTX 3090) ran the same llama.cpp build, 4096-token
+context, Q8 KV, native MTP depth 3, reasoning off, one slot, temperature 0,
+and a fixed coding prompt with a 256-token limit for both formats. After two
+warm-ups, ten serial completed requests per model yielded:
+
+| Format | Median server decode | Median end-to-end request | Result |
+| --- | ---: | ---: | --- |
+| Q8_K_XL | 61.96 tokens/s | 3.83 s | Selected, about 51% faster decode |
+| BF16 | 40.96 tokens/s | 5.85 s | CLI comparison only |
+
+All measured requests ended normally (`finish_reason=stop`). This is a
+short-context, text-only throughput comparison, not a full-262K context,
+vision, or quality evaluation. Normal menu launches retain native 262K,
+BF16 vision, and xhigh reasoning.
+
 The launcher visibly reports:
 
 - model/projector/sidecar checksum progress, rate, and ETA;

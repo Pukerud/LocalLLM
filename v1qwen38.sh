@@ -78,6 +78,11 @@ readonly SWIFT_MMPROJ_SHA="b343ceeb860cf802b16a5f9f3d048d61374bf0807caa86f9e61c2
 readonly SWIFT15_REPO="ukisai/Swift-1.5-Qwen3.8-27B-GGUF"
 readonly SWIFT15_REV="a1614465cfa35d04d3e8575d713fa779662b5eab"
 readonly SWIFT15_MMPROJ="mmproj-Swift-1.5-Qwen3.8-27B-F16.gguf"
+readonly SWIFT15U_REPO="ajgazin/Swift-1.5-Qwen3.8-27B-Uncensored-Dynamic-MTP-GGUF"
+readonly SWIFT15U_REV="490e3d954a5d7616cccb69df3da437d66c20991a"
+readonly SWIFT15U_Q8="Swift-1.5-Qwen3.8-27B-Uncensored-Dynamic-MTP-UD-Q8_K_XL.gguf"
+readonly SWIFT15U_BF16="Swift-1.5-Qwen3.8-27B-Uncensored-MTP-BF16.gguf"
+readonly SWIFT15U_MMPROJ="mmproj-BF16.gguf"
 readonly GSQ_REPO="ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF"
 readonly GSQ_REV="1c04b8102ca5346f1faf4d9914503e378d713021"
 readonly GSQ_MMPROJ="mmproj-Qwen3.8-Flash-Next-BF16.gguf"
@@ -275,6 +280,8 @@ Profiles:
   swift-bf16         Swift-Qwen3.8 uncensored BF16 GGUF + BF16 vision, native 262K, Q4 KV
   swift15-q8         UkisAI Swift 1.5 Q8_0 + F16 vision, native 262K, xhigh, embedded MTP
   swift15-q4         UkisAI Swift 1.5 Q4_K_M + F16 vision, native 262K, xhigh, embedded MTP
+  swift15u-q8        Ajgazin Swift 1.5 uncensored Q8_K_XL + BF16 vision, native 262K, embedded MTP
+  swift15u-bf16      Ajgazin Swift 1.5 uncensored BF16 + BF16 vision, native 262K, embedded MTP
   hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K (explicit CLI-only experiment)
 
 --smoke uses a 4096-token context, one short text request, and one small PNG
@@ -443,6 +450,25 @@ configure_profile() {
             FULL_CTX=262144
             SERVER_CTX=$((FULL_CTX * TURBO_SLOTS))
             PARALLEL="$TURBO_SLOTS"
+            KV_TYPE="q8_0"
+            SPEC_MODE="native"
+            ;;
+        swift15u-q8|swift15u-bf16)
+            [[ "$SWIFT15_MTP_N_MAX" =~ ^[1-7]$ ]] || die "QWEN38_SWIFT15_MTP_N_MAX must be an integer from 1 to 7"
+            local swift15u_quant=Q8_K_XL swift15u_model="$SWIFT15U_Q8"
+            if [[ "$PROFILE" == swift15u-bf16 ]]; then
+                swift15u_quant=BF16
+                swift15u_model="$SWIFT15U_BF16"
+            fi
+            PROFILE_LABEL="Swift 1.5 uncensored ${swift15u_quant} / BF16 vision / native 262K / xhigh / 1 slot / Q8 KV / native MTP n=${SWIFT15_MTP_N_MAX}"
+            RUNTIME_KIND="swift15"
+            RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen38-turbo-upstream-4cbe8b07"
+            MODEL_PATH="${MODEL_ROOT}/swift15-uncensored/${swift15u_model}"
+            MMPROJ_PATH="${MODEL_ROOT}/swift15-uncensored/${SWIFT15U_MMPROJ}"
+            DRAFT_PATH=""
+            FULL_CTX=262144
+            SERVER_CTX=262144
+            PARALLEL=1
             KV_TYPE="q8_0"
             SPEC_MODE="native"
             ;;
@@ -664,6 +690,17 @@ ensure_swift_assets() {
 }
 
 ensure_swift15_assets() {
+    if [[ "$PROFILE" == swift15u-q8 || "$PROFILE" == swift15u-bf16 ]]; then
+        local model_sha base="https://huggingface.co/${SWIFT15U_REPO}/resolve/${SWIFT15U_REV}"
+        if [[ "$PROFILE" == swift15u-q8 ]]; then
+            model_sha="9076f99a2b1c0d232d5c169bb117e919ca21bafbe092be8fc8d9c4d645ed09c9"
+        else
+            model_sha="f4bcbcc27fbb3f3560e51a4fbcea5fea346e76d89965fe21901bf43f70154b8f"
+        fi
+        download_file "$base/$(basename "$MODEL_PATH")" "$MODEL_PATH" "$model_sha"
+        download_file "$base/$SWIFT15U_MMPROJ" "$MMPROJ_PATH" "19acd7fcf4ee504328566eddf0f8e603ef853a205b4830209d2a4908213abdea"
+        return
+    fi
     local sha base="https://huggingface.co/${SWIFT15_REPO}/resolve/${SWIFT15_REV}"
     if [[ "$PROFILE" == swift15-q8 ]]; then
         sha="0b3b4aa0e367c620756de4f9db77fc18f94fbeb256db208281cbb84c48e2a101"
@@ -1539,6 +1576,7 @@ choose_profile() {
     say "  Swift 1.5 (reasoning-efficient; native 262K; F16 vision; xhigh; embedded native MTP n=${SWIFT15_MTP_N_MAX}):"
     say "  [9] Swift 1.5 Q8_0 | fidelity reference | ~30 GB with projector | speed: $(speed_display swift15-q8)"
     say " [10] Swift 1.5 Q4_K_M | speed/memory comparison | ~18.4 GB with projector | speed: $(speed_display swift15-q4)"
+    say " [11] Swift 1.5 Uncensored Q8_K_XL | faster than BF16 on 4x3090 | ~32.4 GB with projector | speed: $(speed_display swift15u-q8)"
     say "  [s] Run short speed tests for all standard profiles"
     say "      DFlash2 is hidden here; explicit CLI only: --profile hauhau-q8-dflash2 (text-only, no vision)"
 
@@ -1556,6 +1594,7 @@ choose_profile() {
         8) PROFILE="gsq-iq3" ;;
         9) PROFILE="swift15-q8" ;;
         10) PROFILE="swift15-q4" ;;
+        11) PROFILE="swift15u-q8" ;;
         s|S)
             PROFILE="hauhau-q8"
             MODE="speed-all"
