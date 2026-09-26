@@ -1,19 +1,21 @@
 # HiveOS LLM custom miner
 
-This custom HiveOS miner exposes the retained Qwen3.8 Hauhau FastMTP server as
+This custom HiveOS miner exposes the Swift 1.5 Uncensored Q8 server as
 an ordinary HiveOS miner. It uses every detected NVIDIA GPU, the official
 `hive-miners-custom` control package, and the normal `miner start` / `miner stop`
 lifecycle.
 
-The miner starts the current Q4-KV production profile:
+The miner starts the current two-slot Q8-KV production profile:
 
 ```text
-/home/user/LocalLLM/v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q4kv-xhigh --no-dashboard
+/home/user/LocalLLM/v1qwen38.sh --quickstart --profile swift15u-q8 --no-dashboard
 ```
 
 It deliberately does **not** stop or start `osn.service`. On the current
-4x RTX 3090 host, the launcher automatically uses FastMTP n=4 and three
-native-262K slots with Q4_0 K/V and xhigh reasoning; on the original 3-GPU layout it uses n=3 and two slots. The Q8-KV `hauhau-q8-fastmtp` profile remains available as a fallback. When OctaSpace rents the node, its
+4x RTX 3090 host, the launcher uses native MTP and two native-262K slots
+with Q8_0 K/V, BF16 vision and xhigh reasoning. On smaller GPU layouts it
+defaults to one slot. The Hauhau `hauhau-q8-fastmtp` profile remains available
+as a Q8-KV alternative. When OctaSpace rents the node, its
 normal HiveOS `miner stop` command reaches the foreground wrapper, which stops
 the Qwen server. When the rental ends, `miner start` starts the wrapper again
 while `osn.service` remains running. Managed starts skip hashing already-present

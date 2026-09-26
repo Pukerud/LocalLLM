@@ -35,7 +35,7 @@ fi
 
 PORT="${QWEN38_PORT:-8080}"
 BIND_HOST="${QWEN38_HOST:-0.0.0.0}"
-PROFILE="hauhau-q8-fastmtp-q4kv-xhigh"
+PROFILE="swift15u-q8"
 MODE="menu"
 PROFILE_EXPLICIT=0
 SPEC_OVERRIDE=""
@@ -47,6 +47,7 @@ DFLASH_N_MAX="${QWEN38_DFLASH_N_MAX:-5}"
 TURBO_MTP_N_MAX="${QWEN38_TURBO_MTP_N_MAX:-2}"
 SWIFT_MTP_N_MAX="${QWEN38_SWIFT_MTP_N_MAX:-2}"
 SWIFT15_MTP_N_MAX="${QWEN38_SWIFT15_MTP_N_MAX:-3}"
+SWIFT15U_MTP_N_MAX="${QWEN38_SWIFT15U_MTP_N_MAX:-3}"
 
 # Pinned/provenance data. Re-check PR head before intentionally updating it.
 readonly HAUHAU_REPO="HauhauCS/Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-MTP-GGUF"
@@ -241,6 +242,16 @@ default_swift_slots() {
         # fullest GPU while creating the native MTP KV cache.
         printf '3'
     elif (( GPU_COUNT >= 3 )); then
+        printf '2'
+    else
+        printf '1'
+    fi
+}
+
+default_swift15u_slots() {
+    if [[ -n "${QWEN38_SWIFT15U_SLOTS:-}" ]]; then
+        printf '%s' "$QWEN38_SWIFT15U_SLOTS"
+    elif (( GPU_COUNT >= 4 )); then
         printf '2'
     else
         printf '1'
@@ -454,21 +465,26 @@ configure_profile() {
             SPEC_MODE="native"
             ;;
         swift15u-q8|swift15u-bf16)
-            [[ "$SWIFT15_MTP_N_MAX" =~ ^[1-7]$ ]] || die "QWEN38_SWIFT15_MTP_N_MAX must be an integer from 1 to 7"
+            [[ "$SWIFT15U_MTP_N_MAX" =~ ^[1-7]$ ]] || die "QWEN38_SWIFT15U_MTP_N_MAX must be an integer from 1 to 7"
             local swift15u_quant=Q8_K_XL swift15u_model="$SWIFT15U_Q8"
             if [[ "$PROFILE" == swift15u-bf16 ]]; then
                 swift15u_quant=BF16
                 swift15u_model="$SWIFT15U_BF16"
             fi
-            PROFILE_LABEL="Swift 1.5 uncensored ${swift15u_quant} / BF16 vision / native 262K / xhigh / 1 slot / Q8 KV / native MTP n=${SWIFT15_MTP_N_MAX}"
+            local swift15u_slots=1
+            if [[ "$PROFILE" == swift15u-q8 ]]; then
+                swift15u_slots="$(default_swift15u_slots)"
+                [[ "$swift15u_slots" =~ ^[1-3]$ ]] || die "QWEN38_SWIFT15U_SLOTS must be an integer from 1 to 3"
+            fi
+            PROFILE_LABEL="Swift 1.5 uncensored ${swift15u_quant} / BF16 vision / native 262K / xhigh / ${swift15u_slots} slot(s) / Q8 KV / native MTP n=${SWIFT15U_MTP_N_MAX}"
             RUNTIME_KIND="swift15"
             RUNTIME_DIR="${RUNTIME_ROOT}/llama-qwen38-turbo-upstream-4cbe8b07"
             MODEL_PATH="${MODEL_ROOT}/swift15-uncensored/${swift15u_model}"
             MMPROJ_PATH="${MODEL_ROOT}/swift15-uncensored/${SWIFT15U_MMPROJ}"
             DRAFT_PATH=""
             FULL_CTX=262144
-            SERVER_CTX=262144
-            PARALLEL=1
+            SERVER_CTX=$((FULL_CTX * swift15u_slots))
+            PARALLEL="$swift15u_slots"
             KV_TYPE="q8_0"
             SPEC_MODE="native"
             ;;
@@ -908,6 +924,8 @@ make_server_args() {
         native_mtp_n_max="$TURBO_MTP_N_MAX"
     elif [[ "$PROFILE" == "swift-bf16" ]]; then
         native_mtp_n_max="$SWIFT_MTP_N_MAX"
+    elif [[ "$PROFILE" == swift15u-q8 || "$PROFILE" == swift15u-bf16 ]]; then
+        native_mtp_n_max="$SWIFT15U_MTP_N_MAX"
     elif [[ "$RUNTIME_KIND" == swift15 ]]; then
         native_mtp_n_max="$SWIFT15_MTP_N_MAX"
     fi
@@ -1505,8 +1523,8 @@ show_dashboard() {
             "$FULL_CTX" "$PARALLEL" "${KV_TYPE^^}" "$spec_label"
         if [[ -z "$MMPROJ_PATH" ]]; then
             printf '  Vision:   OFF (DFlash2 text-only profile)\n'
-        elif [[ "$RUNTIME_KIND" == "hauhau" ]]; then
-            printf '  Vision:   ON (BF16 projector)\n'
+        elif [[ "$PROFILE" == swift15-q8 || "$PROFILE" == swift15-q4 ]]; then
+            printf '  Vision:   ON (F16 projector)\n'
         else
             printf '  Vision:   ON (BF16 projector)\n'
         fi
@@ -1532,7 +1550,11 @@ show_dashboard() {
         echo "=================================================================="
         echo ""
         printf '  Health: %s\n' "$health"
-        printf '  Speed:  %s\n' "$(speed_detail "$PROFILE")"
+        if [[ "$PROFILE" == swift15u-q8 && "$PARALLEL" -eq 2 && "$SWIFT15U_MTP_N_MAX" -eq 3 && "$SPEC_MODE" == native && "$GPU_DEVICE_LIST" == CUDA0,CUDA1,CUDA2,CUDA3 ]]; then
+            printf '  Speed:  60.65 tok/s short decode; 45.88 coding / 50.30 narrative fixed-budget decode (2026-09-26)\n'
+        else
+            printf '  Speed:  %s\n' "$(speed_detail "$PROFILE")"
+        fi
         printf '  CPU: %s%%\n' "$(cpu_percent)"
         gpu_dashboard
         echo ""
@@ -1556,52 +1578,56 @@ show_dashboard() {
 }
 
 choose_profile() {
-    FAST_MTP_SLOTS="$(default_fast_mtp_slots)"
-    FAST_MTP_N_MAX="$(default_fast_mtp_n_max)"
-    TURBO_SLOTS="$(default_turbo_slots)"
-    SWIFT_SLOTS="$(default_swift_slots)"
+    local candidate description choice index
+    local -a menu_profiles=()
     say ""
-    say "Qwen3.8 Quick Start (choose by use case)"
+    say "Qwen3.8 Quick Start (installed models only)"
     say "  GPUs detected: ${GPU_SUMMARY}"
-    say "  Stable profiles:"
-    say "  [1] Hauhau Q8 + native MTP | SAME Hauhau model as [2] | vision | 1 slot / F16 KV / reference fallback | speed: $(speed_display hauhau-q8)"
-    say "  [2] Hauhau Q8 + FastMTP | SAME Hauhau model as [1] | Q8 KV fallback | vision | ${FAST_MTP_SLOTS} slots | speed: $(speed_display hauhau-q8-fastmtp)"
-    say "  [3] Qwen3.8-27B TURBO MTP Q8_0 | new Q8 model | vision | thinking xhigh (model max; concise TURBO reasoning) | ${TURBO_SLOTS} slots / native 262K each / Q8 KV | speed: $(speed_display turbo-q8-mtp)"
-    say "  [4] Hauhau Q8 + FastMTP | CURRENT production | vision | Q4_0 K/V | xhigh (maximum supported) reasoning | ${FAST_MTP_SLOTS} slots | speed: $(speed_display hauhau-q8-fastmtp-q4kv-xhigh)"
-    say "  [5] Swift-Qwen3.8 Uncensored BF16 GGUF | public BF16 conversion; gated d0xin source was unavailable | vision | native 262K | Q4 KV | ${SWIFT_SLOTS} slots by default | speed: $(speed_display swift-bf16)"
-    say "  Experimental Flash-Next GSQ-RCO (lazy PLE; no MTP; Q2: tuned 2x3090/native 262K, otherwise 32K):"
-    say "  [6] GSQ Q2_0 | speed-oriented | 66.4 GB download + vision | speed: $(speed_display gsq-q2)"
-    say "  [7] GSQ IQ2_XS | compact quality | 68.0 GB download + vision | speed: $(speed_display gsq-iq2)"
-    say "  [8] GSQ IQ3_XXS | publisher quality recommendation | 75.8 GB + vision | speed: $(speed_display gsq-iq3)"
-    say "  Swift 1.5 (reasoning-efficient; native 262K; F16 vision; xhigh; embedded native MTP n=${SWIFT15_MTP_N_MAX}):"
-    say "  [9] Swift 1.5 Q8_0 | fidelity reference | ~30 GB with projector | speed: $(speed_display swift15-q8)"
-    say " [10] Swift 1.5 Q4_K_M | speed/memory comparison | ~18.4 GB with projector | speed: $(speed_display swift15-q4)"
-    say " [11] Swift 1.5 Uncensored Q8_K_XL | faster than BF16 on 4x3090 | ~32.4 GB with projector | speed: $(speed_display swift15u-q8)"
-    say "  [s] Run short speed tests for all standard profiles"
-    say "      DFlash2 is hidden here; explicit CLI only: --profile hauhau-q8-dflash2 (text-only, no vision)"
-
+    say "  Native 262K context per slot unless a profile says otherwise."
+    say "  Preferred and comparison profiles:"
+    for candidate in swift15u-q8 hauhau-q8-fastmtp turbo-q8-mtp swift15-q8 swift15u-bf16; do
+        PROFILE="$candidate"
+        configure_profile
+        [[ -f "$MODEL_PATH" && -f "$MMPROJ_PATH" ]] || continue
+        [[ -z "$DRAFT_PATH" || -f "$DRAFT_PATH" ]] || continue
+        case "$candidate" in
+            swift15u-q8) description="Swift 1.5 Uncensored Q8_K_XL | DEFAULT | ${PARALLEL} slots | Q8 KV | BF16 vision | native MTP n=${SWIFT15U_MTP_N_MAX}" ;;
+            hauhau-q8-fastmtp) description="Hauhau Q8 | ${PARALLEL} slots | Q8 KV | BF16 vision | FastMTP n=${FAST_MTP_N_MAX}" ;;
+            turbo-q8-mtp) description="TURBO Q8_0 | ${PARALLEL} slots | Q8 KV | BF16 vision | native MTP n=${TURBO_MTP_N_MAX}" ;;
+            swift15-q8) description="Swift 1.5 Q8_0 | 1 slot | Q8 KV | F16 vision | native MTP n=${SWIFT15_MTP_N_MAX}" ;;
+            swift15u-bf16) description="Swift 1.5 Uncensored BF16 | 1 slot | Q8 KV | BF16 vision | native MTP n=${SWIFT15U_MTP_N_MAX}" ;;
+        esac
+        menu_profiles+=("$candidate")
+        index="${#menu_profiles[@]}"
+        say "  [$index] $description"
+    done
+    say "  Other installed profiles (explicit trade-offs):"
+    for candidate in swift-bf16 hauhau-q8-fastmtp-q4kv-xhigh hauhau-q8 gsq-q2 gsq-iq2 gsq-iq3 swift15-q4; do
+        PROFILE="$candidate"
+        configure_profile
+        [[ -f "$MODEL_PATH" && -f "$MMPROJ_PATH" ]] || continue
+        [[ -z "$DRAFT_PATH" || -f "$DRAFT_PATH" ]] || continue
+        if [[ "$RUNTIME_KIND" == gsq ]]; then
+            [[ -f "$(dirname "$MODEL_PATH")/$(basename "$MODEL_PATH" 00001-of-00002.gguf)00002-of-00002.gguf" ]] || continue
+        fi
+        case "$candidate" in
+            swift-bf16) description="Older Swift BF16 | ${PARALLEL} slots | Q4 KV | BF16 vision" ;;
+            hauhau-q8-fastmtp-q4kv-xhigh) description="Hauhau Q8 | ${PARALLEL} slots | Q4 KV | BF16 vision | FastMTP" ;;
+            hauhau-q8) description="Hauhau Q8 reference | 1 slot | F16 KV | BF16 vision | native MTP" ;;
+            gsq-*) description="Flash-Next GSQ ${candidate#gsq-} | experimental | ${FULL_CTX} context | Q8 KV | BF16 vision" ;;
+            swift15-q4) description="Swift 1.5 Q4_K_M | 1 slot | Q8 KV | F16 vision" ;;
+        esac
+        menu_profiles+=("$candidate")
+        index="${#menu_profiles[@]}"
+        say "  [$index] $description"
+    done
+    say "  Missing/download-only profiles are available by explicit --profile after download."
+    say "  Short legacy speed suite: --speed-test-all (not all menu profiles)."
     say "  [q] Cancel"
-    read -r -p "Select [4]: " choice
-    choice="${choice:-4}"
-    case "$choice" in
-        1) PROFILE="hauhau-q8" ;;
-        2) PROFILE="hauhau-q8-fastmtp" ;;
-        3) PROFILE="turbo-q8-mtp" ;;
-        4) PROFILE="hauhau-q8-fastmtp-q4kv-xhigh" ;;
-        5) PROFILE="swift-bf16" ;;
-        6) PROFILE="gsq-q2" ;;
-        7) PROFILE="gsq-iq2" ;;
-        8) PROFILE="gsq-iq3" ;;
-        9) PROFILE="swift15-q8" ;;
-        10) PROFILE="swift15-q4" ;;
-        11) PROFILE="swift15u-q8" ;;
-        s|S)
-            PROFILE="hauhau-q8"
-            MODE="speed-all"
-            SMOKE=1
-            ;;
-        *) say "Cancelled."; exit 0 ;;
-    esac
+    read -r -p "Select [1]: " choice
+    choice="${choice:-1}"
+    [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#menu_profiles[@]} )) || { say "Cancelled."; exit 0; }
+    PROFILE="${menu_profiles[choice-1]}"
 }
 
 main() {

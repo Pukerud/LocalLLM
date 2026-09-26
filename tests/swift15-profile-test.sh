@@ -5,7 +5,7 @@ scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 export QWEN38_DATA_ROOT="$scratch/data" QWEN38_STATE_ROOT="$scratch/state"
 source <(head -n -1 "$root/v1qwen38.sh")
-[[ "$PROFILE" == hauhau-q8-fastmtp-q4kv-xhigh ]]
+[[ "$PROFILE" == swift15u-q8 ]]
 GPU_COUNT=4
 GPU_INDICES=(0 1 2 3)
 GPU_NAMES=('NVIDIA GeForce RTX 3090' 'NVIDIA GeForce RTX 3090' 'NVIDIA GeForce RTX 3090' 'NVIDIA GeForce RTX 3090')
@@ -44,12 +44,19 @@ for p in swift15-q8 swift15-q4; do
  [[ " ${SERVER_ARGS[*]} " != *' --spec-type '* && " ${SERVER_ARGS[*]} " == *' --ctx-size 262144 '* ]]
 done
 SPEC_OVERRIDE=""
-choose_profile <<< 9 > "$scratch/menu"
-[[ "$PROFILE" == swift15-q8 ]]
-choose_profile <<< 10 > "$scratch/menu"
-[[ "$PROFILE" == swift15-q4 ]]
+mkdir -p "$MODEL_ROOT/swift15-uncensored"
+touch "$MODEL_ROOT/swift15-uncensored/$SWIFT15U_Q8" "$MODEL_ROOT/swift15-uncensored/$SWIFT15U_MMPROJ"
 choose_profile <<< '' > "$scratch/menu"
-[[ "$PROFILE" == hauhau-q8-fastmtp-q4kv-xhigh ]]
+[[ "$PROFILE" == swift15u-q8 ]]
 configure_profile
-[[ "$SPEC_MODE" == fast && "$KV_TYPE" == q4_0 ]]
-echo 'Swift 1.5 native MTP, draft-depth validation, no-spec fallback, full-context vision, pinned downloads and default: PASS'
+make_server_args
+[[ "$SPEC_MODE" == native && "$KV_TYPE" == q8_0 ]]
+[[ "$PARALLEL" == 2 && "$SERVER_CTX" == 524288 ]]
+[[ " ${SERVER_ARGS[*]} " == *' --ctx-size 524288 '* && " ${SERVER_ARGS[*]} " == *' --parallel 2 '* && " ${SERVER_ARGS[*]} " == *' --spec-draft-n-max 3 '* ]]
+grep -q 'Swift 1.5 Uncensored Q8_K_XL | DEFAULT' "$scratch/menu"
+! grep -q 'GSQ IQ3_XXS' "$scratch/menu"
+QWEN38_SWIFT15U_SLOTS=1;configure_profile
+[[ "$PARALLEL" == 1 && "$SERVER_CTX" == 262144 ]]
+QWEN38_SWIFT15U_SLOTS=4
+if (configure_profile); then echo 'Unvalidated four Q8-KV slots accepted' >&2;exit 1;fi
+echo 'Swift 1.5 native MTP, pinned downloads, two-slot Q8 default and installed-only menu: PASS'

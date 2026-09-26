@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Install the Qwen3.8 FastMTP server as HiveOS's official custom miner.
+# Install the Swift 1.5 Q8 server as HiveOS's official custom miner.
 # This intentionally leaves osn.service alone; OctaSpace owns the service
 # lifecycle and uses HiveOS miner stop/start for rental handoff.
 set -Eeuo pipefail
@@ -69,7 +69,7 @@ sync
 printf '\nHiveOS LLM miner installed.\n'
 printf '  MINER=custom\n'
 printf '  CUSTOM_MINER=%s\n' "$CUSTOM_NAME"
-printf '  Profile: hauhau-q8-fastmtp-q4kv-xhigh\n'
+printf '  Profile: swift15u-q8\n'
 printf '  osn.service was not stopped or modified.\n'
 printf '\nStart it with: miner start\n'
 printf 'Stop it with:  miner stop\n'
