@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepared Strata IQ3_S launcher. No downloads, updates, driver or service changes."""
+"""Prepared Strata model launcher. No downloads, updates, driver or service changes."""
 import argparse
 import fcntl
 import hashlib
@@ -16,6 +16,8 @@ import urllib.request
 from engine_safety import (SafetyError, command_output, docker_empty, launch_gate, owner_home,
                            proc, same_process, signal_identity, strata_state)
 from prepare_strata import DIGESTS
+from orca_assets import MODEL_ID as ORCA_MODEL_ID, PROFILE as ORCA_PROFILE
+from orca_profile import ready_orca
 
 SOURCE_COMMIT = '99f3dbd0b21d1401b3769e0c0d963913607f380b'
 MODEL_REVISION = 'ed59f92082b1e93c0e96d60a8b11aab089b52f09'
@@ -26,8 +28,12 @@ def data_root():
     return Path(os.environ.get('STRATA_DATA_ROOT', owner_home() / '.local/share/localllm-strata'))
 
 
-def ready():
+def ready(profile='iq3_s'):
     root = data_root()
+    if profile == ORCA_PROFILE:
+        return ready_orca(root)
+    if profile != 'iq3_s':
+        raise SafetyError('Unknown prepared Strata profile')
     manifest = json.loads((root / 'prepared.json').read_text())
     if manifest['source_commit'] != SOURCE_COMMIT:
         raise SafetyError('Prepared Strata source pin mismatch')
@@ -223,8 +229,8 @@ def health(port):
         return False
 
 
-def start(lock):
-    source, config_path, cfg = ready()
+def start(lock, profile='iq3_s'):
+    source, config_path, cfg = ready() if profile == 'iq3_s' else ready(profile)
     state = read_state()
     if state and family(state):
         raise SafetyError('Strata is already running; use its existing web UI')
@@ -235,8 +241,8 @@ def start(lock):
     # A private effective config permits optional API credentials without editing the pinned source config.
     cfg['host'] = os.environ.get('STRATA_HOST', cfg.get('host', '0.0.0.0'))
     cfg['port'] = port
-    cfg['model_name'] = 'qwen3.8-flash-next-iq3_s-strata'
-    cfg['aliases'] = ['qwen38', 'strata']
+    cfg['model_name'] = ORCA_MODEL_ID if profile == ORCA_PROFILE else 'qwen3.8-flash-next-iq3_s-strata'
+    cfg['aliases'] = ['orca', 'orca-strata'] if profile == ORCA_PROFILE else ['qwen38', 'strata']
     cfg['sampling'] = {'temperature': 1.0, 'top_p': 0.95, 'top_k': 20,
                        'experimental_speed_projection': False}
     if os.environ.get('STRATA_API_KEY'):
@@ -254,7 +260,11 @@ def start(lock):
     lib_dirs = cfg.get('lib_dirs', [])
     if lib_dirs:
         env['LD_LIBRARY_PATH'] = ':'.join(lib_dirs) + ':' + env.get('LD_LIBRARY_PATH', '')
-    print(f'EXPERIMENTAL Strata IQ3_S | BF16 GPU vision | native 262144 | INT8 KV | MTP | high reasoning')
+    if profile == ORCA_PROFILE:
+        print('EXPERIMENTAL Orca Uncensored IQ3_XXS | initial 32K | INT8 KV | MTP | high | F16 GPU vision configured')
+        print('WARNING: Orca model/vision GPU inference has not been locally validated. Original IQ3_S is unchanged.')
+    else:
+        print('EXPERIMENTAL Strata IQ3_S | BF16 GPU vision | native 262144 | INT8 KV | MTP | high reasoning')
     print(f'Four-GPU layer split auto; serial requests. Log: {log}', flush=True)
     if cfg['host'] == '0.0.0.0' and not cfg.get('api_key'):
         print('WARNING: unauthenticated LAN API. Use STRATA_API_KEY before exposing beyond a trusted LAN.')
@@ -269,7 +279,7 @@ def start(lock):
         child.terminate()
         child.wait(timeout=10)
         raise SafetyError('Frontend launch identity could not be recorded')
-    state = {'identity': identity, 'port': port, 'log': str(log), 'source_commit': SOURCE_COMMIT,
+    state = {'identity': identity, 'port': port, 'log': str(log), 'source_commit': SOURCE_COMMIT, 'profile': profile,
              'config': str(run_config), 'allowed_executables': [str(python.resolve()), cfg['exe'], cfg['vision']['exe']]}
     write_state(state)
     # Serialize the launch handoff, not the whole foreground server lifetime.
@@ -337,16 +347,22 @@ def main():
     modes.add_argument('--stop', action='store_true')
     modes.add_argument('--status', action='store_true')
     modes.add_argument('--check-ready', action='store_true')
+    ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE], default=None)
     a = ap.parse_args()
+    profile = a.profile or 'iq3_s'
     try:
         if a.check_ready:
-            source, config, cfg = ready()
-            print('PREPARED: pinned IQ3_S, BF16 GPU vision, native 262144, INT8 KV, MTP, four-GPU auto split.')
-            print('Readiness verifies assets/config; bounded live validation is documented in STRATA_IQ3S.md (not full-context quality).')
+            source, config, cfg = ready() if profile == 'iq3_s' else ready(profile)
+            if profile == ORCA_PROFILE:
+                print('PREPARED: pinned Orca IQ3_XXS, own compatibility pack/tokenizer, F16 vision configured, initial 32K.')
+                print('Actual Orca model/vision GPU inference UNTESTED; preparation does not stop a running server.')
+            else:
+                print('PREPARED: pinned IQ3_S, BF16 GPU vision, native 262144, INT8 KV, MTP, four-GPU auto split.')
+                print('Readiness verifies assets/config; bounded live validation is documented in STRATA_IQ3S.md (not full-context quality).')
         elif a.status:
             state = read_state()
             if state and family(state):
-                print(f'Strata running; port {state["port"]}; log {state["log"]}')
+                print(f'Strata running ({state.get("profile", "iq3_s")}); port {state["port"]}; log {state["log"]}')
             else:
                 print('Strata stopped.')
         else:
@@ -354,7 +370,13 @@ def main():
             root.mkdir(parents=True, exist_ok=True)
             with (root / 'lifecycle.lock').open('a') as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                stop() if a.stop else start(lock)
+                if a.stop:
+                    state = read_state()
+                    if a.profile and state and state.get('profile', 'iq3_s') != profile and family(state):
+                        raise SafetyError('A different Strata profile is running; profile-specific stop refused')
+                    stop()
+                else:
+                    start(lock, profile)
     except (SafetyError, FileNotFoundError, PermissionError, ValueError, TypeError, KeyError, IndexError, BlockingIOError) as exc:
         print(f'BLOCKED: {exc}', file=sys.stderr)
         return 1

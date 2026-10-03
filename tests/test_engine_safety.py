@@ -274,6 +274,12 @@ class StrataState(unittest.TestCase):
 
 class ForegroundIntegration(unittest.TestCase):
     def test_cpu_http_start_request_external_stop_and_reap(self):
+        self.run_case('iq3_s')
+
+    def test_cpu_orca_profile_request_external_stop_and_reap(self):
+        self.run_case('orca-iq3_xxs')
+
+    def run_case(self, profile):
         """Fake CPU frontend exercises the real launcher lifecycle, not model inference."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -289,10 +295,11 @@ class ForegroundIntegration(unittest.TestCase):
             state_root = root / 'state'
             cfg = {'args': [], 'exe': '/bin/sleep', 'vision': {'exe': '/bin/sleep'}, 'host': '127.0.0.1', 'port': port}
             driver = root / 'driver.py'
-            driver.write_text(f'''import sys,pathlib,fcntl\nsys.path.insert(0,{str(ROOT)!r})\nimport strata_launcher as s\ns.ready=lambda: (pathlib.Path({str(source)!r}),pathlib.Path('unused'),{cfg!r})\ns.launch_gate=lambda port: None\ns.runtime_gate=lambda state: None\ns.main()\n''')
+            driver.write_text(f'''import sys,pathlib,fcntl\nsys.path.insert(0,{str(ROOT)!r})\nimport strata_launcher as s\ns.ready=lambda *args: (pathlib.Path({str(source)!r}),pathlib.Path('unused'),{cfg!r})\ns.launch_gate=lambda port: None\ns.runtime_gate=lambda state: None\ns.main()\n''')
             env = dict(os.environ, STRATA_DATA_ROOT=str(root), STRATA_STATE_ROOT=str(state_root), STRATA_HEALTH_TIMEOUT='10')
             with (root / 'driver.log').open('w') as log:
-                driver_proc = subprocess.Popen([sys.executable, str(driver), '--quickstart'], env=env, stdout=log, stderr=log)
+                driver_proc = subprocess.Popen([sys.executable, str(driver), '--quickstart', '--profile', profile],
+                                               env=env, stdout=log, stderr=log)
             try:
                 deadline = time.monotonic() + 12
                 while time.monotonic() < deadline:
@@ -309,6 +316,16 @@ class ForegroundIntegration(unittest.TestCase):
                 with urllib.request.urlopen(req, timeout=3) as response:
                     data = json.load(response)
                 self.assertEqual(data['choices'][0]['message']['content'], 'ANSWER=42')
+                state = json.loads((state_root / 'server.json').read_text())
+                effective = json.loads((state_root / 'run-config.json').read_text())
+                self.assertEqual(state['profile'], profile)
+                self.assertEqual(effective['model_name'], 'qwen3.8-flash-next-orca-iq3_xxs-strata' if profile ==
+                                 'orca-iq3_xxs' else 'qwen3.8-flash-next-iq3_s-strata')
+                wrong = 'iq3_s' if profile == 'orca-iq3_xxs' else 'orca-iq3_xxs'
+                refused = subprocess.run([sys.executable, str(ROOT / 'strata_launcher.py'), '--stop', '--profile', wrong],
+                                          env=env, capture_output=True, timeout=5)
+                self.assertNotEqual(refused.returncode, 0)
+                self.assertTrue(launcher.health(port))
                 subprocess.run([sys.executable, str(ROOT / 'strata_launcher.py'), '--stop'], env=env,
                                capture_output=True, text=True, check=True, timeout=25)
                 self.assertEqual(driver_proc.wait(timeout=12), 0, (root / 'driver.log').read_text())

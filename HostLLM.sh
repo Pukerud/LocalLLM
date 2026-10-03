@@ -71,7 +71,13 @@ run_selected() {
         return 1
     fi
     if [[ "$launcher" == v1strata.sh ]]; then
-        "$SCRIPT_DIR/$launcher" --check-ready || return 1
+        local arg previous=''
+        local -a check_args=(--check-ready)
+        for arg in "$@"; do
+            [[ "$previous" != --profile ]] || check_args+=(--profile "$arg")
+            previous="$arg"
+        done
+        "$SCRIPT_DIR/$launcher" "${check_args[@]}" || return 1
     fi
     local port="${QWEN38_PORT:-8080}"
     [[ "$launcher" == v1strata.sh ]] && port="${STRATA_PORT:-8080}"
@@ -98,6 +104,7 @@ main() {
         echo '  [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
         echo '  [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
         echo '  [3] Strata IQ3_S — BF16 GPU vision | MTP | high | INT8 KV | native 262K | four-GPU split'
+        echo '  [4] Orca Uncensored IQ3_XXS (Strata) — EXPERIMENTAL | MTP | high | initial 32K | F16 vision UNTESTED'
         echo ''
         echo '  Starting hosting pauses the miner and OctaSpace automatically (never an active rental).'
         echo '  Strata LAN UI/API: http://192.168.1.69:8080/ — wait for readiness.'
@@ -117,13 +124,16 @@ main() {
                     run_selected v1qwen38.sh --quickstart --profile "$profile"
                 fi
                 ;;
-            3|s|S)
+            3|4|s|S|o|O)
+                profile=iq3_s
+                [[ "$choice" != 4 && "$choice" != o && "$choice" != O ]] || profile=orca-iq3_xxs
                 if [[ "$active" == strata ]]; then
                     "$SCRIPT_DIR/v1strata.sh" --status
+                    echo 'The running Strata model was left alone. Use [9] only when you are ready to switch.'
                 elif [[ "$active" != none && "$active" != qwen38 ]]; then
                     echo 'Another LLM is running. Stop it first with [9].'
                 else
-                    run_selected v1strata.sh --quickstart
+                    run_selected v1strata.sh --quickstart --profile "$profile"
                 fi
                 ;;
             9) stop_owned_engines ;;

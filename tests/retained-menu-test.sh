@@ -42,6 +42,7 @@ source "$root/HostLLM.sh"
 grep -q '\[1\] Swift 1.5 Uncensored' "$root/HostLLM.sh"
 grep -q '\[2\] Hauhau Q8_K_P' "$root/HostLLM.sh"
 grep -q '\[3\] Strata IQ3_S' "$root/HostLLM.sh"
+grep -q '\[4\] Orca Uncensored IQ3_XXS' "$root/HostLLM.sh"
 ! grep -qE '^[[:space:]]*(pkill|killall)[[:space:]]' "$root/HostLLM.sh"
 trace="$scratch/maintrace"
 (
@@ -50,10 +51,39 @@ trace="$scratch/maintrace"
   host_gpu_summary() { :; }
   hosting() { :; }  # Never invoke real service operations from this test.
   run_selected() { printf '%s\n' "$*" >> "$trace"; }
-  main < <(printf '1\n 2 \n3\n11\n') > /dev/null
+  main < <(printf '1\n 2 \n3\n4\n11\n') > /dev/null
 )
 grep -qx 'v1qwen38.sh --quickstart --profile swift15u-q8' "$trace"
 grep -qx 'v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q4kv-xhigh' "$trace"
-grep -qx 'v1strata.sh --quickstart' "$trace"
-[[ "$(wc -l < "$trace")" -eq 3 ]]
-echo 'Three direct models, retained Q8 settings and guarded automatic hosting pause: PASS'
+grep -qx 'v1strata.sh --quickstart --profile iq3_s' "$trace"
+grep -qx 'v1strata.sh --quickstart --profile orca-iq3_xxs' "$trace"
+[[ "$(wc -l < "$trace")" -eq 4 ]]
+# Choosing Orca while original Strata runs must not call the launch/pause/stop path.
+(
+  SCRIPT_DIR="$scratch/live-menu"
+  mkdir -p "$SCRIPT_DIR"
+  printf '#!/bin/bash\nexit 0\n' > "$SCRIPT_DIR/v1strata.sh"
+  chmod +x "$SCRIPT_DIR/v1strata.sh"
+  detect_engine() { echo strata; }
+  show_workload_status() { :; }
+  host_gpu_summary() { :; }
+  hosting() { :; }
+  run_selected() { echo 'unexpected-start' >> "$trace"; }
+  main < <(printf '4\n11\n') > /dev/null
+)
+[[ "$(wc -l < "$trace")" -eq 4 ]]
+# An unprepared Orca request must use Orca's readiness gate, before any service/engine mutation.
+ready_trace="$scratch/readiness.trace"
+export ready_trace
+(
+  SCRIPT_DIR="$scratch/unprepared-menu"
+  mkdir -p "$SCRIPT_DIR"
+  printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "$ready_trace"\nexit 1\n' > "$SCRIPT_DIR/v1strata.sh"
+  chmod +x "$SCRIPT_DIR/v1strata.sh"
+  hosting() { echo 'unexpected-pause' >> "$ready_trace"; }
+  stop_owned_engines() { echo 'unexpected-stop' >> "$ready_trace"; }
+  if run_selected v1strata.sh --quickstart --profile orca-iq3_xxs; then exit 1; fi
+)
+grep -qx -- '--check-ready --profile orca-iq3_xxs' "$ready_trace"
+[[ "$(wc -l < "$ready_trace")" -eq 1 ]]
+echo 'Four direct models, running-Strata preservation and pre-pause readiness: PASS'

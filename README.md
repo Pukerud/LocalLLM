@@ -1,11 +1,12 @@
-# LocalLLM — Swift, Hauhau and Strata
+# LocalLLM — Swift, Hauhau, Strata and Orca
 
-Three directly selectable models on `.69` (4× RTX 3090, 128 GB RAM):
+Four directly selectable models on `.69` (4× RTX 3090, 128 GB RAM); Orca is experimental:
 
 ```text
   [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots
   [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots
   [3] Strata IQ3_S — BF16 GPU vision | MTP | high | INT8 KV | native 262K | four-GPU split
+  [4] Orca Uncensored IQ3_XXS (Strata) — experimental | MTP | high | initial 32K | F16 vision untested
 
   [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit
 ```
@@ -15,7 +16,7 @@ Three directly selectable models on `.69` (4× RTX 3090, 128 GB RAM):
 ```bash
 cd /home/user/LocalLLM
 ./HostLLM.sh
-# Select 1, 2 or 3. No manual miner stop is required.
+# Select 1, 2, 3 or 4. No manual miner stop is required.
 ```
 
 **Starting hosting automatically pauses OctaSpace (`osn.service`) and stops the Hive miner.** This restores the
@@ -61,6 +62,7 @@ Those settings belong to the launched process; no global Pi configuration is edi
 | [1] Swift | `swift15u-q8` | Q8_K_XL weights, shared BF16 vision, embedded native MTP depth 3, Q8 K/V, xhigh, two 262144-token slots |
 | [2] Hauhau | `hauhau-q8-fastmtp-q4kv-xhigh` | Q8_K_P weights, BF16 vision, matching FastMTP sidecar depth 4, Q4_0 K/V, xhigh, three 262144-token slots |
 | [3] Strata | Original Flash-Next GSQ-RCO IQ3_S | BF16 GPU vision, appropriate Flash-Next MTP `--spec 4`, INT8 KV, high reasoning, native 262144, automatic contiguous four-GPU layer split |
+| [4] Orca | `orca-iq3_xxs` | Separate uncensored Flash-Next IQ3_XXS pack/tokenizer, original Flash-Next MTP, INT8 KV, high, initial 32768, four-GPU split; F16 vision configured but local model/vision inference untested |
 
 Swift remains the default; Hauhau's previously verified Q4-KV/xhigh preset remains the fallback. Dense Qwen runtime
 pins, weights and normal flags are unchanged. Hauhau's alternative Q8-KV preset shares those retained weights and
@@ -70,6 +72,14 @@ Strata is a separate **Flash-Next** engine, not an engine for the retained dense
 request at a time, supports **images but not video**, and exposes thinking `none/low/medium/high` (**not `xhigh`**).
 No context extension or experimental CVec/speed projection is enabled. Its 2048 MiB VRAM reserve and native-context
 INT8 KV streaming policy are retained.
+
+## Orca: prepared separately, no live model switch
+
+See [ORCA_IQ3XXS.md](ORCA_IQ3XXS.md). **[4] never automatically stops a running Strata instance.** Preparing Orca is
+CPU/download-only, uses its own pinned shards/projector and compatibility pack/tokenizer, and neither rebuilds nor
+updates the shared runtime. Readiness is checked before any hosting pause; missing preparation cannot stop mining.
+Orca remains locally GPU-unvalidated, starts with 32K (not a native-262K capacity claim), and shares Strata's single
+FIFO generation sequence/state/port. It is not a concurrent extra worker or a replacement for [3].
 
 ## Strata preparation and validation
 
