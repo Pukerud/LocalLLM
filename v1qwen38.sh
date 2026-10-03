@@ -843,6 +843,12 @@ build_runtime() {
 }
 
 write_server_info() {
+    local start_ticks
+    start_ticks="$(python3 - "$SERVER_PID" <<'PY'
+import pathlib, sys
+print(pathlib.Path('/proc', sys.argv[1], 'stat').read_text().rsplit(')', 1)[1].split()[19])
+PY
+)" || return 1
     # State is shared with the original HiveOS login user when this launcher
     # is started from the automatic root shell; it contains no secrets.
     umask 022
@@ -850,6 +856,7 @@ write_server_info() {
 profile=$PROFILE
 label=$PROFILE_LABEL
 pid=$SERVER_PID
+start_ticks=$start_ticks
 port=$PORT
 host=$BIND_HOST
 model=$MODEL_PATH
@@ -879,37 +886,14 @@ running_pid() {
     printf '%s\n' "$pid"
 }
 
-pid_exists() {
-    [[ -r "/proc/$1/cmdline" ]]
-}
-
-signal_pid() {
-    local signal="$1" pid="$2"
-    if kill "-$signal" "$pid" 2>/dev/null; then
-        return 0
-    fi
-    if [[ "${EUID}" -ne 0 ]]; then
-        sudo kill "-$signal" "$pid" 2>/dev/null
-    else
-        return 1
-    fi
-}
-
 stop_server() {
-    local pid=""
-    if pid="$(running_pid)"; then
-        say "Stopping Qwen3.8 server PID $pid"
-        signal_pid TERM "$pid" || true
-        for _ in $(seq 1 20); do
-            pid_exists "$pid" || break
-            sleep 1
-        done
-        if pid_exists "$pid"; then
-            warn "server did not stop gracefully; sending SIGKILL to PID $pid"
-            signal_pid KILL "$pid" || true
-        fi
+    # Stop only the recorded PID/start-time/model identity, using a pidfd.
+    # Hive may call this during its own supervised teardown; it never stops Hive itself.
+    if [[ "${EUID}" -eq 0 ]]; then
+        QWEN38_STATE_ROOT="$STATE_ROOT" python3 "$SCRIPT_DIR/engine_safety.py" stop-qwen --owner-stop
+    else
+        sudo -n env QWEN38_STATE_ROOT="$STATE_ROOT" python3 "$SCRIPT_DIR/engine_safety.py" stop-qwen --owner-stop
     fi
-    rm -f "${STATE_ROOT}/server.pid" "${STATE_ROOT}/server.info"
 }
 
 check_port_free() {
@@ -1078,6 +1062,8 @@ start_server() {
     fi
     rm -f "${STATE_ROOT}/server.pid" "${STATE_ROOT}/server.info"
     check_port_free
+    # Also protect direct CLI starts, not just starts through HostLLM.
+    python3 "$SCRIPT_DIR/engine_safety.py" preflight --port "$PORT" || return 1
     make_server_args
 
     SERVER_LOG="${LOG_ROOT}/${PROFILE}-$(date +%Y%m%d-%H%M%S).log"
@@ -1581,50 +1567,26 @@ choose_profile() {
     local candidate description choice index
     local -a menu_profiles=()
     say ""
-    say "Qwen3.8 Quick Start (installed models only)"
+    say "Qwen3.8 Quick Start (retained installed bundles)"
     say "  GPUs detected: ${GPU_SUMMARY}"
-    say "  Native 262K context per slot unless a profile says otherwise."
-    say "  Preferred and comparison profiles:"
-    for candidate in swift15u-q8 hauhau-q8-fastmtp turbo-q8-mtp swift15-q8 swift15u-bf16; do
+    say "  BF16 vision; native 262K context per slot; normal xhigh reasoning."
+    for candidate in swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh; do
         PROFILE="$candidate"
         configure_profile
         [[ -f "$MODEL_PATH" && -f "$MMPROJ_PATH" ]] || continue
         [[ -z "$DRAFT_PATH" || -f "$DRAFT_PATH" ]] || continue
         case "$candidate" in
             swift15u-q8) description="Swift 1.5 Uncensored Q8_K_XL | DEFAULT | ${PARALLEL} slots | Q8 KV | BF16 vision | native MTP n=${SWIFT15U_MTP_N_MAX}" ;;
-            hauhau-q8-fastmtp) description="Hauhau Q8 | ${PARALLEL} slots | Q8 KV | BF16 vision | FastMTP n=${FAST_MTP_N_MAX}" ;;
-            turbo-q8-mtp) description="TURBO Q8_0 | ${PARALLEL} slots | Q8 KV | BF16 vision | native MTP n=${TURBO_MTP_N_MAX}" ;;
-            swift15-q8) description="Swift 1.5 Q8_0 | 1 slot | Q8 KV | F16 vision | native MTP n=${SWIFT15_MTP_N_MAX}" ;;
-            swift15u-bf16) description="Swift 1.5 Uncensored BF16 | 1 slot | Q8 KV | BF16 vision | native MTP n=${SWIFT15U_MTP_N_MAX}" ;;
+            hauhau-q8-fastmtp-q4kv-xhigh) description="Hauhau Q8_K_P | proven fallback | ${PARALLEL} slots | Q4 KV | BF16 vision | FastMTP n=${FAST_MTP_N_MAX}" ;;
         esac
         menu_profiles+=("$candidate")
         index="${#menu_profiles[@]}"
         say "  [$index] $description"
     done
-    say "  Other installed profiles (explicit trade-offs):"
-    for candidate in swift-bf16 hauhau-q8-fastmtp-q4kv-xhigh hauhau-q8 gsq-q2 gsq-iq2 gsq-iq3 swift15-q4; do
-        PROFILE="$candidate"
-        configure_profile
-        [[ -f "$MODEL_PATH" && -f "$MMPROJ_PATH" ]] || continue
-        [[ -z "$DRAFT_PATH" || -f "$DRAFT_PATH" ]] || continue
-        if [[ "$RUNTIME_KIND" == gsq ]]; then
-            [[ -f "$(dirname "$MODEL_PATH")/$(basename "$MODEL_PATH" 00001-of-00002.gguf)00002-of-00002.gguf" ]] || continue
-        fi
-        case "$candidate" in
-            swift-bf16) description="Older Swift BF16 | ${PARALLEL} slots | Q4 KV | BF16 vision" ;;
-            hauhau-q8-fastmtp-q4kv-xhigh) description="Hauhau Q8 | ${PARALLEL} slots | Q4 KV | BF16 vision | FastMTP" ;;
-            hauhau-q8) description="Hauhau Q8 reference | 1 slot | F16 KV | BF16 vision | native MTP" ;;
-            gsq-*) description="Flash-Next GSQ ${candidate#gsq-} | experimental | ${FULL_CTX} context | Q8 KV | BF16 vision" ;;
-            swift15-q4) description="Swift 1.5 Q4_K_M | 1 slot | Q8 KV | F16 vision" ;;
-        esac
-        menu_profiles+=("$candidate")
-        index="${#menu_profiles[@]}"
-        say "  [$index] $description"
-    done
-    say "  Missing/download-only profiles are available by explicit --profile after download."
-    say "  Short legacy speed suite: --speed-test-all (not all menu profiles)."
+    say "  Strata IQ3_S is a separate engine: HostLLM [2], not a Qwen runtime profile."
+    say "  Archived comparison profiles remain explicit CLI-only; selecting them can re-download removed models."
     say "  [q] Cancel"
-    read -r -p "Select [1]: " choice
+    read -r -p "Select [1]: " choice || { say "Cancelled."; exit 0; }
     choice="${choice:-1}"
     [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#menu_profiles[@]} )) || { say "Cancelled."; exit 0; }
     PROFILE="${menu_profiles[choice-1]}"

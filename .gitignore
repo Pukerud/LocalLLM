@@ -15,3 +15,7 @@ server.log
 .llama_arg_probe_*
 bench_logs/
 bench_results*.txt
+
+# Python launch helpers and tests
+__pycache__/
+*.py[cod]

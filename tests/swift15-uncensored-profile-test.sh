@@ -20,7 +20,12 @@ for profile in swift15u-q8 swift15u-bf16; do
     configure_profile
     make_server_args
     [[ "$RUNTIME_KIND" == swift15 && "$SPEC_MODE" == native && -z "$DRAFT_PATH" ]]
-    [[ "$SERVER_CTX" == 262144 && "$PARALLEL" == 1 && "$KV_TYPE" == q8_0 ]]
+    [[ "$KV_TYPE" == q8_0 ]]
+    if [[ "$profile" == swift15u-q8 ]]; then
+        [[ "$SERVER_CTX" == 524288 && "$PARALLEL" == 2 ]]
+    else
+        [[ "$SERVER_CTX" == 262144 && "$PARALLEL" == 1 ]]
+    fi
     [[ "$MMPROJ_PATH" == *swift15-uncensored/mmproj-BF16.gguf ]]
     args=" ${SERVER_ARGS[*]} "
     [[ "$args" == *' --spec-type draft-mtp '* && "$args" == *' --spec-draft-n-max 3 '* ]]
@@ -43,7 +48,9 @@ for profile in swift15u-q8 swift15u-bf16; do
     make_server_args
     [[ " ${SERVER_ARGS[*]} " != *' --spec-type '* ]]
 done
-choose_profile <<< 11 > "$scratch/menu"
+mkdir -p "$MODEL_ROOT/swift15-uncensored"
+touch "$MODEL_ROOT/swift15-uncensored/$SWIFT15U_Q8" "$MODEL_ROOT/swift15-uncensored/$SWIFT15U_MMPROJ"
+choose_profile <<< 1 > "$scratch/menu"
 [[ "$PROFILE" == swift15u-q8 ]]
 grep -q 'Swift 1.5 Uncensored Q8_K_XL' "$scratch/menu"
 echo 'Swift 1.5 uncensored Q8/BF16 profile assets, MTP and no-spec: PASS'

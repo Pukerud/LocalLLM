@@ -1,0 +1,331 @@
+#!/usr/bin/env python3
+"""Prepared Strata IQ3_S launcher. No downloads, updates, driver or service changes."""
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+
+from engine_safety import (SafetyError, command_output, docker_empty, launch_gate, owner_home,
+                           proc, same_process, signal_identity, strata_state)
+from prepare_strata import DIGESTS
+
+SOURCE_COMMIT = '99f3dbd0b21d1401b3769e0c0d963913607f380b'
+MODEL_REVISION = 'ed59f92082b1e93c0e96d60a8b11aab089b52f09'
+MODEL = 'Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S'
+
+
+def data_root():
+    return Path(os.environ.get('STRATA_DATA_ROOT', owner_home() / '.local/share/localllm-strata'))
+
+
+def ready():
+    root = data_root()
+    manifest = json.loads((root / 'prepared.json').read_text())
+    if manifest['source_commit'] != SOURCE_COMMIT:
+        raise SafetyError('Prepared Strata source pin mismatch')
+    source = root / 'source-99f3dbd0b21d'
+    actual = command_output(['git', '-c', f'safe.directory={source}', '-C', str(source), 'rev-parse', 'HEAD']).strip()
+    if actual != SOURCE_COMMIT:
+        raise SafetyError('Strata source checkout changed since preparation')
+    runtimes = {r['path']: r for r in manifest.get('runtime_assets', [])}
+    for executable in [source / 'engine/strata', source / 'engine/strata-vision']:
+        record = runtimes.get(str(executable))
+        if not record or not executable.is_file() or executable.stat().st_size != record['bytes'] or \
+                executable.stat().st_mtime_ns != record['mtime_ns'] or \
+                hashlib.sha256(executable.read_bytes()).hexdigest() != record['sha256']:
+            raise SafetyError(f'Compiled runtime missing or changed: {executable}')
+    config_path = source / 'strata-iq3_s.json'
+    cfg = json.loads(config_path.read_text())
+    args = cfg['args']
+    for key, expected in [('exe', source / 'engine/strata')]:
+        if Path(cfg[key]).resolve() != expected.resolve():
+            raise SafetyError('Unexpected Strata engine path')
+    if Path(cfg['vision']['exe']).resolve() != (source / 'engine/strata-vision').resolve():
+        raise SafetyError('Unexpected vision helper path')
+    model_paths = [root / relative for relative in DIGESTS]
+    pack = root / 'data/packs/iq3_s'
+    for key, value in [('--max-context', '262144'), ('--kv', 'int8'), ('--spec', '4'),
+                       ('--vram-reserve-mib', '2048'), ('--kv-resident', '32768'), ('--spec-min-p', '0.5'),
+                       ('--pack', str(pack)), ('--native', str(model_paths[0])),
+                       ('--ple-gguf', str(model_paths[1])), ('--mtp', str(root / 'data/mtp/rt'))]:
+        if key not in args or args[args.index(key) + 1] != value:
+            raise SafetyError(f'Unexpected Strata setting: {key}')
+    if cfg['vision']['model'] != str(model_paths[0]) or cfg['vision']['mmproj'] != str(model_paths[2]):
+        raise SafetyError('Vision must use the verified Flash-Next model/projector pair')
+    if cfg['tokenizer'] != str(pack / 'tokenizer') or not (pack / 'dense.bin').is_file() or \
+            not (pack / 'tokenizer/tokenizer.json').is_file():
+        raise SafetyError('Prepared model pack/tokenizer missing or miswired')
+    if cfg.get('gpu') != [0, 1, 2, 3] or cfg.get('layer_split') != 'auto':
+        raise SafetyError('Expected the prepared four-GPU automatic layer split')
+    if '--vision' not in args or not cfg.get('vision') or not cfg['vision'].get('gpu'):
+        raise SafetyError('Prepared GPU vision configuration missing')
+    if any(a.startswith('--cvec') for a in args):
+        raise SafetyError('Experimental speed projection must remain off')
+    verified = {asset['path']: asset for asset in manifest['assets']}
+    for relative, digest in DIGESTS.items():
+        p = root / relative
+        asset = verified.get(str(p))
+        if not asset or asset['sha256'] != digest or not p.is_file() or p.stat().st_size != asset['bytes']:
+            raise SafetyError(f'Missing or changed model asset: {p}')
+        if 'mtime_ns' in asset and p.stat().st_mtime_ns != asset['mtime_ns']:
+            raise SafetyError(f'Model asset changed since checksum verification: {p}')
+    for p in [source / '.venv/bin/python', Path(cfg['exe']), Path(cfg['vision']['exe']),
+              Path(args[args.index('--mtp') + 1]) / 'experts.bin']:
+        if not p.is_file():
+            raise SafetyError(f'Prepared runtime asset missing: {p}')
+    return source, config_path, cfg
+
+
+def read_state():
+    p = strata_state() / 'server.json'
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+def write_state(state):
+    root = strata_state()
+    root.mkdir(parents=True, exist_ok=True)
+    p = root / 'server.json'
+    tmp = root / f'.server.{os.getpid()}.tmp'
+    with tmp.open('w') as f:
+        json.dump(state, f, indent=2)
+        f.write('\n')
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, p)
+
+
+def remember_children(state):
+    """Do not let a foreground watcher recreate state removed by an external stop."""
+    root = strata_state()
+    with (root / 'lifecycle.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        current = read_state()
+        if current is None or not same_process(current['identity'], state['identity']):
+            return False
+        children = [p for p in family(state) if p['pid'] != state['identity']['pid']]
+        state['children'] = children
+        if current.get('children') != children:
+            write_state(state)
+    return True
+
+
+def family(state):
+    leader = state['identity']
+    live = proc(leader['pid'])
+    if live and not same_process(leader, live):
+        raise SafetyError('Strata frontend PID changed identity; stop refused')
+    allowed = {str(Path(p).resolve()) for p in state['allowed_executables']}
+    recorded = {p['pid']: p for p in state.get('children', [])}
+    members = []
+    for d in Path('/proc').iterdir():
+        if not d.name.isdigit():
+            continue
+        # Read stat first to avoid inspecting unrelated root/renter executables.
+        try:
+            stat = (d / 'stat').read_text().rsplit(')', 1)[1].split()
+            if int(stat[3]) != leader['sid'] or stat[0] in ('Z', 'X', 'x'):
+                continue
+        except FileNotFoundError:
+            continue
+        p = proc(int(d.name))
+        if p is None:
+            continue
+        if p['sid'] != leader['sid'] or p['pgid'] != leader['pgid'] or p['uid'] != leader['uid']:
+            raise SafetyError('Strata process-family identity mismatch')
+        if live is None and not same_process(recorded.get(p['pid']), p):
+            raise SafetyError('Frontend exited before this child identity was recorded; stop refused')
+        if p['exe'] not in allowed:
+            raise SafetyError(f"Unidentified process in Strata session: {p['pid']}; no process was stopped")
+        if p['exe'] == leader['exe'] and not same_process(leader, p):
+            raise SafetyError('Unidentified Python child in Strata session; stop refused')
+        members.append(p)
+    return members
+
+
+def runtime_gate(state):
+    """Yield our own runtime if a rental/new miner appears; never signal that workload."""
+    docker_empty()
+    owned = {p['pid'] for p in family(state)}
+    text = command_output(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader,nounits'])
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        if not line.strip().isdigit() or int(line.strip()) not in owned:
+            raise SafetyError('New/unidentified GPU workload detected; yielding only Strata')
+
+
+def stop(expected=None):
+    state = expected if expected is not None else read_state()
+    if not state:
+        print('Strata is not running.')
+        return
+    members = family(state)  # Validate the entire family before the first signal.
+    for p in sorted(members, key=lambda p: p['pid'] == state['identity']['pid']):
+        signal_identity(p, signal.SIGTERM)
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        remaining = family(state)
+        if not remaining:
+            break
+        time.sleep(0.1)
+    else:
+        for p in family(state):
+            signal_identity(p, signal.SIGKILL)
+        for _ in range(50):
+            if not family(state):
+                break
+            time.sleep(0.1)
+        else:
+            raise SafetyError('Strata teardown could not be confirmed')
+    if read_state() == state:
+        (strata_state() / 'server.json').unlink(missing_ok=True)
+    print('Only the identity-verified Strata frontend/engine/vision helper were stopped.')
+
+
+def health(port):
+    try:
+        with urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=3) as response:
+            return response.status == 200
+    except (urllib.error.URLError, TimeoutError):
+        return False
+
+
+def start(lock):
+    source, config_path, cfg = ready()
+    state = read_state()
+    if state and family(state):
+        raise SafetyError('Strata is already running; use its existing web UI')
+    port = int(os.environ.get('STRATA_PORT', cfg.get('port', 8080)))
+    launch_gate(port)
+    state_root = strata_state()
+    state_root.mkdir(parents=True, exist_ok=True)
+    # A private effective config permits optional API credentials without editing the pinned source config.
+    cfg['host'] = os.environ.get('STRATA_HOST', cfg.get('host', '0.0.0.0'))
+    cfg['port'] = port
+    cfg['model_name'] = 'qwen3.8-flash-next-iq3_s-strata'
+    cfg['aliases'] = ['qwen38', 'strata']
+    cfg['sampling'] = {'temperature': 1.0, 'top_p': 0.95, 'top_k': 20,
+                       'experimental_speed_projection': False}
+    if os.environ.get('STRATA_API_KEY'):
+        cfg['api_key'] = os.environ['STRATA_API_KEY']
+    run_config = state_root / 'run-config.json'
+    fd = os.open(run_config, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    os.fchmod(fd, 0o600)
+    with os.fdopen(fd, 'w') as f:
+        json.dump(cfg, f, indent=2)
+    log_root = data_root() / 'logs'
+    log_root.mkdir(parents=True, exist_ok=True)
+    log = log_root / f'server-{time.strftime("%Y%m%d-%H%M%S")}.log'
+    env = dict(os.environ)
+    lib_dirs = cfg.get('lib_dirs', [])
+    if lib_dirs:
+        env['LD_LIBRARY_PATH'] = ':'.join(lib_dirs) + ':' + env.get('LD_LIBRARY_PATH', '')
+    print(f'EXPERIMENTAL Strata IQ3_S | BF16 GPU vision | native 262144 | INT8 KV | MTP | high reasoning')
+    print(f'Four-GPU layer split auto; serial requests. Log: {log}', flush=True)
+    if cfg['host'] == '0.0.0.0' and not cfg.get('api_key'):
+        print('WARNING: unauthenticated LAN API. Use STRATA_API_KEY before exposing beyond a trusted LAN.')
+    python = source / '.venv/bin/python'
+    with log.open('a') as out:
+        child = subprocess.Popen([str(python), '-m', 'serve.server', '--engine', 'strata', '--config', str(run_config),
+                                  '--host', cfg['host'], '--port', str(port)], cwd=source, env=env,
+                                 stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
+    identity = proc(child.pid)
+    if not identity or identity['exe'] != str(python.resolve()) or identity['sid'] != child.pid:
+        # Popen's exec handshake plus retained child identity, never a guessed global process name.
+        child.terminate()
+        child.wait(timeout=10)
+        raise SafetyError('Frontend launch identity could not be recorded')
+    state = {'identity': identity, 'port': port, 'log': str(log), 'source_commit': SOURCE_COMMIT,
+             'config': str(run_config), 'allowed_executables': [str(python.resolve()), cfg['exe'], cfg['vision']['exe']]}
+    write_state(state)
+    # Serialize the launch handoff, not the whole foreground server lifetime.
+    fcntl.flock(lock, fcntl.LOCK_UN)
+    interrupted = False
+    def interrupt(signum, frame):
+        nonlocal interrupted
+        interrupted = True
+    old_handlers = {s: signal.signal(s, interrupt) for s in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        deadline = time.monotonic() + int(os.environ.get('STRATA_HEALTH_TIMEOUT', '600'))
+        next_report = 0
+        next_guard = 0
+        while not health(port):
+            if not remember_children(state) or interrupted:
+                return  # external stop/Ctrl+C, not a failed model-quality check
+            if child.poll() is not None:
+                raise SafetyError(f'Strata did not become ready; see {log}')
+            if time.monotonic() >= next_guard:
+                runtime_gate(state)
+                next_guard = time.monotonic() + 3
+            if time.monotonic() >= deadline:
+                raise SafetyError(f'Strata health timeout; see {log}')
+            if time.monotonic() >= next_report:
+                print('Loading Strata; no long-context request is being sent...', flush=True)
+                next_report = time.monotonic() + 15
+            time.sleep(1)
+        print(f'Strata ready: this host, port {port}, API /v1. Ctrl+C stops only Strata.', flush=True)
+        while not interrupted and child.poll() is None:
+            if time.monotonic() >= next_guard:
+                runtime_gate(state)
+                next_guard = time.monotonic() + 3
+            if not remember_children(state):
+                break
+            time.sleep(1)
+        if not interrupted and child.poll() is not None:
+            fcntl.flock(lock, fcntl.LOCK_EX)  # wait for any external stop/state removal
+            if read_state() == state:
+                raise SafetyError(f'Strata frontend exited unexpectedly ({child.returncode}); see {log}')
+    finally:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            stop(expected=state)
+        finally:
+            for sig, handler in old_handlers.items():
+                signal.signal(sig, handler)
+            try:
+                child.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                print('WARNING: frontend did not reap; inspect its recorded identity.', file=sys.stderr)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    modes = ap.add_mutually_exclusive_group()
+    modes.add_argument('--quickstart', '--start', action='store_true')
+    modes.add_argument('--stop', action='store_true')
+    modes.add_argument('--status', action='store_true')
+    modes.add_argument('--check-ready', action='store_true')
+    a = ap.parse_args()
+    try:
+        if a.check_ready:
+            source, config, cfg = ready()
+            print('PREPARED: pinned IQ3_S, BF16 GPU vision, native 262144, INT8 KV, MTP, four-GPU auto split.')
+            print('Actual GPU inference/throughput/full-context quality have not been tested while the miner runs.')
+        elif a.status:
+            state = read_state()
+            if state and family(state):
+                print(f'Strata running; port {state["port"]}; log {state["log"]}')
+            else:
+                print('Strata stopped.')
+        else:
+            root = strata_state()
+            root.mkdir(parents=True, exist_ok=True)
+            with (root / 'lifecycle.lock').open('a') as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                stop() if a.stop else start(lock)
+    except (SafetyError, FileNotFoundError, PermissionError, ValueError, TypeError, KeyError, IndexError, BlockingIOError) as exc:
+        print(f'BLOCKED: {exc}', file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

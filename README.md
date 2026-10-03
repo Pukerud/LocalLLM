@@ -1,493 +1,153 @@
-# LocalLLM — Qwen3.8 Inference
+# LocalLLM — retained Qwen models and experimental Strata
 
-Local NVIDIA-GPU launchers for the current Qwen3.8 profiles, with a general llama.cpp fallback. Only one server should use port `8080` at a time.
+Local NVIDIA-GPU inference on `.69` (four RTX 3090s, 128 GB RAM).
+**The menu does not stop/start Hive miners, change drivers/clocks/watchdog settings, or pause `osn.service`.**
+Stop the miner yourself before launching an LLM. Docker uncertainty, running containers, occupied GPUs, or an
+occupied API port block a new launch.
 
-> **Current primary:** Swift 1.5 Uncensored Q8_K_XL with BF16 vision, native MTP, Q8_0 K/V, xhigh reasoning, and two native-262K slots across four RTX 3090 GPUs.
->
-> **Installed alternatives:** Hauhau FastMTP Q8 K/V (`hauhau-q8-fastmtp`), TURBO Q8_0, Swift 1.5 Q8_0, and Swift 1.5 Uncensored BF16 remain selectable. The launcher menu displays only models whose weights and vision projector are present.
->
-> The older Hauhau Q4-KV and Swift BF16 profiles are retained as explicit comparison options, not the default.
-
-## Quick Start
-
-```bash
-git clone https://github.com/Pukerud/LocalLLM.git
-cd LocalLLM
-chmod +x HostLLM.sh v1*.sh
-./HostLLM.sh
-```
-
-From the HostLLM menu, press **[1]** (or **[Q]**) for the Qwen3.8
-llama.cpp profile menu.
+## Current menu
 
 ```text
 HostLLM — Engine Picker
-  [1] Swift 1.5 Uncensored Q8 — BF16 vision | 2 native-262K slots | native MTP + Q8 K/V | xhigh reasoning
-  [Q] Qwen3.8 profile menu (alias for [1])
-  [2] llama.cpp — general GGUF fallback
-
-Qwen3.8 Quick Start (installed models only)
-  [1] Swift 1.5 Uncensored Q8_K_XL | DEFAULT | 2 slots | Q8 KV | BF16 vision | native MTP
-  [2] Hauhau Q8 | 3 slots | Q8 KV | BF16 vision | FastMTP
-  [3] TURBO Q8_0 | 3 slots | Q8 KV | BF16 vision | native MTP
-  Other installed comparisons follow; missing weights are hidden.
-  [q] Cancel
+  [1] Qwen profiles — Swift 1.5 Uncensored Q8 (default) / Hauhau Q8 FastMTP
+  [2] Strata IQ3_S — EXPERIMENTAL | BF16 GPU vision | native 262K | INT8 KV
+  [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit
 ```
 
-Normal menu starts keep thinking enabled at `xhigh`. Option [1] is the
-current default and retains Q8 K/V, BF16 vision and two 262K slots.
-TURBO uses `xhigh`, which is its maximum supported reasoning level; the model
-template does not support the literal `max` value. This selects the model's
-maximum mode but cannot override TURBO's trained short-reasoning behavior.
-Smoke and speed tests intentionally turn reasoning off so they remain short and
-comparable.
-The Swift option uses the public ajgazin/Swift-Qwen3.8-27B-Uncensored-Dynamic-MTP-GGUF BF16 conversion because the linked d0xin/Swift-Qwen3.8-27B-Uncensored-BF16 repository is gated. It is not claimed byte-identical to the gated repository; its revision and SHA-256 checksums are pinned in v1qwen38.sh.
+The Qwen submenu contains only the two retained, installed bundles:
 
-### Swift 1.5 uncensored: Q8 selected on the four-3090 host
+| Choice | Profile | Normal settings on four RTX 3090s |
+| --- | --- | --- |
+| Qwen [1] | `swift15u-q8` — Swift 1.5 Uncensored Q8_K_XL | BF16 vision, native MTP depth 3, Q8 K/V, xhigh, two 262,144-token slots |
+| Qwen [2] | `hauhau-q8-fastmtp-q4kv-xhigh` — Hauhau Q8_K_P, proven fallback | BF16 vision, matching FastMTP sidecar depth 4, Q4_0 K/V, xhigh, three 262,144-token slots |
+| HostLLM [2] | Strata — original Flash-Next GSQ-RCO IQ3_S | BF16 GPU vision, its own Flash-Next MTP runtime, INT8 KV, high reasoning, one serial request, native 262,144 context, four-GPU automatic layer split |
 
-Menu **[1]** selects `swift15u-q8` from
-[`ajgazin/Swift-1.5-Qwen3.8-27B-Uncensored-Dynamic-MTP-GGUF`](https://huggingface.co/ajgazin/Swift-1.5-Qwen3.8-27B-Uncensored-Dynamic-MTP-GGUF).
-The BF16 alternative remains available as `--profile swift15u-bf16` and appears in
-the installed-model menu when present. Both weights and the BF16 vision projector are pinned by
-repository revision and SHA-256 in `v1qwen38.sh`.
+Strata is a **separate engine**, not a new quantization of the dense 27B Swift/Hauhau models. The two Qwen bundles,
+their existing runtime pins, vision projectors and normal inference flags are unchanged. The menu selects Hauhau's
+previously verified Q4-KV/xhigh preset; its Q8-KV alternative remains CLI-only and shares the same retained weights.
 
-On 2026-09-26, `.69` (4 x RTX 3090) ran the same llama.cpp build, 4096-token
-context, Q8 KV, native MTP depth 3, reasoning off, one slot, temperature 0,
-and a fixed coding prompt with a 256-token limit for both formats. After two
-warm-ups, ten serial completed requests per model yielded:
-
-| Format | Median server decode | Median end-to-end request | Result |
-| --- | ---: | ---: | --- |
-| Q8_K_XL | 61.96 tokens/s | 3.83 s | Selected, about 51% faster decode |
-| BF16 | 40.96 tokens/s | 5.85 s | CLI comparison only |
-
-All measured requests ended normally (`finish_reason=stop`). This is a
-short-context, text-only throughput comparison, not a full-262K context,
-vision, or quality evaluation. Normal menu launches retain native 262K,
-BF16 vision, and xhigh reasoning.
-
-On the current four-RTX-3090 host, the deployed Q8 profile uses **two**
-262,144-token slots, Q8 K/V, BF16 vision, xhigh reasoning and native MTP depth
-3. Two and three full-size slots passed allocation, short text, vision and
-simultaneous-request checks; four Q8-KV slots failed on GPU 3 during MTP KV
-allocation. Depths 2–7 and no-MTP were compared; depth 3 was the best balance
-on longer coding and narrative decode probes. See the
-[2026-09-26 capacity and tuning report](SWIFT15U_2SLOT_2026-09-26.md).
-
-The launcher visibly reports:
-
-- model/projector/sidecar checksum progress, rate, and ETA;
-- downloads and already-present assets;
-- runtime/build status;
-- a health-wait heartbeat every ten seconds while the model loads.
-
-No full-context generation is used by the speed tests. The server may still start with its configured native context after the test context has been selected.
-
-## HiveOS LLM miner
-
-The Swift 1.5 Uncensored Q8 profile runs as HiveOS's official custom miner,
-so it appears in the HiveOS dashboard and follows the normal `miner start` /
-`miner stop` lifecycle. Install it from the repository root as root:
+## Start on the prepared node
 
 ```bash
-./install-hive-llm-miner.sh
-miner start
+cd /home/user/LocalLLM
+miner stop                 # your manual action, not an installer/menu side effect
+./HostLLM.sh
+# Select [2] for Strata, or [1] then a retained Qwen profile.
 ```
 
-The custom miner launches `swift15u-q8` directly and deliberately leaves
-`osn.service` running. It uses two native 262K slots with Q8 K/V on the
-current four-RTX-3090 host. When OctaSpace rents the node, its normal HiveOS `miner stop`
-stops the Qwen server; after the rental, `miner start` brings it back without
-restarting OctaSpace. The wrapper fails closed if Docker reports an
-unknown/running non-HostLLM workload and cleans up its Hive screen on startup
-failure so later `miner start` calls are recoverable. It reports zero hashrate
-because the process is an inference server, but its running state and GPU
-telemetry remain visible in HiveOS. Remove it with `./uninstall-hive-llm-miner.sh`.
+Strata remains in the foreground, shows loading/health progress and writes a persistent log. Open
+`http://192.168.1.69:8080` after it becomes healthy. OpenAI base URL: `http://192.168.1.69:8080/v1`.
+Anthropic endpoint: `/v1/messages`. The configured model name is `qwen3.8-flash-next-iq3_s-strata`; `qwen38` and
+`strata` are accepted aliases.
 
-## Tested Qwen3.8 profiles
+**Ctrl+C stops only the identity-verified Strata frontend, engine and vision helper**, then returns to the menu.
+Start the miner again manually only after the LLM has stopped. Nothing automatically resumes mining.
+If an engine was started as root, stop it from the same root shell (or with `sudo`).
 
-Measured on 2026-08-27–2026-09-04 using short coding and prose prompts. These are lightweight generation measurements, not full-context benchmarks; the current rows use the configured multi-GPU slot profiles.
-
-### Historical Hauhau Q4-KV comparison profile
-
-Profile `hauhau-q8-fastmtp-q4kv-xhigh` was the former
-production profile and deliberately keeps
-the Hauhau Q8_K_P model, BF16 vision projector, FastMTP sidecar, detected GPU
-layout, slot count, native 262K context per slot, and sampling defaults from
-option **[2]**. It changes the KV cache to `q4_0` for both K and V while keeping
-normal reasoning at `xhigh`, the maximum supported level. It is included in
-the legacy `--speed-test-all` run. The related `hauhau-q8-fastmtp` profile
-remains a Q8-KV alternative. Start the older Q4-KV profile manually with:
+The default API binding is `0.0.0.0:8080`, matching the existing private-LAN workflow. It is unauthenticated unless
+an API key is set: **do not expose it publicly**. For Strata:
 
 ```bash
-./v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q4kv-xhigh
+STRATA_HOST=127.0.0.1 ./v1strata.sh --quickstart    # local/tunnel only
+# Or set STRATA_API_KEY in the environment before a trusted-LAN start.
+./v1strata.sh --status
+./v1strata.sh --check-ready
+./v1strata.sh --stop
 ```
 
-Smoke and speed modes intentionally disable reasoning; use `--quickstart` or
-the dashboard/API when comparing the xhigh-reasoning behavior.
+## Strata IQ3_S: preparation and limits
 
-| Profile | Coding | Story | Average | Notes |
-|---|---:|---:|---:|---|
-| Hauhau Q8 native MTP | 56.87 tok/s | 40.62 tok/s | **48.74 tok/s** | BF16 vision projector |
-| Hauhau Q8 FastMTP | 76.47 tok/s | 48.81 tok/s | **62.64 tok/s** | previous Q8-KV 4-GPU baseline and fallback; FastMTP n=4, 3 slots / 262K each; menu speed test, 2026-09-03 |
-| TURBO MTP Q8_0 | 58.13 tok/s | 42.23 tok/s | **50.18 tok/s** | DavidAU TURBO MTP Q8_0; current upstream 4cbe8b070, 3 slots / 262K each / Q8 K/V; short menu speed test, 2026-09-04 |
-| Swift BF16 (3 native slots) | 34.99 tok/s | 25.09 tok/s | **30.04 tok/s** | Public BF16 conversion; 3-slot native-262K health passed; short text + vision passed; same 4096-token A/B run on 2026-09-15 |
-| Hauhau Q8 + DFlash2 Q4 n=5 | 86.52 tok/s | 38.67 tok/s | **62.59 tok/s** | upstream master `4e97ac86`; text-only; reversed layer-device order; opt-in candidate |
+See [STRATA_IQ3S.md](STRATA_IQ3S.md) for pins, checksums, setup provenance and validation boundaries.
+The prepared profile uses:
 
+- [Niko1221/Strata](https://github.com/Niko1221/Strata), engine 0.1.38, pinned source `99f3dbd0b21d1401b3769e0c0d963913607f380b`;
+- [ISTA-DASLab/Flash-Next GSQ-RCO IQ3_S](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09/IQ3_S), with both GGUF shards and its own BF16 projector;
+- the original Flash-Next MTP tensors, fetched/checked and packed by the pinned Strata tools;
+- existing CUDA 12.9, `sm_86`, Release builds, at most four low-priority build workers;
+- a private Python environment; no global pip/apt installation or driver/toolkit replacement;
+- no experimental speed projection, no context extension, INT8 KV with Strata's native-context streaming policy.
 
-### Swift BF16 A/B result (2026-09-15)
+**GPU inference is deliberately deferred to the user's first manual launch while the miner remains running during
+installation.** Compilation, checksums, configuration and CPU-only API/lifecycle checks are not speed, vision-quality,
+VRAM-peak or full-context-generation measurements. No full-context generation was sent.
 
-The former Hauhau Q4-KV production profile measured 75.52 coding / 41.19 story / **58.35 tok/s** in the same short run. Swift BF16 measured 34.99 / 25.09 / **30.04 tok/s**. Native-context health passed at one, two, and three slots; a four-slot probe failed cleanly during KV allocation, so three slots is the default for that older Swift BF16 profile on four RTX 3090s.
-The DFlash2 row is not a replacement for the vision-capable profiles. The Q4
-DFlash2 drafter currently fails to process multimodal embedding chunks in this
-llama.cpp build, so the opt-in profile deliberately does not load a projector.
+Differences from the Qwen runtime:
 
-### Historical retired Flash-Next validation
+- Strata serves **one request at a time**, not two/three parallel generation slots.
+- It supports images; **not video**. Its highest exposed thinking level is `high`, not `xhigh`.
+- 262,144 is native. Its optional 384K/512K modes are experimental rope-scaled extensions and are not enabled here.
+- Performance depends on CPU, PCIe links, cache residency, draft acceptance and actual prompt length.
+  Other machines' published throughput is not a measurement on this host.
+- The foreground supervisor yields only its own Strata processes if Docker becomes uncertain, a rental container
+  appears, or a new/unidentified GPU workload appears. It never kills that other workload.
 
-The previous official `UD-IQ4_XS` Flash-Next model was tested side-by-side with
-`cygnal/Qwen3.8-Flash-Next-Uncensored-IQ4XS-NGQ4-GGUF` on 2026-08-30. Both used
-the same qwen4exp PR #27742 runtime, three RTX 3090 GPUs, automatic layer fitting,
-Q8 K/V, one slot, and a configured native `262144`-token context. No full-context
-generation was sent; the health check verified `n_ctx_slot=262144`.
-
-| Target | Coding | Story | Average | Vision |
-|---|---:|---:|---:|---|
-| Previous UD-IQ4_XS | 40.96 tok/s | 40.49 tok/s | **40.72 tok/s** | passed |
-| Uncensored IQ4XS-NGQ4 | 38.72 tok/s | 39.21 tok/s | **38.97 tok/s** | passed |
-
-The new target was **95.7%** of the previous full-context decode average and its
-longer vision response was **95.4%** of the previous model. It also produced a
-direct technical answer to the uncensoring probe and emitted a valid `get_weather`
-tool call. Its model and projector SHA-256 checks passed. The launcher now uses
-this uncensored target; the previous Flash weights were removed after validation.
-
-### 2026-09-01 historical b10731 runtime and speed update
-
-Upstream llama.cpp build `b10731` (`0eadefebd`) was released today. It includes
-qwen4exp graph/GDN changes from #27877 and #27880, the indexer-head reduction
-from #28023, and the later recurrent-state rollback fix #28123. The rollback
-fix is not usable by this uncensored GGUF because it exports no MTP head, but
-the qwen4exp runtime changes are usable.
-
-The same uncensored model was A/B tested on all four RTX 3090s with identical
-Q8 K/V, automatic layer fitting, and short deterministic requests. The pinned
-PR runtime measured approximately `46.45` tok/s code, `46.33` prose, and `44.70`
-repeated JSON. `b10731` measured `66.18`, `66.17`, and `63.97` respectively,
-without `CUDA_SCALE_LAUNCH_QUEUES`; this is roughly a 43% decode improvement.
-`CUDA_SCALE_LAUNCH_QUEUES=4x` was also tested and produced no meaningful decode
-gain on this host.
-
-The b10731 target loaded successfully with two native-262K slots
-(`--ctx-size 524288`, `n_ctx_slot=262144`) across all four GPUs. Two concurrent
-text requests, vision, tool calling, and repeated JSON output all passed. The
-configured two-slot profile measured `60.46` tok/s coding and `60.33` prose.
-
-The historical optional `--spec ngram` entry used the **same Flash IQ4 model as
-[3]**; it is not a smarter or different model. It is workload-dependent
-speculation: after warm-up, repeated JSON reached about `129–136` tok/s versus
-`58–64` tok/s without speculation in earlier tests; code reached about
-`90–145` tok/s, while prose varied from roughly `59–71` tok/s and can be
-slower. The fresh current-upstream menu test measured `66.30` coding / `65.69`
-story / `66.00` average versus `67.20` for normal Flash, while tool, vision,
-and schema-valid JSON checks passed. It remains opt-in rather than the normal
-Flash default.
-
-### 2026-09-04 historical current-upstream Flash menu upgrade
-
-The retired Flash menu profile was pinned to current upstream llama.cpp commit
-`4cbe8b070bb040f3b95845408f100fbf5fb746f1` instead of the older b10731
-runtime. It uses a versioned runtime directory and explicitly selects CUDA
-12.9 for fresh builds. The previously installed b10731 runtime remains on the
-host as a rollback artifact but is no longer selected by the menu.
-
-Before this menu update, isolated same-flag server A/B testing on all four
-RTX 3090s measured approximately 486 versus 14.4 tok/s prompt processing at
-512 tokens and 521 versus 13.5 tok/s at 2048 tokens, with current upstream
-also decoding substantially faster. Current upstream loaded four native
-262144-token slots, and short text, JSON, tool, and BF16 vision checks passed.
-The menu-specific build, smoke, native-context health, and active-profile
-restoration were revalidated during this upgrade; no full-context generation
-was used.
-
-### Two-user maximum-context check
-
-On 2026-08-30, the production Q8 FastMTP model was tested with
-`--parallel 2` and `--ctx-size 524288`, giving two slots with `n_ctx_slot=262144`.
-The F16-KV version failed allocation on GPU2, while the Q8-KV version loaded
-successfully and completed two simultaneous short requests. Peak observed usage
-was approximately 22.2 GiB of 24 GiB on the fullest GPU.
-
-On 2026-08-31, the host exposed a fourth RTX 3090. The same model loaded with
-all four GPUs, `--tensor-split 1,1,1,1`, `--parallel 3`, and aggregate
-`--ctx-size 786432`; llama.cpp reported three `n_ctx_slot=262144` slots and
-about 22.4 GiB on the fullest GPU (74.6 GiB total) at allocation. No full-context generation was sent.
-The launcher now selects FastMTP `n=4` and three slots automatically on four
-or more GPUs, while retaining `n=3` and two slots on a three-GPU host. Set
-`QWEN38_FASTMTP_SLOTS=2` to force the conservative two-slot mode or
-`QWEN38_FASTMTP_N_MAX=3` to use the previous draft length. For TURBO, use
-`QWEN38_TURBO_SLOTS=1` to reduce concurrency or
-`QWEN38_TURBO_MTP_N_MAX=1` to reduce the embedded MTP draft window.
-
-Results are cached in:
-
-```text
-~/.local/state/locallm-qwen38/speed-results.tsv
-```
-
-The Qwen submenu reads that cache and displays the average beside each profile.
-Run a profile-specific test with:
+To prepare the same profile on another compatible four-3090 Linux host, explicitly run:
 
 ```bash
-./v1qwen38.sh --speed-test --profile hauhau-q8-fastmtp
-./v1qwen38.sh --speed-test --profile hauhau-q8-fastmtp-q4kv-xhigh
-./v1qwen38.sh --speed-test-all
+./v1strata.sh --prepare
 ```
 
-## Upstream master and DFlash2 validation
+This installs **without starting inference or calibration**, verifies all model/projector SHA-256 hashes and creates
+`prepared.json`. It requires Python 3.10+ with venv/ensurepip, git, gcc/g++, and the already-installed
+`/usr/local/cuda-12.9/bin/nvcc`. Missing system tools cause failure rather than a system package/driver installation.
+Preparation may continue alongside a bare Hive miner; unknown Docker state or rental containers block it.
+A fresh copy needs roughly 78 GiB for the model/projector, plus its runtime, private environment and MTP artifacts.
 
-On 2026-08-28, upstream llama.cpp master `4e97ac86ebe2c4cb8212d98d2641ad6768810896`
-was built side-by-side with CUDA Toolkit 12.9.86 and `CMAKE_CUDA_ARCHITECTURES=86`.
-The existing pinned runtimes were not modified or replaced. No experimental
-`top-k.cu` changes were applied.
+## Model cleanup
 
-Short 4096-token A/B checks using the same two prompts measured:
+The retained Qwen assets are under `~/.local/share/localllm-qwen38/models/`:
 
-| Profile | Pinned runtime | Upstream master | Result |
-|---|---:|---:|---|
-| Hauhau FastMTP | 60.36 tok/s | 62.84 tok/s | +4.1%; short vision check passed |
-| Previous Flash UD-IQ4_XS | 46.95 tok/s | 55.56 tok/s | +18.3%; short vision check passed |
+- `hauhau/`: Q8_K_P weights, BF16 projector and matching FastMTP sidecar;
+- `swift15-uncensored/`: **Q8_K_XL weights and the shared BF16 projector only**.
 
-These are lightweight single-request measurements, not full-context benchmarks.
-The 60.39 tok/s FastMTP figure is the historical single-slot F16-KV baseline;
-The current four-GPU production uses FastMTP n=4, three slots with Q4_0 K/V and
-xhigh reasoning; the Q8-KV profile remains the fallback. The original three-GPU layout used
-n=3 and two slots).
+Strata's IQ3_S, projector, pack and MTP assets live separately under `~/.local/share/localllm-strata/`.
+The original PLE second shard and BF16 projector were reused by hard link where publisher SHA-256 hashes matched;
+there is no reason to download those bytes again.
 
-The official Q4 DFlash2 draft was downloaded from
-`incoai/Qwen3.8-27B-DFlash2-GGUF` and verified with SHA-256:
+The retired downloaded assets are: older Swift BF16, Swift 1.5 Uncensored BF16 weights, UkisAI Swift 1.5 27B Q8,
+TURBO Q8, DFlash2 draft, GSQ Q2 and GLM-5.3-Flash EXL3. A guarded cleanup checks active file references and retained
+asset identities; it does not delete shared Swift Q8 vision or the retained Hauhau sidecar.
+Cleanup reclaimed **275.23 GiB physically**; about **655.30 GiB** remained free after Strata preparation.
+The larger logical removed total includes the PLE shard/projector that Strata retains by hard link.
+Historical reports and unselected build artifacts are not mistaken for extra downloaded model weights.
 
-```text
-Qwen3.8-27B-DFlash2-Q4_K_M.gguf
-18a380efc9b7ed8d88677fc895f5c11ae170653434ee378f7348f715c14d0594
-```
+Archived comparison profiles remain explicit CLI-only in `v1qwen38.sh`; using their download/start commands can
+re-download retired weights. **Do not use the legacy `--speed-test-all` to test this curated collection:** it includes
+retired profiles. Profile-specific smoke/speed modes use 4K allocation and reasoning off, not normal native-context
+performance.
 
-DFlash2 was tested against the existing Hauhau Q8 target at `n_max=3` and `n_max=5`.
-The original three-GPU layout used target devices `CUDA2,CUDA1,CUDA0` and places
-the draft on `CUDA0`; the target output projection must be visible to the draft
-scheduler. The n=3 run averaged 58.47 tok/s. The n=5 runs averaged about 64.0
-tok/s with the projector loaded; the final launcher verification of the text-only profile measured 62.59 tok/s.
-Acceptance was workload-dependent: coding was about 0.78–0.91 draft-token
-acceptance, while the story prompt was about 0.26–0.44. Three short greedy
-parity prompts matched the non-speculative target exactly. Native-262144 health
-checks passed for both n=3 and n=5 without sending a long-context request.
+Legacy `v1llama_cpp.sh` and `v1glm53.sh` remain archival CLI scripts, not shared-host menu choices. Their old
+stop/benchmark paths are not covered by the new identity-bound guards; do not use them on a rented/shared host.
 
-The DFlash2 candidate is exposed only as the explicit CLI
-`hauhau-q8-dflash2` profile and is intentionally hidden from the normal menu. It defaults to `n=5`, is text-only, and does not
-participate in the normal `--speed-test-all` set. Use:
+## HiveOS LLM custom miner (optional, unchanged)
+
+The repository's optional custom miner still targets `swift15u-q8`, with BF16 vision, Q8 K/V, native MTP and two
+native-262K slots on this machine. Its own Hive lifecycle/rental handling remains separate from a manual Strata
+experiment. This update does not install it or change the currently selected Hive miner/flight sheet.
+See [hive-llm-miner/README.md](hive-llm-miner/README.md).
+
+## Checks
 
 ```bash
-./v1qwen38.sh --smoke --profile hauhau-q8-dflash2
-./v1qwen38.sh --speed-test --profile hauhau-q8-dflash2
-./v1qwen38.sh --quickstart --profile hauhau-q8-dflash2
+bash -n HostLLM.sh v1qwen38.sh v1strata.sh
+bash tests/retained-menu-test.sh
+bash tests/swift15-profile-test.sh
+bash tests/swift15-uncensored-profile-test.sh
+bash tests/gsq-profile-test.sh                 # archived CLI regression checks, no downloads
+python3 -m unittest discover -s tests -p 'test_engine_safety.py' -v
 ```
 
-The profile defaults to `n=5`; set `QWEN38_DFLASH_N_MAX=3` to run the other
-validated draft-length test. The Hauhau FastMTP and TURBO MTP profiles remain
-vision-capable production choices. DFlash2 startup logs and the short A/B results
-are retained under the host's `~/.local/share/localllm-qwen38/logs/` and
-`~/.local/state/locallm-qwen38-upstream-test/` directories.
+The Python safety suite runs on Linux. Its HTTP fixtures and fake `llama-server` are **CPU-only**; they test
+identity-bound lifecycle/known responses without starting a GPU model. Stop helpers use pidfds and matching
+PID/start-time/executable/command identities; no process-name-wide `pkill`, `killall`, or reusable-PID sudo-kill fallback.
 
-## Qwen3.8 runtime details
+## Historical measurements and licenses
 
-- HauhauCS Q8_K_P GGUF with matching BF16 vision projector.
-- TURBO MTP Q8_0 GGUF from `DavidAU/Qwen3.8-27B-TURBO-Fable-Cold-Fusion-735-882-Heretic-Uncensored-NEO-CODER-MAX-MTP-GGUF` at repository revision `6408ab122`; matching `mmproj-BF16.gguf` projector.
-- TURBO uses isolated current-upstream llama.cpp `4cbe8b070` (`4cbe8b070bb040f3b95845408f100fbf5fb746f1`), CUDA 12.9, and `sm_86`.
-- Swift preview BF16 GGUF and BF16 projector come from ajgazin/Swift-Qwen3.8-27B-Uncensored-Dynamic-MTP-GGUF at revision fc14798df8ff4281c903446ad96ff24d489defaa; this is the publicly accessible Swift-Qwen3.8 uncensored BF16 conversion selected while the gated d0xin repository remains unavailable; it retains the native MTP head plus vision projector.
-- RTX 3090 builds use CUDA architecture `sm_86`.
-- Hauhau and TURBO use layer split across all detected GPUs with equal dynamic `--tensor-split` (currently `1,1,1,1`); this host reports PHB topology and no usable peer-to-peer link.
-- F16 KV cache is used by the single-slot native Hauhau profile; the former Hauhau FastMTP profile uses `q4_0` K/V, while `hauhau-q8-fastmtp` uses Q8 K/V. Swift 1.5 Uncensored Q8 and TURBO also use Q8 K/V. All retain aggregate context `262144 × slots`, so every slot retains native 262144 context. TURBO defaults to embedded native MTP `n=2` and three slots on this four-GPU host.
-- FastMTP uses the publisher sidecar and its pinned qwen35-compatible patch.
-- All Qwen3.8 data, runtimes, logs, and state live below:
+- [Swift 1.5 Uncensored two-slot tuning, 2026-09-26](SWIFT15U_2SLOT_2026-09-26.md)
+- [Swift 1.5 source/MTP notes](SWIFT15.md)
+- [Retired GSQ Q2 tuning](GSQ_TUNING_RESULTS.md) and [earlier menu notes](GSQ_FLASH_NEXT.md)
+- [September 24 speed/update research](SPEED_REPORT_2026-09-24.md)
 
-```text
-/home/user/.local/share/localllm-qwen38
-/home/user/.local/state/locallm-qwen38
-```
-
-When HiveOS enters an automatic `sudo -s` shell, the launcher resolves the original `/home/user` owner so root and user shells share the same assets and server state.
-
-## Qwen3.8 server dashboard
-
-After Quick Start finishes, the launcher shows a live dashboard. Press **[2]** to return to the HostLLM menu while keeping the server running, **[1]** to stop it, or **[r]** to refresh.
-
-```text
-==================================================================
-  QWEN3.8 SERVER RUNNING
-==================================================================
-  Profile:  Qwen3.8-27B HauhauCS Q8_K_P / vision / FastMTP / 3 slots / 262K each / Q4_0 K/V
-  Model:    Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-Q8_K_P.gguf
-  Context:  262144 per slot  |  Slots: 3  |  KV: Q8_0  |  Speculation: FastMTP (3-token draft)
-  Vision:   ON (BF16 projector)
-  GPUs:     4x RTX 3090 (24 GB each)
-  Reasoning: ON | effort: xhigh
-
-  Connect from any device on your network:
-
-  Chat UI:       http://192.168.1.69:8080
-  API Base:      http://192.168.1.69:8080/v1
-  Anthropic:     http://192.168.1.69:8080/v1/messages
-
-  API Key: any string or blank (not required)
-
-  OpenWebUI:       OpenAI base URL → http://192.168.1.69:8080/v1
-  Pi / Codex:      OPENAI_API_BASE=http://192.168.1.69:8080/v1
-  Cline / Continue: OpenAI compatible → http://192.168.1.69:8080/v1
-  Anthropic SDK:   base_url → http://192.168.1.69:8080/v1
-==================================================================
-
-  Health: {"status":"ok"}
-  Speed:  avg 60.39 tok/s | coding 73.47 | story 47.31
-  CPU: 0%
-  GPU 0 :   0% | VRAM: 18.3 GB / 24.0 GB (76%) | Temp: 42 degC
-  GPU 1 :   0% | VRAM: 16.7 GB / 24.0 GB (69%) | Temp: 40 degC
-  GPU 2 :   0% | VRAM: 17.2 GB / 24.0 GB (71%) | Temp: 42 degC
-  GPU 3 :   0% | VRAM: 22.4 GB / 24.0 GB (93%) | Temp: 41 degC
-  TOTAL: VRAM: 74.6 GB / 96.0 GB (77%) | GPUs: 4
-
-  [1] Stop server and return to menu
-  [2] Return to menu (keep server running)
-  [r] Refresh
-```
-
-Direct dashboard/status commands:
-
-```bash
-./v1qwen38.sh --status
-./v1qwen38.sh --dashboard
-./v1qwen38.sh --stop
-```
-
-## Current HostLLM menu
-
-The active menu intentionally stays small:
-
-```text
-  [1] Swift 1.5 Uncensored Q8    BF16 vision │ 2 native-262K slots │ native MTP + Q8 K/V │ xhigh
-      Uses all four RTX 3090 GPUs; the Qwen submenu lists installed models only.
-  [Q] Qwen3.8 profile menu (alias for [1])
-  [2] llama.cpp          general GGUF fallback
-  [9] Kill All
-  [10] Update
-  [11] Exit
-```
-
-`v1llama_cpp.sh` remains available for manually running other current GGUF
-models. The removed Qwen3.6-era launchers and tests are recorded below and are
-no longer offered by HostLLM.
-
-### OctaSpace coexistence
-
-If the OctaSpace `osn.service` exists and is active, HostLLM pauses it before
-launching Qwen3.8 or the general llama.cpp engine so both workloads do not
-compete for the same GPUs. When the engine stops, HostLLM starts OctaSpace
-again. If a launcher returns while its server is still running, OctaSpace
-remains paused until **[9] Kill All** stops the engine. A small state marker
-preserves this behavior if HostLLM is reopened.
-
-## API connections
-
-The Qwen3.8 server exposes:
-
-| Endpoint | Purpose |
-|---|---|
-| `http://IP:8080/health` | health check |
-| `http://IP:8080/v1/models` | model list |
-| `http://IP:8080/v1/chat/completions` | OpenAI-compatible chat |
-| `http://IP:8080/v1/completions` | text completions |
-| `http://IP:8080/v1/messages` | Anthropic-compatible messages |
-
-No API key is required by the local server. Clients may still send any placeholder key such as `sk-local`.
-
-## Hardware and safety
-
-Validated host:
-
-- 4× NVIDIA RTX 3090, 24 GiB each, compute capability 8.6;
-- NVIDIA driver `595.91.07`;
-- PHB topology with no usable P2P;
-- approximately 125 GiB system RAM and no swap.
-
-The Qwen3.8 launcher does not modify HiveOS, watchdog, miner, or driver configuration. The custom miner remains disabled; `WD_ENABLED=0`, `REBOOT_ON_ERROR=`, `MINER=`, and `MINER2=` remain unchanged in the active rig configuration.
-
-## Future high-throughput candidates
-
-No alternate serving engine is retained in the active configuration. Any future
-engine or checkpoint experiment must remain isolated and must pass the same
-short text, vision, tool, and safety checks before replacing a current profile.
-
-BeeLlama Docker images are packaging for BeeLlama's `llama-server`, not a special
-Qwen3.8 accelerator. Its preview release is rolling and does not contain the
-custom Hauhau FastMTP or TURBO runtime used here.
-
-## Legacy engines and tests
-
-This section preserves the history of the removed Qwen3.6-era entries. Their source files, old model metadata, and menu routes were removed from the active checkout; Git history retains the previous implementation.
-
-### Why Qwen3.6 was removed
-
-The old launchers were built around Qwen3.6 model files, Qwen3.6 draft models, Qwen3.6 chat templates, or Qwen3.6-specific Docker/Genesis configurations. They did not provide a tested Qwen3.8 vision/FastMTP path on this three-3090 host. Keeping them in the main menu made their old 4090 speed claims look current, so Qwen3.8 is now the primary supported model family.
-
-### Removed engines
-
-| Removed entry | Historical purpose | Reason removed |
-|---|---|---|
-| Legacy MTP Quick Start | Qwen3.6 native MTP, no vision; advertised up to 100 tok/s on a 4090 | Superseded by the tested Qwen3.8 profiles |
-| buun-llama-cpp DFlash | Qwen3.6 DFlash speculative decoding | Qwen3.6-only workflow, no vision, and the script used an `sm_89` build assumption |
-| Old vLLM Docker profile | Qwen3.6 AutoRound INT4 plus Genesis patches | Removed with the obsolete Qwen3.6-specific serving path |
-| Lucebox DFlash | Qwen3.6 DFlash safetensors draft and DDTree | Unstable, Qwen3.6-only, and compiled with an `sm_89` assumption |
-| Upstream llama.cpp MTP dashboard | Qwen3.6 model conversion with PR #22673 MTP layers | Redundant after the Qwen3.8 runtime became the supported path |
-| BeeLlama DFlash dashboard | Qwen3.6 DFlash, TurboQuant/TCQ KV cache, vision, and reasoning | Useful historical fork, but not the Hauhau FastMTP or TURBO runtime |
-| ZAYA1-8B | 8B total / approximately 760M active parameters using Zyphra's experimental vLLM fork | Small-model detour with no value for the current 27B target; installation could hard-lock the host |
-
-### Historical tests and claims
-
-- Legacy MTP was reported at up to approximately 100 tok/s on an RTX 4090 with no vision.
-- Lucebox was reported at approximately 104 tok/s on an RTX 4090 under its Qwen3.6/DDTree settings.
-- Old vLLM README figures ranged from approximately 50–127 tok/s depending on context preset.
-- BeeLlama DFlash benchmarks tested Qwen3.6 target/draft combinations at roughly 100K context with TurboQuant/TCQ KV settings.
-- The old benchmark scripts measured different prompts, models, contexts, KV types, and hardware. Their numbers are not directly comparable to the current Qwen3.8 smoke-speed results.
-
-The comparable historical lightweight measurements in the Qwen3.8 table include four-GPU Hauhau Q8-KV at **62.64 tok/s** and four-GPU TURBO MTP Q8_0 at **50.18 tok/s**. The older Q4-KV result was selected from an earlier operator test; these are short tests, not full-context benchmarks.
-
-### BeeLlama preview history
-
-BeeLlama `preview-v0.4.4` is a rolling preview based on a moving branch build. The published CUDA images included:
-
-```text
-ghcr.io/anbeeld/beellama.cpp:server-cuda-preview-v0.4.4
-ghcr.io/anbeeld/beellama.cpp:server-cuda12-preview-v0.4.4
-ghcr.io/anbeeld/beellama.cpp:server-cuda13-preview-v0.4.4
-```
-
-The images are convenient server packages. They do not inherently improve inference speed and were not selected for the current Qwen3.8 path.
-
-## Repository layout
-
-```text
-HostLLM.sh                 current top-level menu
-v1qwen38.sh                Qwen3.8 llama.cpp profiles, tests, and dashboard
-v1llama_cpp.sh             general llama.cpp fallback
-QWEN38_EXECUTION_PLAN.md   provenance and validation record
-```
-
-Generated Qwen3.8 models, runtimes, logs, and state are stored outside the repository under `/home/user/.local/`.
-
-## Validation
-
-Static checks:
-
-```bash
-bash -n HostLLM.sh v1qwen38.sh v1llama_cpp.sh
-```
-
-The tested Qwen3.8 path uses short text/vision smoke tests and short speed tests only. No full 262K-context generation or long benchmark is part of the normal launcher workflow.
+Historical model/menu numbers are not the current menu. Strata is MIT-licensed; model weights retain their own
+publisher licenses, including the Swift Open License terms for Swift fine-tunes. Consult the exact model repository
+before commercial use. Model/runtime pins are not silently advanced by a normal launch.
