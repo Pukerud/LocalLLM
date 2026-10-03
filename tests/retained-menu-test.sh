@@ -34,9 +34,26 @@ args=" ${SERVER_ARGS[*]} "
 [[ "$args" == *' --reasoning-effort xhigh '* && "$args" == *' --cache-type-v q4_0 '* ]]
 [[ "$(grep -c '^  \[[12]\]' "$scratch/menu")" == 2 ]]
 ! grep -qE 'TURBO|UkisAI|Uncensored BF16|\[3\] Swift|GSQ-RCO' "$scratch/menu"
-grep -q 'HostLLM \[2\]' "$scratch/menu"
+grep -q 'HostLLM \[3\]' "$scratch/menu"
 source "$root/HostLLM.sh"
 [[ "$(declare -f stop_owned_engines)" != *pkill* ]]
-[[ "$(declare -f run_selected)" == *'safety preflight'* ]]
-! grep -qE '^[^#]*(systemctl[[:space:]]+(stop|start)|/hive/bin/miner|^[[:space:]]*(pkill|killall)[[:space:]])' "$root/HostLLM.sh"
-echo 'Retained menu, Q8 profile settings and service-free launch gates: PASS'
+[[ "$(declare -f run_selected)" == *'hosting begin'* ]]
+[[ "$(declare -f run_selected)" == *'hosting release'* ]]
+grep -q '\[1\] Swift 1.5 Uncensored' "$root/HostLLM.sh"
+grep -q '\[2\] Hauhau Q8_K_P' "$root/HostLLM.sh"
+grep -q '\[3\] Strata IQ3_S' "$root/HostLLM.sh"
+! grep -qE '^[[:space:]]*(pkill|killall)[[:space:]]' "$root/HostLLM.sh"
+trace="$scratch/maintrace"
+(
+  detect_engine() { echo none; }
+  show_workload_status() { :; }
+  host_gpu_summary() { :; }
+  hosting() { :; }  # Never invoke real service operations from this test.
+  run_selected() { printf '%s\n' "$*" >> "$trace"; }
+  main < <(printf '1\n 2 \n3\n11\n') > /dev/null
+)
+grep -qx 'v1qwen38.sh --quickstart --profile swift15u-q8' "$trace"
+grep -qx 'v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q4kv-xhigh' "$trace"
+grep -qx 'v1strata.sh --quickstart' "$trace"
+[[ "$(wc -l < "$trace")" -eq 3 ]]
+echo 'Three direct models, retained Q8 settings and guarded automatic hosting pause: PASS'

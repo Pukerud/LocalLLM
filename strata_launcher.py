@@ -110,7 +110,10 @@ def remember_children(state):
         current = read_state()
         if current is None or not same_process(current['identity'], state['identity']):
             return False
-        children = [p for p in family(state) if p['pid'] != state['identity']['pid']]
+        # Keep recorded identities through CUDA exit_mm/context teardown, not just live snapshots.
+        recorded = {p['pid']: p for p in state.get('children', [])}
+        recorded.update({p['pid']: p for p in family(state) if p['pid'] != state['identity']['pid']})
+        children = list(recorded.values())
         state['children'] = children
         if current.get('children') != children:
             write_state(state)
@@ -154,6 +157,13 @@ def runtime_gate(state):
     """Yield our own runtime if a rental/new miner appears; never signal that workload."""
     docker_empty()
     owned = {p['pid'] for p in family(state)}
+    for p in state.get('children', []):
+        try:
+            fields = (Path('/proc') / str(p['pid']) / 'stat').read_text().rsplit(')', 1)[1].split()
+            if int(fields[19]) == p['start_ticks'] and int(fields[2]) == p['pgid'] and int(fields[3]) == p['sid']:
+                owned.add(p['pid'])  # recorded CUDA task still tearing down; never a reusable bare PID
+        except FileNotFoundError:
+            pass
     text = command_output(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader,nounits'])
     for line in text.splitlines():
         if not line.strip():
@@ -162,12 +172,27 @@ def runtime_gate(state):
             raise SafetyError('New/unidentified GPU workload detected; yielding only Strata')
 
 
+def guard_during_run(state):
+    # Serialize against external --stop; don't mistake its draining CUDA PIDs for a new workload.
+    with (strata_state() / 'lifecycle.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        current = read_state()
+        if not current or not same_process(current['identity'], state['identity']) or current.get('stop_requested'):
+            return False
+        runtime_gate(state)
+        return True
+
+
 def stop(expected=None):
     state = expected if expected is not None else read_state()
     if not state:
         print('Strata is not running.')
         return
     members = family(state)  # Validate the entire family before the first signal.
+    current = read_state()
+    if current and same_process(current['identity'], state['identity']):
+        state = dict(current, stop_requested=True)
+        write_state(state)
     for p in sorted(members, key=lambda p: p['pid'] == state['identity']['pid']):
         signal_identity(p, signal.SIGTERM)
     deadline = time.monotonic() + 20
@@ -217,13 +242,14 @@ def start(lock):
     if os.environ.get('STRATA_API_KEY'):
         cfg['api_key'] = os.environ['STRATA_API_KEY']
     run_config = state_root / 'run-config.json'
+    log_root = data_root() / 'logs'
+    log_root.mkdir(parents=True, exist_ok=True)
+    log = log_root / f'server-{time.strftime("%Y%m%d-%H%M%S")}.log'
+    cfg['log'] = str(log.with_name(log.stem + '-engine.log'))
     fd = os.open(run_config, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
     os.fchmod(fd, 0o600)
     with os.fdopen(fd, 'w') as f:
         json.dump(cfg, f, indent=2)
-    log_root = data_root() / 'logs'
-    log_root.mkdir(parents=True, exist_ok=True)
-    log = log_root / f'server-{time.strftime("%Y%m%d-%H%M%S")}.log'
     env = dict(os.environ)
     lib_dirs = cfg.get('lib_dirs', [])
     if lib_dirs:
@@ -263,7 +289,8 @@ def start(lock):
             if child.poll() is not None:
                 raise SafetyError(f'Strata did not become ready; see {log}')
             if time.monotonic() >= next_guard:
-                runtime_gate(state)
+                if not guard_during_run(state):
+                    return
                 next_guard = time.monotonic() + 3
             if time.monotonic() >= deadline:
                 raise SafetyError(f'Strata health timeout; see {log}')
@@ -274,7 +301,8 @@ def start(lock):
         print(f'Strata ready: this host, port {port}, API /v1. Ctrl+C stops only Strata.', flush=True)
         while not interrupted and child.poll() is None:
             if time.monotonic() >= next_guard:
-                runtime_gate(state)
+                if not guard_during_run(state):
+                    break
                 next_guard = time.monotonic() + 3
             if not remember_children(state):
                 break
@@ -284,9 +312,15 @@ def start(lock):
             if read_state() == state:
                 raise SafetyError(f'Strata frontend exited unexpectedly ({child.returncode}); see {log}')
     finally:
+        original_error = sys.exc_info()[1]
         try:
             fcntl.flock(lock, fcntl.LOCK_EX)
             stop(expected=state)
+        except (SafetyError, OSError) as cleanup_error:
+            if original_error is None:
+                raise
+            print(f'Cleanup also blocked: {cleanup_error}. Original failure: {original_error}', file=sys.stderr)
+            # Keep the state/lease for recovery and propagate the original failure, not a masked teardown error.
         finally:
             for sig, handler in old_handlers.items():
                 signal.signal(sig, handler)
@@ -308,7 +342,7 @@ def main():
         if a.check_ready:
             source, config, cfg = ready()
             print('PREPARED: pinned IQ3_S, BF16 GPU vision, native 262144, INT8 KV, MTP, four-GPU auto split.')
-            print('Actual GPU inference/throughput/full-context quality have not been tested while the miner runs.')
+            print('Readiness verifies assets/config; bounded live validation is documented in STRATA_IQ3S.md (not full-context quality).')
         elif a.status:
             state = read_state()
             if state and family(state):

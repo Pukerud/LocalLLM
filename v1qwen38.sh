@@ -1583,7 +1583,7 @@ choose_profile() {
         index="${#menu_profiles[@]}"
         say "  [$index] $description"
     done
-    say "  Strata IQ3_S is a separate engine: HostLLM [2], not a Qwen runtime profile."
+    say "  Strata IQ3_S is a separate engine: HostLLM [3], not a Qwen runtime profile."
     say "  Archived comparison profiles remain explicit CLI-only; selecting them can re-download removed models."
     say "  [q] Cancel"
     read -r -p "Select [1]: " choice || { say "Cancelled."; exit 0; }

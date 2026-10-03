@@ -41,6 +41,18 @@ class Gates(unittest.TestCase):
             with self.assertRaises(guard.SafetyError):
                 guard.launch_gate(18081)
 
+    def test_port_time_wait_is_not_an_active_listener(self):
+        with socket.socket() as server, socket.socket() as client:
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server.bind(('127.0.0.1', 0)); port = server.getsockname()[1]
+            server.listen()
+            client.connect(('127.0.0.1', port))
+            conn, _ = server.accept()
+            conn.shutdown(socket.SHUT_WR); conn.close()
+            self.assertEqual(client.recv(1), b'')
+        with mock.patch.object(guard, 'docker_empty'), mock.patch.object(guard, 'command_output', return_value=''):
+            guard.launch_gate(port)
+
     def test_gpu_query_failure_blocks(self):
         with mock.patch.object(guard, 'docker_empty'), \
              mock.patch.object(guard, 'command_output', side_effect=guard.SafetyError('query failed')):
@@ -78,6 +90,12 @@ class ProcessIdentity(unittest.TestCase):
         self.assertEqual(p['pid'], os.getpid())
         self.assertGreater(p['start_ticks'], 0)
         self.assertTrue(Path(p['exe']).is_absolute())
+
+    def test_cuda_exit_mm_before_zombie_is_terminal(self):
+        fields = ['S', '1', '1', '1', '0', '0', str(0x4)] + ['0'] * 20
+        self.assertTrue(guard.terminal_stat(fields))
+        fields[6] = str(0x400000)
+        self.assertFalse(guard.terminal_stat(fields))
 
     def test_zombie_is_terminal(self):
         child = subprocess.Popen(['/bin/true'])
@@ -205,6 +223,21 @@ class StrataState(unittest.TestCase):
             with self.assertRaises(guard.SafetyError):
                 launcher.runtime_gate({})
             command.assert_not_called()
+
+    def test_guard_does_not_query_gpu_after_external_stop(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(launcher, 'strata_state', return_value=Path(tmp)), \
+             mock.patch.object(launcher, 'read_state', return_value=None), \
+             mock.patch.object(launcher, 'runtime_gate') as gate:
+            self.assertFalse(launcher.guard_during_run({'identity': guard.proc(os.getpid())}))
+            gate.assert_not_called()
+
+    def test_guard_does_not_query_gpu_during_requested_stop(self):
+        state = {'identity': guard.proc(os.getpid()), 'stop_requested': True}
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(launcher, 'strata_state', return_value=Path(tmp)), \
+             mock.patch.object(launcher, 'read_state', return_value=state), \
+             mock.patch.object(launcher, 'runtime_gate') as gate:
+            self.assertFalse(launcher.guard_during_run(state))
+            gate.assert_not_called()
 
     def test_stale_foreground_does_not_recreate_state(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(launcher, 'strata_state', return_value=Path(tmp)):

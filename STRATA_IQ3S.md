@@ -1,12 +1,13 @@
-# Strata IQ3_S — install-only preparation on `.69`, 2026-10-03
+# Strata IQ3_S — preparation and live hosting follow-up on `.69`, 2026-10-03
 
 ## Status and scope
 
-**Prepared, downloaded, packed and checksum-verified. Actual GPU inference is not yet tested.**
-The existing Hive/Wildrig miner continued running on all four RTX 3090s during this work. No `miner stop/start`,
-OctaSpace stop/start, Docker stop, driver installation, clock changes, Hive configuration edits or watchdog changes
-were performed. Strata is an independent experimental engine: **HostLLM [2]**. Swift 1.5 Uncensored Q8 remains the
-Qwen default; Hauhau Q8_K_P + BF16 vision + FastMTP remains the fallback bundle.
+**Prepared and checksum-verified; real four-GPU startup and bounded model/API/vision tests now pass.**
+The initial installation/cleanup left mining running. The user subsequently authorized miner/OctaSpace pausing for
+actual inference testing and requested restoration of automatic hosting pause behavior. HostLLM now presents
+**[1] Swift, [2] Hauhau, [3] Strata**, with a persistent automatic miner/OctaSpace pause lease and safe restoration.
+No driver, clock, watchdog, Hive configuration or renter/container changes were made. Swift remains the default;
+Hauhau Q8_K_P + BF16 vision + FastMTP remains its preserved fallback.
 
 ## Pins and installed layout
 
@@ -20,7 +21,8 @@ Qwen default; Hauhau Q8_K_P + BF16 vision + FastMTP remains the fallback bundle.
 - Models: `data/models/IQ3_S/`; projector: `data/models/mmproj-Qwen3.8-Flash-Next-BF16.gguf`.
 - Packed model: `data/packs/iq3_s/`; original Flash-Next MTP: `data/mtp/`, packed MTP: `data/mtp/rt/`.
 - Readiness evidence: `prepared.json`; preparation exit status `prepare.exit` was **0**.
-- Logs: `logs/prepare.log`, plus separate timestamped frontend logs on future launches.
+- Logs: `logs/prepare.log`, timestamped `server-*.log` frontend and `server-*-engine.log` native-engine logs.
+- `prepared.json` records install-only checks; the later live follow-up does not rewrite that historical manifest.
 - Runtime state: `~/.local/state/locallm-strata/` (intentional single-l `locallm`, like the existing Qwen state path).
 
 Both native executables (Strata and GPU vision helper) were compiled in Release mode for `sm_86` using the existing
@@ -56,36 +58,43 @@ The compiled native executables have recorded SHA-256 hashes in `prepared.json`.
 Existing dense 27B Swift/Hauhau GGUFs are **not Strata-compatible**. Strata's optional Swift 1.5 **Flash-Next** model is a
 different fine-tune from the retained Swift 1.5 **27B** model. No other Strata quantizations or families were downloaded.
 
-## Safe manual start
+## Automatic hosting start
 
 ```bash
 cd /home/user/LocalLLM
-miner stop                   # manual user action after preparation
-./HostLLM.sh                  # choose [2] Strata
-# Direct equivalent: ./v1strata.sh --quickstart
+./HostLLM.sh                  # choose [3] Strata; miner/OctaSpace pause automatically
 ```
 
-Wait for health readiness, then use the web UI or `/v1/chat/completions` on port 8080. The model ID is
+The menu checks rentals/unknown workloads before changing any services. A persistent lease remembers previous
+miner/service state; `MINER_STOP` is reasserted after Hive consumes it. Raw `v1strata.sh --quickstart` is a low-level
+launcher without that pause controller; use HostLLM for normal hosting.
+
+Wait for health readiness, then use **http://192.168.1.69:8080/** or `/v1/chat/completions`. The default binding is
+`0.0.0.0:8080`, not localhost; the web UI, health and model list have been verified from a different LAN machine. The model ID is
 `qwen3.8-flash-next-iq3_s-strata`; `qwen38` and `strata` are aliases. API thinking values are `none/low/medium/high`:
 do not send `xhigh`. Port/host/API-key overrides are `STRATA_PORT`, `STRATA_HOST`, `STRATA_API_KEY`.
 Set `STRATA_API_KEY` or bind loopback before exposing it beyond a trusted LAN; the default has no API authentication.
 
 Ctrl+C invokes identity-bound teardown, not a process-name-wide kill. A second terminal may use `./v1strata.sh --stop`
-from the same user/root privilege level. Only after stopping the LLM should you manually restart the miner.
+from the same user/root privilege level. The menu restores the previous miner/OctaSpace state after confirmed GPU
+teardown; [9] also recovers the persistent lease if the menu was closed/interrupted.
 
 Before launch, Docker must be inspectable/empty, GPUs idle and the selected port free. During the foreground lifetime,
 the supervisor polls for rental containers, Docker uncertainty and new/unidentified GPU workloads and yields **only
-Strata**. It does not stop the miner/renter/container/OctaSpace service. Unknown process-family identities block
-signalling rather than guessing. Use the recorded log/state if an abnormal teardown needs inspection.
+Strata**. Only the separate hosting controller pauses the selected Hive miner/OctaSpace; neither component stops
+renters/unknown workloads. Unknown process-family identities block signalling rather than guessing. `PF_EXITING`
+CUDA tasks are recognized as terminal before zombie state; external stop is serialized against the runtime watcher,
+so draining CUDA PIDs are not misreported as a new workload. Frontend and native-engine logs are separate.
 
-## Validation completed — CPU-only
+## Initial preparation validation — CPU-only
 
 1. Native Strata and GPU vision helper compilation succeeded on the actual host; native engine `--help` succeeded on
    its early-exit path without model inference.
 2. Both installed model shards and the projector passed full-file SHA-256; original MTP tensors passed offline verify.
 3. Readiness checks validated source revision, compiled-runtime hashes, model/projector metadata, native context,
    KV/MTP flags, four-GPU automatic split and configured GPU vision.
-4. **25 Linux safety/lifecycle tests passed as the ordinary user and again as root**. These exercise real procfs/pidfds,
+4. The initial **25 Linux safety/lifecycle tests passed as the ordinary user and again as root**. The follow-up suite
+   is now **43 tests** including mocked miner/OctaSpace pause/restore boundaries and shutdown-race regressions. These exercise real procfs/pidfds,
    terminal/zombie handling, refused mismatched PID/start-time/model identities, Docker/GPU/port gates, private config,
    external stop and foreground reaping. The fake `llama-server` and HTTP fixtures are CPU-only.
 5. The **pinned upstream frontend in `--engine mock` mode** passed a bounded known API response (`ANSWER=42`) and
@@ -98,16 +107,38 @@ signalling rather than guessing. Use the recorded log/state if an abnormal teard
 
 The old, unfinished Hauhau runtime benchmark/lifecycle matrix was **not reused or declared cleared** by these checks.
 
-### Not validated yet
+## Authorized live GPU follow-up
 
-- actual IQ3_S startup/GPU allocation/VRAM peaks on four 3090s;
-- native model responses, arithmetic/code, strict JSON/tool calls, image correctness;
-- prefill/decode throughput, draft acceptance and completed-task latency;
-- populated 262K histories, worst-case memory or full-context generation/quality.
+- Native-context four-3090 startup with BF16 GPU vision and the pinned original MTP succeeded after pausing both
+  the miner and OctaSpace. The automatic split was layers 0–12 / 13–24 / 25–35 / 36–47.
+- Completed bounded requests passed: `ANSWER=42` arithmetic (6 output tokens), strict JSON (30), exactly one
+  `get_weather(city=Oslo)` call (27), red/blue image classification (20), and high reasoning with correct arithmetic
+  (57 tokens including reasoning, a 128-token reasoning budget, 512-token total cap).
+- Those tiny requests took approximately 0.54–1.08 seconds, with response-reported decode around 61–125 tokens/s.
+  These are small completed functional checks, **not a representative speed benchmark or full-context result**.
+- The running LAN server returned HTTP 200 for `/`, `/health`, and `/v1/models` from another LAN machine; model
+  metadata exposes text/image input and native context 262144.
+- The updated three-choice menu successfully paused active OctaSpace and its configured **Swift LLM Hive miner**,
+  then started the actual IQ3_S server on LAN port 8080. Live-supervisor/private-state proof distinguishes that miner
+  from a manual Qwen hosting session; no Hive flight-sheet/configuration was changed.
+- Nine additional bounded LAN checks passed: arithmetic, strict JSON, one tool, yellow/green vision, swapped-image
+  vision (same text, different image), high reasoning, Python code, OpenAI SSE and Anthropic messages. A separate
+  real-browser chat returned `UI_OK` (3 output tokens); only the harmless upstream missing-favicon 404 was logged.
+- After those short requests, observed GPU used/free MiB were 21931/2196, 20655/3472, 20463/3664, 19359/4765.
+  This is one post-request observation, **not a peak or populated-context guarantee**.
+- Identity-bound external stop completed cleanly without a false new-workload warning. The menu reaped its frontend,
+  exited **0**, removed the pause lease, and restored OctaSpace plus the configured Hive miner. A second real startup
+  and identity-bound **SIGINT (Ctrl+C equivalent)** to its foreground supervisor likewise exited 0, reaped the
+  frontend, cleared GPUs and restored the prior state.
+- Port checks now accept TIME_WAIT after owned-server teardown using SO_REUSEADDR, while still blocking live
+  listeners. Shutdown preserves original errors, serializes external stop versus the watcher, and retains recorded
+  identities while CUDA resources drain. No manual miner stop is required.
 
-No published RTX 5070/AMD speed or estimated 3090 rate is represented as a `.69` measurement. Keep this engine
-experimental until bounded actual-model text/tool/JSON/vision checks succeed after the user's manual miner stop.
-Do not use full-context generation as a smoke test.
+### Still unmeasured
+
+Populated 262K histories, worst-case image/memory peaks, sustained representative throughput and full-context quality.
+No full-context generation was performed; do not use it as a smoke test. No other-hardware published speed is treated
+as a `.69` measurement. The separate old Hauhau benchmark/lifecycle matrix remains uncleared.
 
 ## Authorized cleanup result
 

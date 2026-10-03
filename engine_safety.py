@@ -37,25 +37,31 @@ def strata_state():
     return Path(os.environ.get('STRATA_STATE_ROOT', owner_home() / '.local/state/locallm-strata'))
 
 
+def terminal_stat(fields):
+    # CUDA context teardown may keep /proc present after exit_mm removed exe/cmdline.
+    # PF_EXITING (0x4) is irrevocable exit, even before the task becomes a zombie.
+    return fields[0] in ('Z', 'X', 'x') or bool(int(fields[6]) & 0x4)
+
+
 def proc(pid, retries=4):
     """Bracket matching exe/cmdline snapshots with stat reads; terminal states are gone."""
     p = Path('/proc') / str(pid)
     for attempt in range(retries):
         try:
             a = (p / 'stat').read_text().rsplit(')', 1)[1].split()
-            if a[0] in ('Z', 'X', 'x'):
+            if terminal_stat(a):
                 return None
             exe = os.readlink(p / 'exe')
             cmd = (p / 'cmdline').read_bytes().decode('utf-8', 'strict').rstrip('\0').split('\0')
             uid = (p / 'status').stat().st_uid
             b = (p / 'stat').read_text().rsplit(')', 1)[1].split()
-            if b[0] in ('Z', 'X', 'x'):
+            if terminal_stat(b):
                 return None
             exe2 = os.readlink(p / 'exe')
             cmd2 = (p / 'cmdline').read_bytes().decode('utf-8', 'strict').rstrip('\0').split('\0')
             uid2 = (p / 'status').stat().st_uid
             c = (p / 'stat').read_text().rsplit(')', 1)[1].split()
-            if c[0] in ('Z', 'X', 'x'):
+            if terminal_stat(c):
                 return None
             if a[19] == b[19] == c[19] and a[1:4] == b[1:4] == c[1:4] and \
                     exe == exe2 and cmd == cmd2 and uid == uid2 and cmd and exe:
@@ -123,6 +129,7 @@ def launch_gate(port=8080):
         names = ', '.join(row[1].strip() if len(row) > 1 else 'unidentified workload' for row in rows)
         raise SafetyError(f'GPUs are busy ({names}). Manually stop the miner/workload first; nothing was stopped.')
     with socket.socket() as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             sock.bind(('0.0.0.0', port))
         except OSError as exc:

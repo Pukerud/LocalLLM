@@ -1,153 +1,132 @@
-# LocalLLM — retained Qwen models and experimental Strata
+# LocalLLM — Swift, Hauhau and Strata
 
-Local NVIDIA-GPU inference on `.69` (four RTX 3090s, 128 GB RAM).
-**The menu does not stop/start Hive miners, change drivers/clocks/watchdog settings, or pause `osn.service`.**
-Stop the miner yourself before launching an LLM. Docker uncertainty, running containers, occupied GPUs, or an
-occupied API port block a new launch.
-
-## Current menu
+Three directly selectable models on `.69` (4× RTX 3090, 128 GB RAM):
 
 ```text
-HostLLM — Engine Picker
-  [1] Qwen profiles — Swift 1.5 Uncensored Q8 (default) / Hauhau Q8 FastMTP
-  [2] Strata IQ3_S — EXPERIMENTAL | BF16 GPU vision | native 262K | INT8 KV
+  [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots
+  [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots
+  [3] Strata IQ3_S — BF16 GPU vision | MTP | high | INT8 KV | native 262K | four-GPU split
+
   [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit
 ```
 
-The Qwen submenu contains only the two retained, installed bundles:
-
-| Choice | Profile | Normal settings on four RTX 3090s |
-| --- | --- | --- |
-| Qwen [1] | `swift15u-q8` — Swift 1.5 Uncensored Q8_K_XL | BF16 vision, native MTP depth 3, Q8 K/V, xhigh, two 262,144-token slots |
-| Qwen [2] | `hauhau-q8-fastmtp-q4kv-xhigh` — Hauhau Q8_K_P, proven fallback | BF16 vision, matching FastMTP sidecar depth 4, Q4_0 K/V, xhigh, three 262,144-token slots |
-| HostLLM [2] | Strata — original Flash-Next GSQ-RCO IQ3_S | BF16 GPU vision, its own Flash-Next MTP runtime, INT8 KV, high reasoning, one serial request, native 262,144 context, four-GPU automatic layer split |
-
-Strata is a **separate engine**, not a new quantization of the dense 27B Swift/Hauhau models. The two Qwen bundles,
-their existing runtime pins, vision projectors and normal inference flags are unchanged. The menu selects Hauhau's
-previously verified Q4-KV/xhigh preset; its Q8-KV alternative remains CLI-only and shares the same retained weights.
-
-## Start on the prepared node
+## Start hosting
 
 ```bash
 cd /home/user/LocalLLM
-miner stop                 # your manual action, not an installer/menu side effect
 ./HostLLM.sh
-# Select [2] for Strata, or [1] then a retained Qwen profile.
+# Select 1, 2 or 3. No manual miner stop is required.
 ```
 
-Strata remains in the foreground, shows loading/health progress and writes a persistent log. Open
-`http://192.168.1.69:8080` after it becomes healthy. OpenAI base URL: `http://192.168.1.69:8080/v1`.
-Anthropic endpoint: `/v1/messages`. The configured model name is `qwen3.8-flash-next-iq3_s-strata`; `qwen38` and
-`strata` are accepted aliases.
+**Starting hosting automatically pauses OctaSpace (`osn.service`) and stops the Hive miner.** This restores the
+intended hosting behavior; the earlier install-only update incorrectly removed it. Docker must be inspectable and
+empty **before any stop**, and occupied GPUs must be identifiable as the selected Hive miner. A rental container,
+unidentified workload, existing LLM or busy API port blocks a new start without stopping that workload.
 
-**Ctrl+C stops only the identity-verified Strata frontend, engine and vision helper**, then returns to the menu.
-Start the miner again manually only after the LLM has stopped. Nothing automatically resumes mining.
-If an engine was started as root, stop it from the same root shell (or with `sudo`).
+A persistent pause lease in `~/.local/state/hostllm/pause.json` remembers the previous service/miner state. Hive's
+`miner stop/start` consumes `MINER_STOP`, so the controller reasserts that marker after stop while hosting is active.
+No driver, clock, watchdog, flight-sheet or Hive configuration changes are made. The configured Hive miner can
+itself be Swift LLM hosting: its live `llm-hosting/h-run.sh` supervisor and matching private state prove ownership,
+so it is safely paused too. A manually launched LLM is not mistaken for that miner.
 
-The default API binding is `0.0.0.0:8080`, matching the existing private-LAN workflow. It is unauthenticated unless
-an API key is set: **do not expose it publicly**. For Strata:
+- **Strata:** stays in the foreground. Ctrl+C stops its identity-verified frontend/engine/vision helper, then restores
+  the previous miner/OctaSpace state once the GPUs have actually cleared.
+- **Swift/Hauhau:** the dashboard can leave the server running. Leaving the menu keeps mining/OctaSpace paused while
+  that server is active. Use **[9]** to stop it and restore the previous state. Stop before switching models.
+- The pause survives closing/reopening the menu; **[9]** also performs safe recovery after a failed/interrupted start.
+- Restoration fails closed while a rental, unknown GPU process, or incomplete GPU teardown remains. No broad
+  `pkill`, `killall`, or reusable-PID sudo-kill fallback is used.
+- Reopen the menu after an update; an already-running shell retains its old menu functions.
 
-```bash
-STRATA_HOST=127.0.0.1 ./v1strata.sh --quickstart    # local/tunnel only
-# Or set STRATA_API_KEY in the environment before a trusted-LAN start.
-./v1strata.sh --status
-./v1strata.sh --check-ready
-./v1strata.sh --stop
-```
+## LAN web UI and APIs
 
-## Strata IQ3_S: preparation and limits
+After **[3] Strata** reports ready:
 
-See [STRATA_IQ3S.md](STRATA_IQ3S.md) for pins, checksums, setup provenance and validation boundaries.
-The prepared profile uses:
+- **Web UI:** <http://192.168.1.69:8080/>
+- **OpenAI API:** `http://192.168.1.69:8080/v1` (`/chat/completions`, `/models`)
+- **Anthropic API:** `http://192.168.1.69:8080/v1/messages`
 
-- [Niko1221/Strata](https://github.com/Niko1221/Strata), engine 0.1.38, pinned source `99f3dbd0b21d1401b3769e0c0d963913607f380b`;
-- [ISTA-DASLab/Flash-Next GSQ-RCO IQ3_S](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/tree/ed59f92082b1e93c0e96d60a8b11aab089b52f09/IQ3_S), with both GGUF shards and its own BF16 projector;
-- the original Flash-Next MTP tensors, fetched/checked and packed by the pinned Strata tools;
-- existing CUDA 12.9, `sm_86`, Release builds, at most four low-priority build workers;
-- a private Python environment; no global pip/apt installation or driver/toolkit replacement;
-- no experimental speed projection, no context extension, INT8 KV with Strata's native-context streaming policy.
+Strata binds **`0.0.0.0:8080`** by default, not loopback, so other LAN devices can reach it. Like llama.cpp, one engine
+owns port 8080 at a time. Its configured model ID is `qwen3.8-flash-next-iq3_s-strata`; `qwen38` and `strata` are aliases.
+Swift/Hauhau retain their existing LAN binding and llama.cpp web UI/API.
 
-**GPU inference is deliberately deferred to the user's first manual launch while the miner remains running during
-installation.** Compilation, checksums, configuration and CPU-only API/lifecycle checks are not speed, vision-quality,
-VRAM-peak or full-context-generation measurements. No full-context generation was sent.
+The default trusted-LAN API has no authentication: **do not expose it publicly**. Set `STRATA_API_KEY` before starting
+for authenticated access, or `STRATA_HOST=127.0.0.1` for local/tunnel-only access. `STRATA_PORT` overrides Strata's port.
+Those settings belong to the launched process; no global Pi configuration is edited.
 
-Differences from the Qwen runtime:
+## Retained models and normal settings
 
-- Strata serves **one request at a time**, not two/three parallel generation slots.
-- It supports images; **not video**. Its highest exposed thinking level is `high`, not `xhigh`.
-- 262,144 is native. Its optional 384K/512K modes are experimental rope-scaled extensions and are not enabled here.
-- Performance depends on CPU, PCIe links, cache residency, draft acceptance and actual prompt length.
-  Other machines' published throughput is not a measurement on this host.
-- The foreground supervisor yields only its own Strata processes if Docker becomes uncertain, a rental container
-  appears, or a new/unidentified GPU workload appears. It never kills that other workload.
+| Main choice | Profile | Normal settings on four RTX 3090s |
+| --- | --- | --- |
+| [1] Swift | `swift15u-q8` | Q8_K_XL weights, shared BF16 vision, embedded native MTP depth 3, Q8 K/V, xhigh, two 262144-token slots |
+| [2] Hauhau | `hauhau-q8-fastmtp-q4kv-xhigh` | Q8_K_P weights, BF16 vision, matching FastMTP sidecar depth 4, Q4_0 K/V, xhigh, three 262144-token slots |
+| [3] Strata | Original Flash-Next GSQ-RCO IQ3_S | BF16 GPU vision, appropriate Flash-Next MTP `--spec 4`, INT8 KV, high reasoning, native 262144, automatic contiguous four-GPU layer split |
 
-To prepare the same profile on another compatible four-3090 Linux host, explicitly run:
+Swift remains the default; Hauhau's previously verified Q4-KV/xhigh preset remains the fallback. Dense Qwen runtime
+pins, weights and normal flags are unchanged. Hauhau's alternative Q8-KV preset shares those retained weights and
+remains CLI-only.
 
-```bash
-./v1strata.sh --prepare
-```
+Strata is a separate **Flash-Next** engine, not an engine for the retained dense 27B Swift/Hauhau GGUFs. It serves one
+request at a time, supports **images but not video**, and exposes thinking `none/low/medium/high` (**not `xhigh`**).
+No context extension or experimental CVec/speed projection is enabled. Its 2048 MiB VRAM reserve and native-context
+INT8 KV streaming policy are retained.
 
-This installs **without starting inference or calibration**, verifies all model/projector SHA-256 hashes and creates
-`prepared.json`. It requires Python 3.10+ with venv/ensurepip, git, gcc/g++, and the already-installed
-`/usr/local/cuda-12.9/bin/nvcc`. Missing system tools cause failure rather than a system package/driver installation.
-Preparation may continue alongside a bare Hive miner; unknown Docker state or rental containers block it.
-A fresh copy needs roughly 78 GiB for the model/projector, plus its runtime, private environment and MTP artifacts.
+## Strata preparation and validation
 
-## Model cleanup
+See [STRATA_IQ3S.md](STRATA_IQ3S.md) for source/model pins, full-file checksums, installed paths and validation scope.
+Strata 0.1.38 is pinned to `99f3dbd0b21d1401b3769e0c0d963913607f380b`; its IQ3_S publisher revision is
+`ed59f92082b1e93c0e96d60a8b11aab089b52f09`. Native engine and GPU vision helper were built for `sm_86` using existing
+CUDA 12.9 and a private Python/CMake environment, without replacing system tools/drivers.
 
-The retained Qwen assets are under `~/.local/share/localllm-qwen38/models/`:
+Real four-GPU startup and bounded arithmetic, strict JSON, exactly-one tool call, color-image vision and high-thinking
+responses have now passed. Compilation/install-only checks alone were not adequate runtime validation. **No
+full-context generation was run**, and populated-262K quality/worst-case peaks remain unmeasured. Tiny-request timing
+is not a full-context benchmark or a general speed promise.
 
-- `hauhau/`: Q8_K_P weights, BF16 projector and matching FastMTP sidecar;
-- `swift15-uncensored/`: **Q8_K_XL weights and the shared BF16 projector only**.
+Ordinary starts never download/update Strata. Explicit install-only preparation on another compatible four-3090
+Linux host uses `./v1strata.sh --prepare`; it never starts inference/calibration or installs system build tools. This
+requires git, Python 3.10+ with venv/ensurepip, gcc/g++, and existing `/usr/local/cuda-12.9/bin/nvcc`.
 
-Strata's IQ3_S, projector, pack and MTP assets live separately under `~/.local/share/localllm-strata/`.
-The original PLE second shard and BF16 projector were reused by hard link where publisher SHA-256 hashes matched;
-there is no reason to download those bytes again.
+The port gate permits TCP TIME_WAIT after an owned server stops (SO_REUSEADDR), but still refuses a live listener.
+The currently configured Hive miner is resumed, not a hard-coded or historical Wildrig PID/bundle.
 
-The retired downloaded assets are: older Swift BF16, Swift 1.5 Uncensored BF16 weights, UkisAI Swift 1.5 27B Q8,
-TURBO Q8, DFlash2 draft, GSQ Q2 and GLM-5.3-Flash EXL3. A guarded cleanup checks active file references and retained
-asset identities; it does not delete shared Swift Q8 vision or the retained Hauhau sidecar.
-Cleanup reclaimed **275.23 GiB physically**; about **655.30 GiB** remained free after Strata preparation.
-The larger logical removed total includes the PLE shard/projector that Strata retains by hard link.
-Historical reports and unselected build artifacts are not mistaken for extra downloaded model weights.
+Raw `v1strata.sh --quickstart` is a low-level launcher, not the hosting pause controller: use **HostLLM** for automatic
+miner/OctaSpace management. `v1strata.sh --status`, `--check-ready`, and `--stop` inspect/control only the owned runtime.
+Logs are separate timestamped `server-*.log` and `server-*-engine.log` files under the Strata data root. Stopping an
+owned CUDA task recognizes kernel `PF_EXITING` as terminal, even before `/proc/<pid>/exe` and its zombie state agree.
 
-Archived comparison profiles remain explicit CLI-only in `v1qwen38.sh`; using their download/start commands can
-re-download retired weights. **Do not use the legacy `--speed-test-all` to test this curated collection:** it includes
-retired profiles. Profile-specific smoke/speed modes use 4K allocation and reasoning off, not normal native-context
-performance.
+## Cleanup and historical tools
 
-Legacy `v1llama_cpp.sh` and `v1glm53.sh` remain archival CLI scripts, not shared-host menu choices. Their old
-stop/benchmark paths are not covered by the new identity-bound guards; do not use them on a rented/shared host.
+Only these Qwen bundles remain under `~/.local/share/localllm-qwen38/models/`:
 
-## HiveOS LLM custom miner (optional, unchanged)
+- `hauhau/`: Q8_K_P, BF16 projector, matching FastMTP sidecar;
+- `swift15-uncensored/`: Q8_K_XL and its shared BF16 projector.
 
-The repository's optional custom miner still targets `swift15u-q8`, with BF16 vision, Q8 K/V, native MTP and two
-native-262K slots on this machine. Its own Hive lifecycle/rental handling remains separate from a manual Strata
-experiment. This update does not install it or change the currently selected Hive miner/flight sheet.
-See [hive-llm-miner/README.md](hive-llm-miner/README.md).
+Strata model/pack/MTP assets are separate under `~/.local/share/localllm-strata/`. Its publisher-identical PLE second
+shard and BF16 projector were reused by hard link and fully hashed. Retired weights were removed: both BF16 Swift
+comparisons, UkisAI Swift 27B Q8, TURBO, DFlash2, GSQ Q2 and GLM EXL3. **275.23 GiB reclaimed physically; about
+655.30 GiB free** after preparation. Retained Qwen file identities/ownership were unchanged.
 
-## Checks
+Archived comparison profiles remain explicit CLI-only and can re-download removed weights. Do not use the legacy
+`--speed-test-all` for this curated collection. Profile-specific smoke/speed modes use 4K allocation and reasoning
+off, not normal native-context performance. Legacy `v1llama_cpp.sh`/`v1glm53.sh` are not shared-host menu choices;
+their old stop/benchmark paths are not covered by the maintained identity-bound guards.
+
+The optional [Hive custom LLM miner](hive-llm-miner/README.md) remains separate: its direct Qwen launcher still leaves
+`osn.service` running for Hive/OctaSpace rental handoffs. This update does not install it or change the selected miner.
+
+## Checks and references
 
 ```bash
 bash -n HostLLM.sh v1qwen38.sh v1strata.sh
 bash tests/retained-menu-test.sh
 bash tests/swift15-profile-test.sh
 bash tests/swift15-uncensored-profile-test.sh
-bash tests/gsq-profile-test.sh                 # archived CLI regression checks, no downloads
-python3 -m unittest discover -s tests -p 'test_engine_safety.py' -v
+bash tests/gsq-profile-test.sh
+python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-The Python safety suite runs on Linux. Its HTTP fixtures and fake `llama-server` are **CPU-only**; they test
-identity-bound lifecycle/known responses without starting a GPU model. Stop helpers use pidfds and matching
-PID/start-time/executable/command identities; no process-name-wide `pkill`, `killall`, or reusable-PID sudo-kill fallback.
-
-## Historical measurements and licenses
-
-- [Swift 1.5 Uncensored two-slot tuning, 2026-09-26](SWIFT15U_2SLOT_2026-09-26.md)
-- [Swift 1.5 source/MTP notes](SWIFT15.md)
-- [Retired GSQ Q2 tuning](GSQ_TUNING_RESULTS.md) and [earlier menu notes](GSQ_FLASH_NEXT.md)
-- [September 24 speed/update research](SPEED_REPORT_2026-09-24.md)
-
-Historical model/menu numbers are not the current menu. Strata is MIT-licensed; model weights retain their own
-publisher licenses, including the Swift Open License terms for Swift fine-tunes. Consult the exact model repository
-before commercial use. Model/runtime pins are not silently advanced by a normal launch.
+Linux tests use CPU-only fixtures and mocked system/miner boundaries; live GPU/API/LAN checks are documented
+separately. Historical tuning: [Swift two-slot](SWIFT15U_2SLOT_2026-09-26.md), [Swift source/MTP](SWIFT15.md),
+[retired GSQ Q2](GSQ_TUNING_RESULTS.md), [September speed research](SPEED_REPORT_2026-09-24.md).
+Strata is MIT-licensed; model weights retain their publisher licenses, including Swift Open License terms.
