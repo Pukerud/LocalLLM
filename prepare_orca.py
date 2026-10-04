@@ -234,8 +234,8 @@ def main():
     config = {'exe': str(SOURCE / 'engine/strata'), 'args': [
         '--pack', str(PACK), '--native', str(paths[0]), '--ple-gguf', str(paths[0]),
         '--expert-profile', str(SOURCE / 'data/expert-profile.bin'), '--expert-cache', 'auto', '--prefill', '512',
-        '--spec', '4', '--spec-min-p', '0.5', '--mtp', str(mtp), '--max-context', '32768', '--kv', 'int8',
-        '--vision', '--vram-reserve-mib', '2048'],
+        '--spec', '4', '--spec-min-p', '0.5', '--mtp', str(mtp), '--max-context', '262144', '--kv', 'int8',
+        '--kv-resident', '32768', '--vision', '--vram-reserve-mib', '2048'],
         'cwd': str(SOURCE), 'tokenizer': str(PACK / 'tokenizer'), 'gpu': [0,1,2,3], 'layer_split': 'auto',
         'model_name': MODEL_ID, 'aliases': ['orca', 'orca-strata'], 'host': '0.0.0.0', 'port': 8080,
         'vision': {'exe': str(SOURCE / 'engine/strata-vision'), 'model': str(paths[0]), 'mmproj': str(paths[2]),
@@ -255,7 +255,7 @@ def main():
         'model_revision':REVISION,'assets':records,'pack_assets':pack_records,
         'runtime_assets':existing['runtime_assets'],'config':str(PROFILE_ROOT / 'config.json'),
         'inference_tested':False,'vision_configured':True,'vision_inference_tested':False,
-        'initial_context':32768,'compat_bf16':True})
+        'configured_context':262144,'kv_resident':32768,'compat_bf16':True})
     print('ORCA PREPARED: assets/pack verified, original runtime and running Strata preserved. GPU inference/vision UNTESTED.',
           flush=True)
 

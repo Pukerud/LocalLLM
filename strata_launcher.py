@@ -17,7 +17,7 @@ from engine_safety import (SafetyError, command_output, docker_empty, launch_gat
                            proc, same_process, signal_identity, strata_state)
 from prepare_strata import DIGESTS
 from orca_assets import MODEL_ID as ORCA_MODEL_ID, PROFILE as ORCA_PROFILE
-from orca_profile import ready_orca
+from orca_profile import configure_native_context, ready_orca
 
 SOURCE_COMMIT = '99f3dbd0b21d1401b3769e0c0d963913607f380b'
 MODEL_REVISION = 'ed59f92082b1e93c0e96d60a8b11aab089b52f09'
@@ -261,8 +261,8 @@ def start(lock, profile='iq3_s'):
     if lib_dirs:
         env['LD_LIBRARY_PATH'] = ':'.join(lib_dirs) + ':' + env.get('LD_LIBRARY_PATH', '')
     if profile == ORCA_PROFILE:
-        print('EXPERIMENTAL Orca Uncensored IQ3_XXS | initial 32K | INT8 KV | MTP | high | F16 GPU vision configured')
-        print('WARNING: Orca model/vision GPU inference has not been locally validated. Original IQ3_S is unchanged.')
+        print('EXPERIMENTAL Orca Uncensored IQ3_XXS | native 262144 | INT8 streaming KV (32K resident) | MTP | high | F16 GPU vision configured')
+        print('EXPERIMENTAL: bounded text/vision checks are documented in ORCA_IQ3XXS.md; not populated-context quality or peak-memory proof.')
     else:
         print('EXPERIMENTAL Strata IQ3_S | BF16 GPU vision | native 262144 | INT8 KV | MTP | high reasoning')
     print(f'Four-GPU layer split auto; serial requests. Log: {log}', flush=True)
@@ -347,15 +347,20 @@ def main():
     modes.add_argument('--stop', action='store_true')
     modes.add_argument('--status', action='store_true')
     modes.add_argument('--check-ready', action='store_true')
+    modes.add_argument('--configure-native-context', action='store_true')
     ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE], default=None)
     a = ap.parse_args()
     profile = a.profile or 'iq3_s'
     try:
-        if a.check_ready:
+        if a.configure_native_context:
+            if profile != ORCA_PROFILE:
+                raise SafetyError('Only the prepared Orca 32K-to-native migration is supported; IQ3_S already requires 262144')
+            configure_native_context(data_root())
+        elif a.check_ready:
             source, config, cfg = ready() if profile == 'iq3_s' else ready(profile)
             if profile == ORCA_PROFILE:
-                print('PREPARED: pinned Orca IQ3_XXS, own compatibility pack/tokenizer, F16 vision configured, initial 32K.')
-                print('Actual Orca model/vision GPU inference UNTESTED; preparation does not stop a running server.')
+                print('PREPARED: pinned Orca IQ3_XXS, own compatibility pack/tokenizer, F16 vision configured, native 262144, INT8 streaming KV.')
+                print('Readiness verifies assets/config only; bounded live results are separate in ORCA_IQ3XXS.md. No full-context quality claim.')
             else:
                 print('PREPARED: pinned IQ3_S, BF16 GPU vision, native 262144, INT8 KV, MTP, four-GPU auto split.')
                 print('Readiness verifies assets/config; bounded live validation is documented in STRATA_IQ3S.md (not full-context quality).')

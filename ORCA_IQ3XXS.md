@@ -53,22 +53,47 @@ apply. Missing preparation fails **before** the pause. [9] stops the owned engin
 The two Strata profiles share a single ownership/state root; simultaneous blind launches are intentionally blocked.
 An explicit profile-specific CLI stop refuses a different live profile.
 
-Initial Orca settings: **32768 context, INT8 KV, prefill 512, four-GPU contiguous automatic split, 2048 MiB reserve,
-MTP `--spec 4 --spec-min-p 0.5`, high maximum thinking**. Its publisher F16 GPU vision is configured with 1024 image
-tokens but has not been validated locally. These initial settings are not the original IQ3_S defaults, which retain
-native 262144/INT8 streaming KV and BF16 vision.
+Orca settings: **native 262144 context, INT8 streaming KV with 32768 resident, prefill 512, four-GPU contiguous
+automatic split, 2048 MiB reserve, MTP `--spec 4 --spec-min-p 0.5`, high maximum thinking**. Its publisher F16 GPU vision is configured with 1024 image
+tokens. Both profiles use the same native context/streaming policy; IQ3_S retains BF16 vision and Orca its own F16
+projector. The resident 32K is a GPU working window, not the total context. No RoPE extension is enabled.
+
+The first Orca installation at `48e3df9` deliberately used 32K. After this update, migrate the verified cached profile:
+
+```bash
+sudo -n ./v1strata.sh --configure-native-context --profile orca-iq3_xxs
+```
+
+This validates the pinned asset records/runtime/pack, preserves historical preparation metadata/backups, and writes
+only the Orca profile config/metadata. It neither downloads weights nor touches the active run-config/process.
+That engine needs an owned, guarded restart to use the new context. Full explicit preparation also writes native
+settings for fresh installations.
 
 The existing Strata frontend/UI/OpenAI/Anthropic APIs are reused. Default trusted-LAN binding is `0.0.0.0:8080`;
 `STRATA_HOST`, `STRATA_PORT`, `STRATA_API_KEY` apply. Model ID: `qwen3.8-flash-next-orca-iq3_xxs-strata`; aliases:
 `orca`, `orca-strata`. No public unauthenticated exposure. One FIFO generation sequence, not extra concurrent slots.
 
+## Native-context validation — 2026-10-04
+
+On `.69`, both live profiles reported **262144** through `/health`, canonical/alias `/v1/models` entries, `/slots`,
+and `/props`. Each passed bounded arithmetic, JSON, exactly one forced Oslo tool call and red/blue plus swapped-image
+checks. The fixed Pi extension's real HTTP discovery/session registration reported 262144 for every ID/alias on both
+servers. Linux CPU/controller tests passed **66 as user and root**; Node context tests passed **8 including the live API**
+for each profile. The final session was returned to the user's latest selected IQ3_S profile.
+
+The first unconstrained Orca image fixture failed strict JSON parsing. Repeating the bounded vision tests with explicit
+`response_format: json_object` passed both swapped images; no weight, runtime, sampling default or MTP setting was
+changed. One image response recorded 6 accepted / 11 drafted tokens, a tiny-request observation, not representative
+MTP acceptance. Post-short-request Orca GPU used/free MiB were 19727/4400, 17585/6542, 16517/7610, 19039/5085:
+not peaks or full-context guarantees. Raw local evidence is under `logs/native-context-20261004/` and
+`profiles/orca-iq3_xxs/validation-native-context-20261004.json`.
+
 ## Validation scope
 
-**Preparation/readiness and CPU mock-frontend tests are not real Orca inference.** No local model-quality, MTP
-acceptance, image correctness, speed or peak-memory claim is made. The currently running IQ3_S instance is deliberately
-not used for a test request or stopped for a canary. First real Orca tests must wait until the user authorizes switching:
-bounded arithmetic/code/JSON/one-tool checks, swapped-image tests, high reasoning and MTP acceptance, then measurements.
-No full-context generation and no automatic extension to 262K.
+**Preparation/readiness and CPU mock-frontend tests are not real Orca inference.** Historical install-only evidence
+preserved the original IQ3_S session; subsequent native-context validation is recorded separately, not retroactively
+added to the initial preparation results. Native allocation plus bounded arithmetic/JSON/tool/image requests is not
+a full-context quality, speed or peak-memory claim. No full-context generation and no RoPE extension past 262144.
 
 Upstream [ORCA.md](https://github.com/Niko1221/Strata/blob/99f3dbd0b21d1401b3769e0c0d963913607f380b/docs/ORCA.md)
 reports IQ3_XXS text-only validation on different hardware. It is not a `.69` vision/performance validation.

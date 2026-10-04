@@ -58,6 +58,19 @@ The compiled native executables have recorded SHA-256 hashes in `prepared.json`.
 Existing dense 27B Swift/Hauhau GGUFs are **not Strata-compatible**. Strata's optional Swift 1.5 **Flash-Next** model is a
 different fine-tune from the retained Swift 1.5 **27B** model. No other Strata quantizations or families were downloaded.
 
+## Native context and Pi detection — 2026-10-04
+
+Option [3] still enforces **262144**, INT8 KV and **32768 resident**; the 32K GPU working window is not a 32K total
+context. The observed 128000 Pi window came from the legacy sync extension reading only `meta.n_ctx_train`, while
+Strata publishes the effective limit as `meta.n_ctx`. The Pi-profile extension now gives the served per-sequence
+allocation precedence. Reload Pi/reselect the model after updating the extension; no global model/settings edit is
+required. Native context includes prompt/history, tools, image tokens, reasoning and answer tokens together.
+
+Both IQ3_S and the separate Orca profile were rechecked live at 262144 with bounded arithmetic/JSON/tool/swapped-image
+requests and real API-to-Pi-registration metadata tests. The source, original IQ3_S config/assets and runtime flags
+were not changed to achieve this. See [ORCA_IQ3XXS.md](ORCA_IQ3XXS.md) for the Orca native-context migration and scope.
+No full-context generation or context beyond native was performed.
+
 ## Automatic hosting start
 
 ```bash

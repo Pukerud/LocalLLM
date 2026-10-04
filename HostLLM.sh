@@ -104,7 +104,7 @@ main() {
         echo '  [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
         echo '  [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
         echo '  [3] Strata IQ3_S — BF16 GPU vision | MTP | high | INT8 KV | native 262K | four-GPU split'
-        echo '  [4] Orca Uncensored IQ3_XXS (Strata) — EXPERIMENTAL | MTP | high | initial 32K | F16 vision UNTESTED'
+        echo '  [4] Orca Uncensored IQ3_XXS (Strata) — EXPERIMENTAL | MTP | high | native 262K | INT8 streaming KV | F16 GPU vision'
         echo ''
         echo '  Starting hosting pauses the miner and OctaSpace automatically (never an active rental).'
         echo '  Strata LAN UI/API: http://192.168.1.69:8080/ — wait for readiness.'

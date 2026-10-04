@@ -6,7 +6,7 @@ Four directly selectable models on `.69` (4× RTX 3090, 128 GB RAM); Orca is exp
   [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots
   [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots
   [3] Strata IQ3_S — BF16 GPU vision | MTP | high | INT8 KV | native 262K | four-GPU split
-  [4] Orca Uncensored IQ3_XXS (Strata) — experimental | MTP | high | initial 32K | F16 vision untested
+  [4] Orca Uncensored IQ3_XXS (Strata) — experimental | MTP | high | native 262K | INT8 streaming KV | F16 GPU vision
 
   [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit
 ```
@@ -62,7 +62,7 @@ Those settings belong to the launched process; no global Pi configuration is edi
 | [1] Swift | `swift15u-q8` | Q8_K_XL weights, shared BF16 vision, embedded native MTP depth 3, Q8 K/V, xhigh, two 262144-token slots |
 | [2] Hauhau | `hauhau-q8-fastmtp-q4kv-xhigh` | Q8_K_P weights, BF16 vision, matching FastMTP sidecar depth 4, Q4_0 K/V, xhigh, three 262144-token slots |
 | [3] Strata | Original Flash-Next GSQ-RCO IQ3_S | BF16 GPU vision, appropriate Flash-Next MTP `--spec 4`, INT8 KV, high reasoning, native 262144, automatic contiguous four-GPU layer split |
-| [4] Orca | `orca-iq3_xxs` | Separate uncensored Flash-Next IQ3_XXS pack/tokenizer, original Flash-Next MTP, INT8 KV, high, initial 32768, four-GPU split; F16 vision configured but local model/vision inference untested |
+| [4] Orca | `orca-iq3_xxs` | Separate uncensored Flash-Next IQ3_XXS pack/tokenizer, original Flash-Next MTP, INT8 streaming KV (32768 resident), high, native 262144, four-GPU split; F16 vision configured |
 
 Swift remains the default; Hauhau's previously verified Q4-KV/xhigh preset remains the fallback. Dense Qwen runtime
 pins, weights and normal flags are unchanged. Hauhau's alternative Q8-KV preset shares those retained weights and
@@ -78,8 +78,16 @@ INT8 KV streaming policy are retained.
 See [ORCA_IQ3XXS.md](ORCA_IQ3XXS.md). **[4] never automatically stops a running Strata instance.** Preparing Orca is
 CPU/download-only, uses its own pinned shards/projector and compatibility pack/tokenizer, and neither rebuilds nor
 updates the shared runtime. Readiness is checked before any hosting pause; missing preparation cannot stop mining.
-Orca remains locally GPU-unvalidated, starts with 32K (not a native-262K capacity claim), and shares Strata's single
-FIFO generation sequence/state/port. It is not a concurrent extra worker or a replacement for [3].
+Orca uses native 262144 with INT8 streaming KV (32768 resident), and shares Strata's single
+FIFO generation sequence/state/port. Existing 32K preparations require an explicit cached
+`sudo ./v1strata.sh --configure-native-context --profile orca-iq3_xxs` after updating; ordinary launches do not rewrite configs. Native allocation is not a populated-context quality claim. It is not a concurrent extra worker or a replacement for [3].
+
+## Pi context metadata
+
+The legacy `llamacpp-model-sync` extension must read the server's **`meta.n_ctx`** (served context), not only
+`meta.n_ctx_train`. Otherwise Strata/Orca alias entries fall back to 128000 in Pi despite a larger server window.
+The corresponding Pi-profile fix gives the live per-sequence allocation precedence over stale static/training
+metadata. Reload Pi/reselect the model after installing it. No global model/settings edits are necessary.
 
 ## Strata preparation and validation
 

@@ -121,8 +121,8 @@ class Profile(unittest.TestCase):
         self.config={'exe':str(self.source/'engine/strata'),'args':[
             '--pack',str(self.pack),'--native',str(self.paths[0]),'--ple-gguf',str(self.paths[0]),
             '--expert-profile',str(self.source/'data/expert-profile.bin'),'--expert-cache','auto','--prefill','512',
-            '--spec','4','--spec-min-p','0.5','--mtp',str(self.root/'data/mtp/rt'),'--max-context','32768',
-            '--kv','int8','--vision','--vram-reserve-mib','2048'],
+            '--spec','4','--spec-min-p','0.5','--mtp',str(self.root/'data/mtp/rt'),'--max-context','262144',
+            '--kv','int8','--kv-resident','32768','--vision','--vram-reserve-mib','2048'],
             'tokenizer':str(self.pack/'tokenizer'),'gpu':[0,1,2,3],'layer_split':'auto','model_name':MODEL_ID,
             'vision':{'exe':str(self.source/'engine/strata-vision'),'model':str(self.paths[0]),'mmproj':str(self.paths[2]),'gpu':True,'max_tokens':1024}}
         self.cfg.write_text(json.dumps(self.config))
@@ -136,6 +136,45 @@ class Profile(unittest.TestCase):
 
     def test_valid_separate_profile(self):
         self.assertEqual(p.ready_orca(self.root)[1],self.cfg)
+
+    def test_native_context_and_streaming_resident_policy(self):
+        args=p.ready_orca(self.root)[2]['args']
+        self.assertEqual(args[args.index('--max-context')+1],'262144')
+        self.assertEqual(args[args.index('--kv-resident')+1],'32768')
+        self.assertFalse(any(x.startswith('--rope') or x.startswith('--yarn') for x in args))
+
+    def test_legacy_32k_context_refused(self):
+        self.config['args'][self.config['args'].index('--max-context')+1]='32768'
+        self.cfg.write_text(json.dumps(self.config))
+        with self.assertRaises(SafetyError):p.ready_orca(self.root)
+
+    def test_context_without_streaming_refused(self):
+        a=self.config['args'];i=a.index('--kv-resident');del a[i:i+2]
+        self.cfg.write_text(json.dumps(self.config))
+        with self.assertRaises(SafetyError):p.ready_orca(self.root)
+
+    def test_explicit_legacy_migration_keeps_assets_and_historical_evidence(self):
+        a=self.config['args'];a[a.index('--max-context')+1]='32768'
+        i=a.index('--kv-resident');del a[i:i+2]
+        self.cfg.write_text(json.dumps(self.config))
+        before=self.cfg.read_text()
+        self.manifest['initial_context']=32768;self.mp.write_text(json.dumps(self.manifest))
+        active=self.root/'active-run-config.json';active.write_text(before)
+        with mock.patch.object(p,'docker_empty'):
+            p.configure_native_context(self.root)
+            p.configure_native_context(self.root)  # idempotent; original backup must survive
+        self.assertEqual(active.read_text(),before)
+        self.assertEqual(json.loads((self.pr/'context-config-before.json').read_text())['args'],self.config['args'])
+        m=json.loads(self.mp.read_text());self.assertEqual(m['initial_context'],32768)
+        self.assertEqual(m['configured_context'],262144)
+        self.assertEqual(m['assets'],self.manifest['assets'])
+        self.assertEqual(p.ready_orca(self.root)[2]['args'][p.ready_orca(self.root)[2]['args'].index('--max-context')+1],'262144')
+
+    def test_migration_rental_check_precedes_config_write(self):
+        before=self.cfg.read_bytes()
+        with mock.patch.object(p,'docker_empty',side_effect=SafetyError('rental')):
+            with self.assertRaises(SafetyError):p.configure_native_context(self.root)
+        self.assertEqual(self.cfg.read_bytes(),before)
 
     def test_missing_preparation_never_starts_or_downloads(self):
         self.mp.unlink()

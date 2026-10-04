@@ -1,9 +1,10 @@
 """Prepared-only Orca profile validation. No downloads, source updates or inference."""
+import fcntl
 import hashlib
 import json
 from pathlib import Path
 
-from engine_safety import SafetyError, command_output
+from engine_safety import SafetyError, command_output, docker_empty
 from orca_assets import ASSETS, MODEL_ID, PROFILE, REPOSITORY, REVISION
 from prepare_strata import PIN
 
@@ -23,7 +24,7 @@ def check_record(path, record, expected_sha=None):
         raise SafetyError(f'Orca asset missing or changed: {path}')
 
 
-def ready_orca(root):
+def ready_orca(root, *, allow_legacy_context=False):
     profile_root = root / 'profiles' / PROFILE
     try:
         manifest = json.loads((profile_root / 'prepared.json').read_text())
@@ -45,11 +46,17 @@ def ready_orca(root):
     expected_args = [
         '--pack', str(pack), '--native', str(paths[0]), '--ple-gguf', str(paths[0]),
         '--expert-profile', str(source / 'data/expert-profile.bin'), '--expert-cache', 'auto', '--prefill', '512',
-        '--spec', '4', '--spec-min-p', '0.5', '--mtp', str(root / 'data/mtp/rt'), '--max-context', '32768',
-        '--kv', 'int8', '--vision', '--vram-reserve-mib', '2048']
+        '--spec', '4', '--spec-min-p', '0.5', '--mtp', str(root / 'data/mtp/rt'), '--max-context', '262144',
+        '--kv', 'int8', '--kv-resident', '32768', '--vision', '--vram-reserve-mib', '2048']
     vision = {'exe': str(source / 'engine/strata-vision'), 'model': str(paths[0]), 'mmproj': str(paths[2]),
               'gpu': True, 'max_tokens': 1024}
-    if (cfg.get('args') != expected_args or cfg.get('exe') != str(source / 'engine/strata') or
+    allowed_args = [expected_args]
+    if allow_legacy_context:
+        legacy = list(expected_args)
+        legacy[legacy.index('--max-context') + 1] = '32768'
+        i = legacy.index('--kv-resident'); del legacy[i:i+2]
+        allowed_args.append(legacy)  # only the exact verified install-only preset, never arbitrary flags
+    if (cfg.get('args') not in allowed_args or cfg.get('exe') != str(source / 'engine/strata') or
             cfg.get('tokenizer') != str(pack / 'tokenizer') or cfg.get('vision') != vision or
             cfg.get('gpu') != [0,1,2,3] or cfg.get('layer_split') != 'auto' or cfg.get('model_name') != MODEL_ID):
         raise SafetyError('Orca must use its own pack/tokenizer/shards/projector and pinned experimental settings')
@@ -81,3 +88,34 @@ def ready_orca(root):
     if not (source / '.venv/bin/python').is_file() or not (root / 'data/mtp/rt/experts.bin').is_file():
         raise SafetyError('Prepared Python/original Flash-Next draft runtime missing')
     return source, config_path, cfg
+
+
+def configure_native_context(root):
+    """Explicit cached-profile migration; never changes active run-config/state or starts/stops a process."""
+    from prepare_orca import atomic_json
+    profile_root = root / 'profiles' / PROFILE
+    with (profile_root / 'prepare.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        docker_empty()
+        _, path, cfg = ready_orca(root, allow_legacy_context=True)
+        original = json.loads(path.read_text())
+        manifest_path = profile_root / 'prepared.json'
+        manifest = json.loads(manifest_path.read_text())
+        # Keep first-install evidence instead of rewriting its historical 32K allocation.
+        for name, value in [('context-config-before.json', original), ('context-prepared-before.json', manifest)]:
+            backup = profile_root / name
+            if not backup.exists():
+                atomic_json(backup, value)
+        args = cfg['args']
+        args[args.index('--max-context') + 1] = '262144'
+        if '--kv-resident' not in args:
+            args[args.index('--vision'):args.index('--vision')] = ['--kv-resident', '32768']
+        atomic_json(path, cfg)
+        try:
+            ready_orca(root)
+        except Exception:
+            atomic_json(path, original)
+            raise
+        manifest.update(configured_context=262144, kv_resident=32768)
+        atomic_json(manifest_path, manifest)
+    print('Orca profile configured: native 262144, INT8 streaming KV, 32768 resident. Active engine untouched; restart required.')
