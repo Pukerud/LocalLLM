@@ -1,0 +1,849 @@
+{
+  "date": "2026-10-05",
+  "host": "192.168.1.69",
+  "hardware": "4x RTX 3090 / Ryzen 5 5600G / approximately 128 GiB RAM / CUDA 12.9 sm86",
+  "source_pins": {
+    "0.1.38": "99f3dbd0b21d1401b3769e0c0d963913607f380b",
+    "0.1.39": "6f32ec070f23ced9f50e704d854d775da52591ab"
+  },
+  "policy": {
+    "native_context": 262144,
+    "resident_int8_kv": 32768,
+    "temperature": 1,
+    "top_p": 0.95,
+    "top_k": 20,
+    "reasoning_effort": "high",
+    "max_output_tokens": 384,
+    "max_measured_prompt_tokens": 5294,
+    "repetitions": 3,
+    "full_context_generation": false,
+    "solo_rate": "engine-reported decode, excluding prefill/queue",
+    "pair_rate": "aggregate output / pair wall time, including prefill/queue",
+    "first_token": "first nonempty reasoning or answer delta",
+    "peak_guarantees": false
+  },
+  "arms": [
+    {
+      "profile": "iq3_s",
+      "version": "0.1.38",
+      "slots": 1,
+      "groups": 1,
+      "passed": true,
+      "error": null,
+      "cases": {
+        "code": {
+          "solo_repetitions": 3,
+          "pair_repetitions": 3,
+          "solo_engine_decode_tps": 55.6,
+          "solo_engine_prefill_tps": 149.4,
+          "solo_end_to_end_tps": 50.531,
+          "solo_seconds": 7.599,
+          "solo_ttft_seconds": 0.712,
+          "solo_prompt_tokens": 102,
+          "solo_output_tokens": 384,
+          "pair_aggregate_output_tps": 49.951,
+          "pair_wall_seconds": 15.375,
+          "pair_first_ttft_seconds": 0.713,
+          "pair_last_ttft_seconds": 8.271,
+          "pair_request_seconds": 11.529,
+          "pair_engine_decode_tps": 55.8,
+          "solo_cache_tokens": [
+            0,
+            0,
+            0
+          ]
+        },
+        "ledger": {
+          "solo_repetitions": 3,
+          "pair_repetitions": 3,
+          "solo_engine_decode_tps": 60.0,
+          "solo_engine_prefill_tps": 1156.4,
+          "solo_end_to_end_tps": 34.858,
+          "solo_seconds": 11.016,
+          "solo_ttft_seconds": 4.619,
+          "solo_prompt_tokens": 5294,
+          "solo_output_tokens": 384,
+          "pair_aggregate_output_tps": 35.433,
+          "pair_wall_seconds": 21.675,
+          "pair_first_ttft_seconds": 4.632,
+          "pair_last_ttft_seconds": 15.151,
+          "pair_request_seconds": 16.356,
+          "pair_engine_decode_tps": 59.2,
+          "solo_cache_tokens": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "observed_resources": {
+        "sample_count": 110,
+        "min_free_gpu_mib": [
+          2190,
+          3466,
+          3654,
+          4755
+        ],
+        "max_used_gpu_mib": [
+          21937,
+          20661,
+          20473,
+          19369
+        ],
+        "min_available_ram_gib": 63.83,
+        "max_live_running": 0
+      },
+      "name": "iq3_s-v0.1.38-p1-g1-results.json",
+      "functional_checks": [
+        {
+          "name": "known_working_math",
+          "passed": true
+        },
+        {
+          "name": "json",
+          "passed": true
+        },
+        {
+          "name": "one_tool",
+          "passed": true
+        },
+        {
+          "name": "code",
+          "passed": true
+        },
+        {
+          "name": "vision_red",
+          "passed": true
+        },
+        {
+          "name": "vision_blue",
+          "passed": true
+        }
+      ],
+      "all_resident_batch_optimization": "upstream default"
+    },
+    {
+      "profile": "iq3_s",
+      "version": "0.1.39",
+      "slots": 1,
+      "groups": 1,
+      "passed": true,
+      "error": null,
+      "cases": {
+        "code": {
+          "solo_repetitions": 3,
+          "pair_repetitions": 3,
+          "solo_engine_decode_tps": 68.7,
+          "solo_engine_prefill_tps": 216.5,
+          "solo_end_to_end_tps": 63.287,
+          "solo_seconds": 6.068,
+          "solo_ttft_seconds": 0.496,
+          "solo_prompt_tokens": 102,
+          "solo_output_tokens": 384,
+          "pair_aggregate_output_tps": 62.071,
+          "pair_wall_seconds": 12.373,
+          "pair_first_ttft_seconds": 0.496,
+          "pair_last_ttft_seconds": 6.649,
+          "pair_request_seconds": 9.306,
+          "pair_engine_decode_tps": 67.8,
+          "solo_cache_tokens": [
+            0,
+            0,
+            0
+          ]
+        },
+        "ledger": {
+          "solo_repetitions": 3,
+          "pair_repetitions": 3,
+          "solo_engine_decode_tps": 73.3,
+          "solo_engine_prefill_tps": 1554.9,
+          "solo_end_to_end_tps": 44.208,
+          "solo_seconds": 8.686,
+          "solo_ttft_seconds": 3.441,
+          "solo_prompt_tokens": 5294,
+          "solo_output_tokens": 384,
+          "pair_aggregate_output_tps": 44.84,
+          "pair_wall_seconds": 17.127,
+          "pair_first_ttft_seconds": 3.454,
+          "pair_last_ttft_seconds": 12.579,
+          "pair_request_seconds": 13.062,
+          "pair_engine_decode_tps": 71.65,
+          "solo_cache_tokens": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "observed_resources": {
+        "sample_count": 87,
+        "min_free_gpu_mib": [
+          2200,
+          3472,
+          3656,
+          839
+        ],
+        "max_used_gpu_mib": [
+          21927,
+          20655,
+          20471,
+          23285
+        ],
+        "min_available_ram_gib": 64.22,
+        "max_live_running": 0
+      },
+      "name": "iq3_s-v0.1.39-p1-g1-results.json",
+      "functional_checks": [
+        {
+          "name": "known_working_math",
+          "passed": true
+        },
+        {
+          "name": "json",
+          "passed": true
+        },
+        {
+          "name": "one_tool",
+          "passed": true
+        },
+        {
+          "name": "code",
+          "passed": true
+        },
+        {
+          "name": "vision_red",
+          "passed": true
+        },
+        {
+          "name": "vision_blue",
+          "passed": true
+        }
+      ],
+      "all_resident_batch_optimization": "upstream default"
+    },
+    {
+      "profile": "iq3_s",
+      "version": "0.1.39",
+      "slots": 2,
+      "groups": 1,
+      "passed": true,
+      "error": null,
+      "cases": {
+        "code": {
+          "solo_repetitions": 3,
+          "pair_repetitions": 3,
+          "solo_engine_decode_tps": 63.2,
+          "solo_engine_prefill_tps": 150.9,
+          "solo_end_to_end_tps": 56.811,
+          "solo_seconds": 6.759,
+          "solo_ttft_seconds": 0.703,
+          "solo_prompt_tokens": 102,
+          "solo_output_tokens": 384,
+          "pair_aggregate_output_tps": 60.563,
+          "pair_wall_seconds": 12.681,
+          "pair_first_ttft_seconds": 0.703,
+          "pair_last_ttft_seconds": 1.573,
+          "pair_request_seconds": 12.655,
+          "pair_engine_decode_tps": 33.55,
+          "solo_cache_tokens": [
+            0,
+            0,
+            0
+          ]
+        },
+        "ledger": {
+          "solo_repetitions": 3,
+          "pair_repetitions": 3,
+          "solo_engine_decode_tps": 67.6,
+          "solo_engine_prefill_tps": 1192.5,
+          "solo_end_to_end_tps": 37.8,
+          "solo_seconds": 10.159,
+          "solo_ttft_seconds": 4.478,
+          "solo_prompt_tokens": 5294,
+          "solo_output_tokens": 384,
+          "pair_aggregate_output_tps": 37.127,
+          "pair_wall_seconds": 20.686,
+          "pair_first_ttft_seconds": 4.493,
+          "pair_last_ttft_seconds": 9.13,
+          "pair_request_seconds": 20.66,
+          "pair_engine_decode_tps": 28.7,
+          "solo_cache_tokens": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "observed_resources": {
+        "sample_count": 98,
+        "min_free_gpu_mib": [
+          1558,
+          2846,
+          3038,
+          4129
+        ],
+        "max_used_gpu_mib": [
+          22569,
+          21281,
+          21089,
+          19995
+        ],
+        "min_available_ram_gib": 57.37,
+        "max_live_running": 2
+      },
+      "name": "iq3_s-v0.1.39-p2-g1-guarded-results.json",
+      "functional_checks": [
+        {
+          "name": "known_working_math",
+          "passed": true
+        },
+        {
+          "name": "json",
+          "passed": true
+        },
+        {
+          "name": "one_tool",
+          "passed": true
+        },
+        {
+          "name": "code",
+          "passed": true
+        },
+        {
+          "name": "vision_red",
+          "passed": true
+        },
+        {
+          "name": "vision_blue",
+          "passed": true
+        }
+      ],
+      "all_resident_batch_optimization": "disabled"
+    },
+    {
+      "profile": "iq3_s",
+      "version": "0.1.39",
+      "slots": 2,
+      "groups": 1,
+      "passed": false,
+      "error": "<HTTPError 400: 'Bad Request'>",
+      "cases": {
+        "code": {
+          "solo_repetitions": 0,
+          "pair_repetitions": 0,
+          "solo_engine_decode_tps": null,
+          "solo_engine_prefill_tps": null,
+          "solo_end_to_end_tps": null,
+          "solo_seconds": null,
+          "solo_ttft_seconds": null,
+          "solo_prompt_tokens": null,
+          "solo_output_tokens": null,
+          "pair_aggregate_output_tps": null,
+          "pair_wall_seconds": null,
+          "pair_first_ttft_seconds": null,
+          "pair_last_ttft_seconds": null,
+          "pair_request_seconds": null,
+          "pair_engine_decode_tps": null,
+          "solo_cache_tokens": []
+        },
+        "ledger": {
+          "solo_repetitions": 0,
+          "pair_repetitions": 0,
+          "solo_engine_decode_tps": null,
+          "solo_engine_prefill_tps": null,
+          "solo_end_to_end_tps": null,
+          "solo_seconds": null,
+          "solo_ttft_seconds": null,
+          "solo_prompt_tokens": null,
+          "solo_output_tokens": null,
+          "pair_aggregate_output_tps": null,
+          "pair_wall_seconds": null,
+          "pair_first_ttft_seconds": null,
+          "pair_last_ttft_seconds": null,
+          "pair_request_seconds": null,
+          "pair_engine_decode_tps": null,
+          "solo_cache_tokens": []
+        }
+      },
+      "observed_resources": {
+        "sample_count": 0,
+        "min_free_gpu_mib": null,
+        "max_used_gpu_mib": null,
+        "min_available_ram_gib": null,
+        "max_live_running": null
+      },
+      "name": "iq3_s-v0.1.39-p2-g1-results.json",
+      "functional_checks": [],
+      "all_resident_batch_optimization": "upstream default"
+    },
+    {
+      "profile": "iq3_s",
+      "version": "0.1.39",
+      "slots": 2,
+      "groups": 2,
+      "passed": true,
+      "error": null,
+      "cases": {
+        "code": {
+          "solo_repetitions": 3,
+          "pair_repetitions": 3,
+          "solo_engine_decode_tps": 62.5,
+          "solo_engine_prefill_tps": 153.7,
+          "solo_end_to_end_tps": 56.378,
+          "solo_seconds": 6.811,
+          "solo_ttft_seconds": 0.69,
+          "solo_prompt_tokens": 102,
+          "solo_output_tokens": 384,
+          "pair_aggregate_output_tps": 78.255,
+          "pair_wall_seconds": 9.814,
+          "pair_first_ttft_seconds": 0.695,
+          "pair_last_ttft_seconds": 1.556,
+          "pair_request_seconds": 9.793,
+          "pair_engine_decode_tps": 44.8,
+          "solo_cache_tokens": [
+            0,
+            0,
+            0
+          ]
+        },
+        "ledger": {
+          "solo_repetitions": 3,
+          "pair_repetitions": 3,
+          "solo_engine_decode_tps": 67.0,
+          "solo_engine_prefill_tps": 1191.6,
+          "solo_end_to_end_tps": 37.523,
+          "solo_seconds": 10.234,
+          "solo_ttft_seconds": 4.481,
+          "solo_prompt_tokens": 5294,
+          "solo_output_tokens": 384,
+          "pair_aggregate_output_tps": 43.705,
+          "pair_wall_seconds": 17.572,
+          "pair_first_ttft_seconds": 4.49,
+          "pair_last_ttft_seconds": 9.146,
+          "pair_request_seconds": 17.558,
+          "pair_engine_decode_tps": 37.85,
+          "solo_cache_tokens": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "observed_resources": {
+        "sample_count": 87,
+        "min_free_gpu_mib": [
+          1564,
+          2850,
+          3042,
+          4137
+        ],
+        "max_used_gpu_mib": [
+          22563,
+          21277,
+          21085,
+          19987
+        ],
+        "min_available_ram_gib": 57.4,
+        "max_live_running": 2
+      },
+      "name": "iq3_s-v0.1.39-p2-g2-results.json",
+      "functional_checks": [
+        {
+          "name": "known_working_math",
+          "passed": true
+        },
+        {
+          "name": "json",
+          "passed": true
+        },
+        {
+          "name": "one_tool",
+          "passed": true
+        },
+        {
+          "name": "code",
+          "passed": true
+        },
+        {
+          "name": "vision_red",
+          "passed": true
+        },
+        {
+          "name": "vision_blue",
+          "passed": true
+        }
+      ],
+      "all_resident_batch_optimization": "disabled"
+    },
+    {
+      "profile": "orca-iq3_xxs",
+      "version": "0.1.38",
+      "slots": 1,
+      "groups": 1,
+      "passed": true,
+      "error": null,
+      "cases": {
+        "code": {
+          "solo_repetitions": 3,
+          "pair_repetitions": 3,
+          "solo_engine_decode_tps": 56.7,
+          "solo_engine_prefill_tps": 249.7,
+          "solo_end_to_end_tps": 53.468,
+          "solo_seconds": 7.182,
+          "solo_ttft_seconds": 0.436,
+          "solo_prompt_tokens": 102,
+          "solo_output_tokens": 384,
+          "pair_aggregate_output_tps": 52.816,
+          "pair_wall_seconds": 14.541,
+          "pair_first_ttft_seconds": 0.436,
+          "pair_last_ttft_seconds": 7.893,
+          "pair_request_seconds": 10.943,
+          "pair_engine_decode_tps": 55.5,
+          "solo_cache_tokens": [
+            0,
+            0,
+            0
+          ]
+        },
+        "ledger": {
+          "solo_repetitions": 3,
+          "pair_repetitions": 3,
+          "solo_engine_decode_tps": 61.9,
+          "solo_engine_prefill_tps": 917.1,
+          "solo_end_to_end_tps": 32.012,
+          "solo_seconds": 11.996,
+          "solo_ttft_seconds": 5.812,
+          "solo_prompt_tokens": 5294,
+          "solo_output_tokens": 384,
+          "pair_aggregate_output_tps": 32.414,
+          "pair_wall_seconds": 23.694,
+          "pair_first_ttft_seconds": 5.816,
+          "pair_last_ttft_seconds": 17.737,
+          "pair_request_seconds": 17.84,
+          "pair_engine_decode_tps": 63.8,
+          "solo_cache_tokens": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "observed_resources": {
+        "sample_count": 112,
+        "min_free_gpu_mib": [
+          4390,
+          6542,
+          7610,
+          5097
+        ],
+        "max_used_gpu_mib": [
+          19737,
+          17585,
+          16517,
+          19027
+        ],
+        "min_available_ram_gib": 63.55,
+        "max_live_running": 0
+      },
+      "name": "orca-iq3_xxs-v0.1.38-p1-g1-results.json",
+      "functional_checks": [
+        {
+          "name": "known_working_math",
+          "passed": true
+        },
+        {
+          "name": "json",
+          "passed": true
+        },
+        {
+          "name": "one_tool",
+          "passed": true
+        },
+        {
+          "name": "code",
+          "passed": true
+        },
+        {
+          "name": "vision_red",
+          "passed": true
+        },
+        {
+          "name": "vision_blue",
+          "passed": true
+        }
+      ],
+      "all_resident_batch_optimization": "upstream default"
+    },
+    {
+      "profile": "orca-iq3_xxs",
+      "version": "0.1.39",
+      "slots": 1,
+      "groups": 1,
+      "passed": true,
+      "error": null,
+      "cases": {
+        "code": {
+          "solo_repetitions": 3,
+          "pair_repetitions": 3,
+          "solo_engine_decode_tps": 71.1,
+          "solo_engine_prefill_tps": 255.4,
+          "solo_end_to_end_tps": 66.132,
+          "solo_seconds": 5.807,
+          "solo_ttft_seconds": 0.422,
+          "solo_prompt_tokens": 102,
+          "solo_output_tokens": 384,
+          "pair_aggregate_output_tps": 65.216,
+          "pair_wall_seconds": 11.776,
+          "pair_first_ttft_seconds": 0.423,
+          "pair_last_ttft_seconds": 6.389,
+          "pair_request_seconds": 8.824,
+          "pair_engine_decode_tps": 69.15,
+          "solo_cache_tokens": [
+            0,
+            0,
+            0
+          ]
+        },
+        "ledger": {
+          "solo_repetitions": 3,
+          "pair_repetitions": 3,
+          "solo_engine_decode_tps": 76.8,
+          "solo_engine_prefill_tps": 1765.6,
+          "solo_end_to_end_tps": 47.924,
+          "solo_seconds": 8.013,
+          "solo_ttft_seconds": 3.034,
+          "solo_prompt_tokens": 5294,
+          "solo_output_tokens": 384,
+          "pair_aggregate_output_tps": 48.367,
+          "pair_wall_seconds": 15.879,
+          "pair_first_ttft_seconds": 3.042,
+          "pair_last_ttft_seconds": 11.194,
+          "pair_request_seconds": 11.955,
+          "pair_engine_decode_tps": 79.0,
+          "solo_cache_tokens": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "observed_resources": {
+        "sample_count": 81,
+        "min_free_gpu_mib": [
+          4400,
+          6548,
+          7612,
+          5103
+        ],
+        "max_used_gpu_mib": [
+          19727,
+          17579,
+          16515,
+          19021
+        ],
+        "min_available_ram_gib": 63.56,
+        "max_live_running": 0
+      },
+      "name": "orca-iq3_xxs-v0.1.39-p1-g1-results.json",
+      "functional_checks": [
+        {
+          "name": "known_working_math",
+          "passed": true
+        },
+        {
+          "name": "json",
+          "passed": true
+        },
+        {
+          "name": "one_tool",
+          "passed": true
+        },
+        {
+          "name": "code",
+          "passed": true
+        },
+        {
+          "name": "vision_red",
+          "passed": true
+        },
+        {
+          "name": "vision_blue",
+          "passed": true
+        }
+      ],
+      "all_resident_batch_optimization": "upstream default"
+    },
+    {
+      "profile": "orca-iq3_xxs",
+      "version": "0.1.39",
+      "slots": 2,
+      "groups": 1,
+      "passed": true,
+      "error": null,
+      "cases": {
+        "code": {
+          "solo_repetitions": 3,
+          "pair_repetitions": 3,
+          "solo_engine_decode_tps": 65.4,
+          "solo_engine_prefill_tps": 253.9,
+          "solo_end_to_end_tps": 61.143,
+          "solo_seconds": 6.28,
+          "solo_ttft_seconds": 0.427,
+          "solo_prompt_tokens": 102,
+          "solo_output_tokens": 384,
+          "pair_aggregate_output_tps": 66.492,
+          "pair_wall_seconds": 11.55,
+          "pair_first_ttft_seconds": 0.428,
+          "pair_last_ttft_seconds": 1.025,
+          "pair_request_seconds": 11.477,
+          "pair_engine_decode_tps": 35.95,
+          "solo_cache_tokens": [
+            0,
+            0,
+            0
+          ]
+        },
+        "ledger": {
+          "solo_repetitions": 3,
+          "pair_repetitions": 3,
+          "solo_engine_decode_tps": 71.4,
+          "solo_engine_prefill_tps": 1761.0,
+          "solo_end_to_end_tps": 45.682,
+          "solo_seconds": 8.406,
+          "solo_ttft_seconds": 3.043,
+          "solo_prompt_tokens": 5294,
+          "solo_output_tokens": 384,
+          "pair_aggregate_output_tps": 35.082,
+          "pair_wall_seconds": 21.892,
+          "pair_first_ttft_seconds": 3.021,
+          "pair_last_ttft_seconds": 13.295,
+          "pair_request_seconds": 20.858,
+          "pair_engine_decode_tps": 45.25,
+          "solo_cache_tokens": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "observed_resources": {
+        "sample_count": 94,
+        "min_free_gpu_mib": [
+          3760,
+          5924,
+          6996,
+          4471
+        ],
+        "max_used_gpu_mib": [
+          20367,
+          18203,
+          17131,
+          19653
+        ],
+        "min_available_ram_gib": 56.9,
+        "max_live_running": 2
+      },
+      "name": "orca-iq3_xxs-v0.1.39-p2-g1-results.json",
+      "functional_checks": [
+        {
+          "name": "known_working_math",
+          "passed": true
+        },
+        {
+          "name": "json",
+          "passed": true
+        },
+        {
+          "name": "one_tool",
+          "passed": true
+        },
+        {
+          "name": "code",
+          "passed": true
+        },
+        {
+          "name": "vision_red",
+          "passed": true
+        },
+        {
+          "name": "vision_blue",
+          "passed": true
+        }
+      ],
+      "all_resident_batch_optimization": "disabled"
+    },
+    {
+      "profile": "orca-iq3_xxs",
+      "version": "0.1.39",
+      "slots": 2,
+      "groups": 2,
+      "passed": false,
+      "error": "RuntimeError('HTTP 502: {\"error\": {\"type\": \"structured_output_failed\", \"code\": \"structured_output_failed\", \"message\": \"model did not return valid JSON: Expecting value: line 1 column 1 (char 0)\"}}')",
+      "cases": {
+        "code": {
+          "solo_repetitions": 0,
+          "pair_repetitions": 0,
+          "solo_engine_decode_tps": null,
+          "solo_engine_prefill_tps": null,
+          "solo_end_to_end_tps": null,
+          "solo_seconds": null,
+          "solo_ttft_seconds": null,
+          "solo_prompt_tokens": null,
+          "solo_output_tokens": null,
+          "pair_aggregate_output_tps": null,
+          "pair_wall_seconds": null,
+          "pair_first_ttft_seconds": null,
+          "pair_last_ttft_seconds": null,
+          "pair_request_seconds": null,
+          "pair_engine_decode_tps": null,
+          "solo_cache_tokens": []
+        },
+        "ledger": {
+          "solo_repetitions": 0,
+          "pair_repetitions": 0,
+          "solo_engine_decode_tps": null,
+          "solo_engine_prefill_tps": null,
+          "solo_end_to_end_tps": null,
+          "solo_seconds": null,
+          "solo_ttft_seconds": null,
+          "solo_prompt_tokens": null,
+          "solo_output_tokens": null,
+          "pair_aggregate_output_tps": null,
+          "pair_wall_seconds": null,
+          "pair_first_ttft_seconds": null,
+          "pair_last_ttft_seconds": null,
+          "pair_request_seconds": null,
+          "pair_engine_decode_tps": null,
+          "solo_cache_tokens": []
+        }
+      },
+      "observed_resources": {
+        "sample_count": 0,
+        "min_free_gpu_mib": null,
+        "max_used_gpu_mib": null,
+        "min_available_ram_gib": null,
+        "max_live_running": null
+      },
+      "name": "orca-iq3_xxs-v0.1.39-p2-g2-results.json",
+      "functional_checks": [
+        {
+          "name": "known_working_math",
+          "passed": true
+        },
+        {
+          "name": "json",
+          "passed": true
+        },
+        {
+          "name": "one_tool",
+          "passed": true
+        },
+        {
+          "name": "code",
+          "passed": true
+        }
+      ],
+      "all_resident_batch_optimization": "disabled"
+    }
+  ]
+}

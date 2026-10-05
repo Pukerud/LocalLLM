@@ -18,6 +18,7 @@ from engine_safety import (SafetyError, command_output, docker_empty, launch_gat
 from prepare_strata import DIGESTS
 from orca_assets import MODEL_ID as ORCA_MODEL_ID, PROFILE as ORCA_PROFILE
 from orca_profile import configure_native_context, ready_orca
+import strata_runtime as runtimes
 
 SOURCE_COMMIT = '99f3dbd0b21d1401b3769e0c0d963913607f380b'
 MODEL_REVISION = 'ed59f92082b1e93c0e96d60a8b11aab089b52f09'
@@ -88,6 +89,11 @@ def ready(profile='iq3_s'):
         if not p.is_file():
             raise SafetyError(f'Prepared runtime asset missing: {p}')
     return source, config_path, cfg
+
+
+def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
+    source, path, cfg = ready() if profile == 'iq3_s' else ready(profile)
+    return runtimes.configure(data_root(), source, path, cfg, profile, runtime, parallel, batch_groups)
 
 
 def read_state():
@@ -229,8 +235,22 @@ def health(port):
         return False
 
 
-def start(lock, profile='iq3_s'):
-    source, config_path, cfg = ready() if profile == 'iq3_s' else ready(profile)
+def verify_serving(cfg, version, port):
+    """Do not silently advertise two slots if upstream fell back to one after allocation failure."""
+    if version == '0.1.38':
+        return 1
+    headers = {'Authorization': 'Bearer ' + cfg['api_key']} if cfg.get('api_key') else {}
+    request = urllib.request.Request(f'http://127.0.0.1:{port}/v1/status', headers=headers)
+    with urllib.request.urlopen(request, timeout=5) as response:
+        status = json.load(response)
+    count = (status.get('concurrency') or {}).get('serving')
+    if status.get('engine') != version or type(count) is not int or count != cfg.get('parallel', 1):
+        raise SafetyError('Effective runtime/slot count differs from the request; no silent single-slot fallback')
+    return count
+
+
+def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
+    source, config_path, cfg, version = ready_runtime(profile, runtime, parallel, batch_groups)
     state = read_state()
     if state and family(state):
         raise SafetyError('Strata is already running; use its existing web UI')
@@ -257,6 +277,9 @@ def start(lock, profile='iq3_s'):
     with os.fdopen(fd, 'w') as f:
         json.dump(cfg, f, indent=2)
     env = dict(os.environ)
+    if version == runtimes.VERSION and parallel > 1:
+        env.update(runtimes.BATCH_ENV)
+        print('Pinned 0.1.39 batching: all-resident zero-doorbell optimization disabled to avoid the verified layer-0 timeout.', flush=True)
     lib_dirs = cfg.get('lib_dirs', [])
     if lib_dirs:
         env['LD_LIBRARY_PATH'] = ':'.join(lib_dirs) + ':' + env.get('LD_LIBRARY_PATH', '')
@@ -265,7 +288,9 @@ def start(lock, profile='iq3_s'):
         print('EXPERIMENTAL: bounded text/vision checks are documented in ORCA_IQ3XXS.md; not populated-context quality or peak-memory proof.')
     else:
         print('EXPERIMENTAL Strata IQ3_S | BF16 GPU vision | native 262144 | INT8 KV | MTP | high reasoning')
-    print(f'Four-GPU layer split auto; serial requests. Log: {log}', flush=True)
+    print(f'Strata {version}; four-GPU layer split auto; requested slots={parallel}, batch groups={batch_groups}. Log: {log}', flush=True)
+    if parallel > 1:
+        print('Experimental batching: concurrent slots decode without MTP drafts; solo requests retain MTP. Verify effective serving count.', flush=True)
     if cfg['host'] == '0.0.0.0' and not cfg.get('api_key'):
         print('WARNING: unauthenticated LAN API. Use STRATA_API_KEY before exposing beyond a trusted LAN.')
     python = source / '.venv/bin/python'
@@ -279,7 +304,9 @@ def start(lock, profile='iq3_s'):
         child.terminate()
         child.wait(timeout=10)
         raise SafetyError('Frontend launch identity could not be recorded')
-    state = {'identity': identity, 'port': port, 'log': str(log), 'source_commit': SOURCE_COMMIT, 'profile': profile,
+    state = {'identity': identity, 'port': port, 'log': str(log),
+             'source_commit': runtimes.PIN if version == runtimes.VERSION else SOURCE_COMMIT,
+             'runtime_version': version, 'parallel': parallel, 'batch_groups': batch_groups, 'profile': profile,
              'config': str(run_config), 'allowed_executables': [str(python.resolve()), cfg['exe'], cfg['vision']['exe']]}
     write_state(state)
     # Serialize the launch handoff, not the whole foreground server lifetime.
@@ -308,7 +335,8 @@ def start(lock, profile='iq3_s'):
                 print('Loading Strata; no long-context request is being sent...', flush=True)
                 next_report = time.monotonic() + 15
             time.sleep(1)
-        print(f'Strata ready: this host, port {port}, API /v1. Ctrl+C stops only Strata.', flush=True)
+        serving = verify_serving(cfg, version, port)
+        print(f'Strata ready: this host, port {port}, serving slots={serving}, API /v1. Ctrl+C stops only Strata.', flush=True)
         while not interrupted and child.poll() is None:
             if time.monotonic() >= next_guard:
                 if not guard_during_run(state):
@@ -348,16 +376,26 @@ def main():
     modes.add_argument('--status', action='store_true')
     modes.add_argument('--check-ready', action='store_true')
     modes.add_argument('--configure-native-context', action='store_true')
+    modes.add_argument('--select-runtime', choices=[runtimes.BASE_VERSION, runtimes.VERSION])
     ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE], default=None)
+    ap.add_argument('--runtime', choices=['auto', runtimes.BASE_VERSION, runtimes.VERSION], default=os.environ.get('STRATA_RUNTIME', 'auto'))
+    ap.add_argument('--parallel', type=int, choices=[1, 2], default=os.environ.get('STRATA_PARALLEL', '1'))
+    ap.add_argument('--batch-groups', type=int, choices=[1, 2], default=os.environ.get('STRATA_BATCH_GROUPS', '1'))
     a = ap.parse_args()
     profile = a.profile or 'iq3_s'
     try:
-        if a.configure_native_context:
+        if a.select_runtime:
+            # No running model is stopped/reconfigured. An active session reads its existing private run-config.
+            for p in runtimes.PROFILES:
+                ready(p)
+            runtimes.select(data_root(), a.select_runtime)
+        elif a.configure_native_context:
             if profile != ORCA_PROFILE:
                 raise SafetyError('Only the prepared Orca 32K-to-native migration is supported; IQ3_S already requires 262144')
             configure_native_context(data_root())
         elif a.check_ready:
-            source, config, cfg = ready() if profile == 'iq3_s' else ready(profile)
+            source, config, cfg, version = ready_runtime(profile, a.runtime, a.parallel, a.batch_groups)
+            print(f'Runtime ready: {version}, requested slots={a.parallel}, batch groups={a.batch_groups}')
             if profile == ORCA_PROFILE:
                 print('PREPARED: pinned Orca IQ3_XXS, own compatibility pack/tokenizer, F16 vision configured, native 262144, INT8 streaming KV.')
                 print('Readiness verifies assets/config only; bounded live results are separate in ORCA_IQ3XXS.md. No full-context quality claim.')
@@ -367,7 +405,8 @@ def main():
         elif a.status:
             state = read_state()
             if state and family(state):
-                print(f'Strata running ({state.get("profile", "iq3_s")}); port {state["port"]}; log {state["log"]}')
+                print(f'Strata running ({state.get("profile", "iq3_s")}, runtime {state.get("runtime_version", "0.1.38")}, '
+                      f'requested slots={state.get("parallel", 1)}); port {state["port"]}; log {state["log"]}')
             else:
                 print('Strata stopped.')
         else:
@@ -379,9 +418,13 @@ def main():
                     state = read_state()
                     if a.profile and state and state.get('profile', 'iq3_s') != profile and family(state):
                         raise SafetyError('A different Strata profile is running; profile-specific stop refused')
+                    explicit_runtime = any(x == '--runtime' or x.startswith('--runtime=') for x in sys.argv[1:])
+                    if (explicit_runtime and a.runtime != 'auto' and state and
+                            state.get('runtime_version', '0.1.38') != a.runtime and family(state)):
+                        raise SafetyError('A different Strata runtime is running; runtime-specific stop refused')
                     stop()
                 else:
-                    start(lock, profile)
+                    start(lock, profile, a.runtime, a.parallel, a.batch_groups)
     except (SafetyError, FileNotFoundError, PermissionError, ValueError, TypeError, KeyError, IndexError, BlockingIOError) as exc:
         print(f'BLOCKED: {exc}', file=sys.stderr)
         return 1

@@ -86,4 +86,12 @@ export ready_trace
 )
 grep -qx -- '--check-ready --profile orca-iq3_xxs' "$ready_trace"
 [[ "$(wc -l < "$ready_trace")" -eq 1 ]]
-echo 'Four direct models, running-Strata preservation and pre-pause readiness: PASS'
+# Runtime/slot/group readiness is also validated before pausing, not only the model profile.
+(
+  SCRIPT_DIR="$scratch/unprepared-menu"
+  hosting() { echo 'unexpected-pause' >> "$ready_trace"; }
+  if run_selected v1strata.sh --quickstart --profile iq3_s --runtime 0.1.39 --parallel 2 --batch-groups 2; then exit 1; fi
+)
+grep -qx -- '--check-ready --profile iq3_s --runtime 0.1.39 --parallel 2 --batch-groups 2' "$ready_trace"
+[[ "$(wc -l < "$ready_trace")" -eq 2 ]]
+echo 'Four direct models, running-Strata preservation and runtime/slot pre-pause readiness: PASS'

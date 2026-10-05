@@ -326,6 +326,10 @@ class ForegroundIntegration(unittest.TestCase):
                                           env=env, capture_output=True, timeout=5)
                 self.assertNotEqual(refused.returncode, 0)
                 self.assertTrue(launcher.health(port))
+                refused_runtime = subprocess.run([sys.executable, str(ROOT / 'strata_launcher.py'), '--stop',
+                                                   '--runtime', '0.1.39'],env=env,capture_output=True,timeout=5)
+                self.assertNotEqual(refused_runtime.returncode,0)
+                self.assertTrue(launcher.health(port))
                 subprocess.run([sys.executable, str(ROOT / 'strata_launcher.py'), '--stop'], env=env,
                                capture_output=True, text=True, check=True, timeout=25)
                 self.assertEqual(driver_proc.wait(timeout=12), 0, (root / 'driver.log').read_text())

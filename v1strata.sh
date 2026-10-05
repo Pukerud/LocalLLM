@@ -10,4 +10,8 @@ if [[ "${1:-}" == --prepare-orca ]]; then
     [[ "$#" == 1 ]] || { echo '--prepare-orca takes no extra flags' >&2; exit 1; }
     exec nice -n 19 ionice -c 3 python3 "$root/prepare_orca.py"
 fi
+if [[ "${1:-}" == --prepare-runtime ]]; then
+    [[ "$#" == 1 ]] || { echo '--prepare-runtime takes no extra flags' >&2; exit 1; }
+    exec nice -n 19 ionice -c 3 python3 "$root/prepare_strata_runtime.py"
+fi
 exec python3 "$root/strata_launcher.py" "$@"

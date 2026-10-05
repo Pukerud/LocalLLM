@@ -74,7 +74,9 @@ run_selected() {
         local arg previous=''
         local -a check_args=(--check-ready)
         for arg in "$@"; do
-            [[ "$previous" != --profile ]] || check_args+=(--profile "$arg")
+            case "$previous" in
+                --profile|--runtime|--parallel|--batch-groups) check_args+=("$previous" "$arg") ;;
+            esac
             previous="$arg"
         done
         "$SCRIPT_DIR/$launcher" "${check_args[@]}" || return 1
@@ -106,6 +108,7 @@ main() {
         echo '  [3] Strata IQ3_S — BF16 GPU vision | MTP | high | INT8 KV | native 262K | four-GPU split'
         echo '  [4] Orca Uncensored IQ3_XXS (Strata) — EXPERIMENTAL | MTP | high | native 262K | INT8 streaming KV | F16 GPU vision'
         echo ''
+        printf '  Strata slots: %s (STRATA_PARALLEL; default 1), batch groups: %s. Runtime override: %s.\n' "${STRATA_PARALLEL:-1}" "${STRATA_BATCH_GROUPS:-1}" "${STRATA_RUNTIME:-selected default}"
         echo '  Starting hosting pauses the miner and OctaSpace automatically (never an active rental).'
         echo '  Strata LAN UI/API: http://192.168.1.69:8080/ — wait for readiness.'
         echo '  [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit'

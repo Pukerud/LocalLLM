@@ -68,18 +68,20 @@ Swift remains the default; Hauhau's previously verified Q4-KV/xhigh preset remai
 pins, weights and normal flags are unchanged. Hauhau's alternative Q8-KV preset shares those retained weights and
 remains CLI-only.
 
-Strata is a separate **Flash-Next** engine, not an engine for the retained dense 27B Swift/Hauhau GGUFs. It serves one
-request at a time, supports **images but not video**, and exposes thinking `none/low/medium/high` (**not `xhigh`**).
-No context extension or experimental CVec/speed projection is enabled. Its 2048 MiB VRAM reserve and native-context
-INT8 KV streaming policy are retained.
+Strata is a separate **Flash-Next** engine, not an engine for the retained dense 27B Swift/Hauhau GGUFs. It defaults to
+one request at a time, supports **images but not video**, and exposes thinking `none/low/medium/high` (**not `xhigh`**).
+The prepared `.69` node now selects **0.1.39 single-slot**, with the original 0.1.38 rollback retained. Guarded two-slot
+batching is opt-in; see [STRATA_V0139.md](STRATA_V0139.md) for measured speed/latency and discovered restrictions.
+No context extension or experimental CVec/speed projection is enabled. The configured 2048 MiB reserve and native
+INT8 streaming policy are retained; sampled auto-prefill free VRAM can be lower than the configured reserve.
 
 ## Orca: prepared separately, no live model switch
 
 See [ORCA_IQ3XXS.md](ORCA_IQ3XXS.md). **[4] never automatically stops a running Strata instance.** Preparing Orca is
 CPU/download-only, uses its own pinned shards/projector and compatibility pack/tokenizer, and neither rebuilds nor
 updates the shared runtime. Readiness is checked before any hosting pause; missing preparation cannot stop mining.
-Orca uses native 262144 with INT8 streaming KV (32768 resident), and shares Strata's single
-FIFO generation sequence/state/port. Existing 32K preparations require an explicit cached
+Orca uses native 262144 with INT8 streaming KV (32768 resident), and shares Strata's ownership/state/port.
+The default remains one FIFO sequence; optional 0.1.39 batching uses slots in this same engine, not duplicate workers. Existing 32K preparations require an explicit cached
 `sudo ./v1strata.sh --configure-native-context --profile orca-iq3_xxs` after updating; ordinary launches do not rewrite configs. Native allocation is not a populated-context quality claim. It is not a concurrent extra worker or a replacement for [3].
 
 ## Pi context metadata
@@ -92,7 +94,9 @@ metadata. Reload Pi/reselect the model after installing it. No global model/sett
 ## Strata preparation and validation
 
 See [STRATA_IQ3S.md](STRATA_IQ3S.md) for source/model pins, full-file checksums, installed paths and validation scope.
-Strata 0.1.38 is pinned to `99f3dbd0b21d1401b3769e0c0d963913607f380b`; its IQ3_S publisher revision is
+The preserved Strata 0.1.38 baseline is pinned to `99f3dbd0b21d1401b3769e0c0d963913607f380b`; the side-by-side
+0.1.39 runtime is pinned to `6f32ec070f23ced9f50e704d854d775da52591ab` (see [upgrade/benchmark report](STRATA_V0139.md)).
+The IQ3_S publisher revision is
 `ed59f92082b1e93c0e96d60a8b11aab089b52f09`. Native engine and GPU vision helper were built for `sm_86` using existing
 CUDA 12.9 and a private Python/CMake environment, without replacing system tools/drivers.
 

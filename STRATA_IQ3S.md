@@ -1,5 +1,9 @@
 # Strata IQ3_S — preparation and live hosting follow-up on `.69`, 2026-10-03
 
+**2026-10-05 runtime follow-up:** [STRATA_V0139.md](STRATA_V0139.md) records the side-by-side 0.1.39 promotion,
+real single/two-slot measurements and guarded batching restrictions. The 0.1.38 preparation below remains the
+unchanged model/config/runtime rollback baseline; its historical evidence was not rewritten.
+
 ## Status and scope
 
 **Prepared and checksum-verified; real four-GPU startup and bounded model/API/vision tests now pass.**

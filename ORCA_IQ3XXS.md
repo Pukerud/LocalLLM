@@ -1,6 +1,10 @@
 # Orca Uncensored IQ3_XXS — separate experimental Strata choice
 
 **[4] Orca** does not replace **[3] GSQ-RCO IQ3_S**, and selecting it while Strata is running only displays status.
+
+**2026-10-05 runtime follow-up:** [STRATA_V0139.md](STRATA_V0139.md) records the side-by-side 0.1.39 upgrade and
+single/two-slot measurements. One slot remains default; Orca's two-group pipeline failed concurrent-image validation
+and is refused. The preparation provenance below refers to the preserved original runtime/assets, not a new conversion.
 It does not stop/restart/test the existing instance. Use [9] yourself when you actually intend to switch.
 Swift remains the default and Hauhau remains the fallback; their settings are unchanged.
 
@@ -71,7 +75,8 @@ settings for fresh installations.
 
 The existing Strata frontend/UI/OpenAI/Anthropic APIs are reused. Default trusted-LAN binding is `0.0.0.0:8080`;
 `STRATA_HOST`, `STRATA_PORT`, `STRATA_API_KEY` apply. Model ID: `qwen3.8-flash-next-orca-iq3_xxs-strata`; aliases:
-`orca`, `orca-strata`. No public unauthenticated exposure. One FIFO generation sequence, not extra concurrent slots.
+`orca`, `orca-strata`. No public unauthenticated exposure. One FIFO generation sequence by default; validated
+0.1.39 two-slot/one-group batching is an explicit alternative in the same engine, not an extra worker.
 
 ## Native-context validation — 2026-10-04
 
