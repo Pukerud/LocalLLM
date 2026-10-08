@@ -2646,5 +2646,26 @@
       }
     }
   },
-  "postdeployment_canary_pending": true
+  "postdeployment_canary_pending": false,
+  "postdeployment_canary": {
+    "controller_commit": "a72b87d2c9b9b9aaff4c74119dd591c5f9e9f041",
+    "profile": "iq3_s",
+    "port": 8080,
+    "auto_selected_0.1.39_passed": true,
+    "explicit_0.1.41_passed": true,
+    "context": 262144,
+    "slots": 1,
+    "chat": true,
+    "responses_json_schema": {"n": 42},
+    "anthropic_messages": true,
+    "sse": true,
+    "swapped_image": {"left": "blue", "right": "red"},
+    "pi_tests_per_runtime": 8,
+    "installed_pi_sync_unchanged_and_matches_tested_source": true,
+    "final_managed_swift_request": "SWIFT_RESTORED_OK",
+    "mining_and_octaspace_restored": true,
+    "strata_state_absent": true,
+    "hosting_lease_absent": true,
+    "selection_0.1.39_preserved": true
+  }
 }

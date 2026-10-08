@@ -91,4 +91,10 @@ sudo -n ./v1strata.sh --prepare-runtime --runtime 0.1.41
 
 It refuses to rebuild the active candidate and invalidates its old validation after rebuilding. Ordinary menu launches never download/repack/update a runtime. Default binding remains **trusted LAN** `0.0.0.0:8080`; do not expose an unauthenticated endpoint publicly.
 
-Machine-readable sanitized results: [results/strata-v0141-20261008.json](results/strata-v0141-20261008.json). Postdeployment normal-menu API/vision/Pi checks are recorded separately after the maintained fast-forward deployment; the optional runtime is not automatically promoted.
+## Deployed canary and restoration
+
+Maintained controller commit `a72b87d2c9b9b9aaff4c74119dd591c5f9e9f041` was cleanly fast-forward deployed without restarting the live managed miner merely for Git. Actual normal HostLLM/port-8080 launches then verified **automatic .39** and **explicit .41** on IQ3_S: native 262144 / one slot / images, exact chat markers, Responses JSON schema `{"n":42}`, Anthropic messages, real SSE, and blue-left/red-right pixels. The existing Pi factory/session/live-registration tests passed **8/8 per runtime**; the installed sync source matched the tested source and was not modified. This is metadata registration, not a reproduced Pi TUI or full Codex CLI test.
+
+Each owned canary safely stopped and restored the recorded baseline. Final real managed-Swift request returned **`SWIFT_RESTORED_OK`**; OctaSpace active, MINER_RUN present, MINER_STOP absent, no Strata state or hosting lease, and selection **.39** unchanged. No Pi settings, skills/extensions, global Git settings or unrelated diagnostics were changed by this upgrade work.
+
+Machine-readable sanitized results: [results/strata-v0141-20261008.json](results/strata-v0141-20261008.json). The optional runtime is **not automatically promoted**.
