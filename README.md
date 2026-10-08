@@ -70,8 +70,10 @@ remains CLI-only.
 
 Strata is a separate **Flash-Next** engine, not an engine for the retained dense 27B Swift/Hauhau GGUFs. It defaults to
 one request at a time, supports **images but not video**, and exposes thinking `none/low/medium/high` (**not `xhigh`**).
-The prepared `.69` node now selects **0.1.39 single-slot**, with the original 0.1.38 rollback retained. Guarded two-slot
+The prepared `.69` node still selects **0.1.39 single-slot**, with the original 0.1.38 rollback retained. Guarded two-slot
 batching is opt-in; see [STRATA_V0139.md](STRATA_V0139.md) for measured speed/latency and discovered restrictions.
+**0.1.41 was prepared/tested separately, but not promoted:** its new four-way auto placement regressed uncached prefill
+by about 24% for IQ3_S and 37% for Orca. See [STRATA_V0141.md](STRATA_V0141.md) for real results and optional use.
 No context extension or experimental CVec/speed projection is enabled. The configured 2048 MiB reserve and native
 INT8 streaming policy are retained; sampled auto-prefill free VRAM can be lower than the configured reserve.
 
@@ -96,6 +98,8 @@ metadata. Reload Pi/reselect the model after installing it. No global model/sett
 See [STRATA_IQ3S.md](STRATA_IQ3S.md) for source/model pins, full-file checksums, installed paths and validation scope.
 The preserved Strata 0.1.38 baseline is pinned to `99f3dbd0b21d1401b3769e0c0d963913607f380b`; the side-by-side
 0.1.39 runtime is pinned to `6f32ec070f23ced9f50e704d854d775da52591ab` (see [upgrade/benchmark report](STRATA_V0139.md)).
+Optional 0.1.41 is pinned to `fb58e0dbc8399662c0e47c76578c6e878b14f6cf`; explicit `--prepare-runtime --runtime 0.1.41`
+is build-only and does not alter the selected runtime or an active engine.
 The IQ3_S publisher revision is
 `ed59f92082b1e93c0e96d60a8b11aab089b52f09`. Native engine and GPU vision helper were built for `sm_86` using existing
 CUDA 12.9 and a private Python/CMake environment, without replacing system tools/drivers.

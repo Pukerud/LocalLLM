@@ -47,6 +47,28 @@ class Client(unittest.TestCase):
     def test_missing_usage_is_not_presented_as_measured_throughput(self):
         self.usage=False
         with self.assertRaisesRegex(RuntimeError,'usage'):self.client.post({'messages':[],'max_tokens':64},stream=True)
+    def test_functional_smoke_uses_reproducible_request_scoped_seed(self):
+        sent=[]
+        class Sent(Exception):pass
+        class Fake:
+            def post(inner,body,stream=False):sent.append(body);raise Sent()
+        with self.assertRaises(Sent):bench.functional(Fake(),1)
+        self.assertEqual(sent[0]['seed'],1234);self.assertNotIn('reasoning_effort',sent[0])
+
+    def test_overlap_checks_independent_bounded_request_results(self):
+        class Fake:
+            def post(inner,body,stream=False):
+                label=body['messages'][0]['content'].splitlines()[0]
+                self.assertTrue(stream);self.assertEqual(body['max_tokens'],256)
+                return {'answer_tail':json.dumps({'fixture':label})}
+        result=bench.overlap_check(Fake())
+        self.assertTrue(result['passed']);self.assertEqual([v['label'] for v in result['requests']],['LONG_A','LONG_B','SHORT_C'])
+
+    def test_overlap_rejects_cross_request_contamination(self):
+        class Fake:
+            def post(inner,body,stream=False):return {'answer_tail':'{"fixture":"wrong"}'}
+        with self.assertRaisesRegex(RuntimeError,'isolation'):bench.overlap_check(Fake())
+
     def test_swapped_images_have_same_shape_and_different_pixels(self):
         import base64
         red=base64.b64decode(bench.image_uri('red','blue').split(',')[1]);blue=base64.b64decode(bench.image_uri('blue','red').split(',')[1])

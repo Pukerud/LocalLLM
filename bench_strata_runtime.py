@@ -67,7 +67,7 @@ class Client:
 def functional(c, slots, results=None):
     if results is None:results=[]
     def check(name,body,validate):
-        d,seconds=c.post(body);m=d['choices'][0]['message'];passed=validate(m)
+        d,seconds=c.post({**body,'seed':1234});m=d['choices'][0]['message'];passed=validate(m)
         row={'name':name,'passed':passed,'seconds':seconds,'usage':d.get('usage'),'timings':d.get('timings')}
         results.append(row)
         if not passed:raise RuntimeError('Functional failure '+name+': '+json.dumps(m))
@@ -81,6 +81,7 @@ def functional(c, slots, results=None):
     check('one_tool',{'messages':[{'role':'user','content':'Call get_weather exactly once for Oslo, with no text answer.'}],
           'tools':[tool],'tool_choice':{'type':'function','function':{'name':'get_weather'}},'parallel_tool_calls':False,
           'reasoning_effort':'none','max_tokens':128},lambda m:len(m.get('tool_calls',[]))==1 and
+          m['tool_calls'][0]['function']['name']=='get_weather' and
           json.loads(m['tool_calls'][0]['function']['arguments'])=={'city':'Oslo'})
     def code_valid(m):
         text=m.get('content','').strip()
@@ -97,7 +98,7 @@ def functional(c, slots, results=None):
     def vision(left,right):
         body={'messages':[{'role':'user','content':[{'type':'text','text':'Return JSON naming the color on each half: keys left and right, lowercase names.'},
               {'type':'image_url','image_url':{'url':image_uri(left,right)}}]}],
-              'max_tokens':128,'reasoning_effort':'none','response_format':{'type':'json_object'}}
+              'max_tokens':128,'reasoning_effort':'none','seed':1234,'response_format':{'type':'json_object'}}
         d,seconds=c.post(body);m=d['choices'][0]['message'];passed=json.loads(m['content'])=={'left':left,'right':right}
         return {'name':'vision_'+left,'passed':passed,'seconds':seconds,'usage':d.get('usage'),'timings':d.get('timings')}
     if slots>1:
@@ -118,6 +119,27 @@ def prompt(case, repetition, member):
     ledger='\n'.join(f'entry {i:03}: batch {i%13} stores {i*7+19} units with a checksum of {i*11+31}.' for i in range(200))
     return nonce+'\n'+ledger+'\nWrite a detailed 500-word technical explanation of how to process this ledger safely. '+\
            'Cover validation, reproducibility, indexing, concurrency and error handling; do not merely repeat the entries.'
+
+
+def overlap_check(c):
+    """Bounded long/long/short admission regression, not a long-context performance claim."""
+    def request(label, long):
+        context=(prompt('ledger',99,label)+'\n')*2 if long else ''
+        body={'messages':[{'role':'user','content':label+'\n'+context+
+              '\nIgnore the ledger; return only JSON with key fixture equal to '+label+'.'}],
+              'max_tokens':256,'reasoning_budget_tokens':64,'response_format':{'type':'json_object'}}
+        result=c.post(body,stream=True)
+        if json.loads(result['answer_tail'])!={'fixture':label}:
+            raise RuntimeError('Overlapping request isolation/correctness failed: '+label)
+        return {'label':label,**result}
+    start=time.perf_counter()
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures=[pool.submit(request,'LONG_A',True),pool.submit(request,'LONG_B',True)]
+        time.sleep(.25)
+        futures.append(pool.submit(request,'SHORT_C',False))
+        results=[future.result(timeout=180) for future in futures]
+    return {'passed':True,'wall_seconds':time.perf_counter()-start,'requests':results,
+            'scope':'two ~10K prompts plus one short prompt; bounded outputs, not populated262K'}
 
 
 class Monitor:
@@ -146,10 +168,10 @@ def main():
     c=Client(a.base_url,model);health=c.get('/health');status=c.get('/v1/status')
     assert health['model']==model and health['loaded'] and health['max_context']==262144 and health['images']
     assert str(status.get('engine'))==a.version,(a.version,status.get('engine'))
-    if a.version=='0.1.39':assert status['concurrency']['serving']==a.slots,status['concurrency']
+    if a.version!='0.1.38':assert status['concurrency']['serving']==a.slots,status['concurrency']
     result={'profile':a.profile,'version':a.version,'requested_slots':a.slots,'batch_groups':a.groups,
             'effective_status':status,'sampling':{'temperature':1,'top_p':0.95,'top_k':20,'reasoning_effort':'high'},
-            'context':262144,'max_output_tokens':384,'full_context_generation':False,'rows':[]}
+            'context':262144,'max_output_tokens':384,'functional_fixture_seed':1234,'full_context_generation':False,'rows':[]}
     a.out.parent.mkdir(parents=True,exist_ok=True)
     def save():a.out.write_text(json.dumps(result,indent=2),encoding='utf8')
     try:
@@ -176,6 +198,8 @@ def main():
                            'aggregate_output_tps':sum(r['usage']['completion_tokens'] for r in pair)/wall}
                     result['rows'].append(group);save()
             result['observed_resources']=monitor.samples
+        if a.slots>1 and a.version=='0.1.41':
+            result['overlap_check']=overlap_check(c);save()
         result['passed']=True;save()
         print(json.dumps({'profile':a.profile,'version':a.version,'slots':a.slots,'groups':a.groups,'passed':True,
               'code_pair_total_tps':statistics.median(r['aggregate_output_tps'] for r in result['rows'] if r['case']=='code' and r['load']=='pair'),

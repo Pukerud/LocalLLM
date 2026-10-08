@@ -1,5 +1,8 @@
 # Strata IQ3_S — preparation and live hosting follow-up on `.69`, 2026-10-03
 
+**2026-10-08 runtime follow-up:** [STRATA_V0141.md](STRATA_V0141.md) records the separately prepared/tested .41
+candidate. Correctness and batching passed, but its new auto placement regressed prefill; **.39 single-slot stays selected**.
+
 **2026-10-05 runtime follow-up:** [STRATA_V0139.md](STRATA_V0139.md) records the side-by-side 0.1.39 promotion,
 real single/two-slot measurements and guarded batching restrictions. The 0.1.38 preparation below remains the
 unchanged model/config/runtime rollback baseline; its historical evidence was not rewritten.

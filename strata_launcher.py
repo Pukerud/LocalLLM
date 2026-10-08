@@ -249,6 +249,17 @@ def verify_serving(cfg, version, port):
     return count
 
 
+def verify_batch_groups(state, version, parallel, groups):
+    if parallel == 1 or version == runtimes.BASE_VERSION:
+        return
+    native = [p for p in family(state) if p['exe'] == state['allowed_executables'][1]]
+    if len(native) != 1:
+        raise SafetyError('Cannot verify the identity-bound native batch configuration')
+    args = native[0]['cmd']
+    if ('--batch-groups' not in args or args[args.index('--batch-groups') + 1] != str(groups)):
+        raise SafetyError('Native batching must receive the explicit requested groups; automatic grouping refused')
+
+
 def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
     source, config_path, cfg, version = ready_runtime(profile, runtime, parallel, batch_groups)
     state = read_state()
@@ -277,9 +288,11 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
     with os.fdopen(fd, 'w') as f:
         json.dump(cfg, f, indent=2)
     env = dict(os.environ)
-    if version == runtimes.VERSION and parallel > 1:
-        env.update(runtimes.BATCH_ENV)
+    env.update(runtimes.runtime_env(version, parallel))
+    if version == runtimes.LEGACY_VERSION and parallel > 1:
         print('Pinned 0.1.39 batching: all-resident zero-doorbell optimization disabled to avoid the verified layer-0 timeout.', flush=True)
+    elif version == runtimes.VERSION:
+        print('Pinned 0.1.41: upstream per-window all-resident fix enabled; precision-changing/unsupported opt-ins disabled.', flush=True)
     lib_dirs = cfg.get('lib_dirs', [])
     if lib_dirs:
         env['LD_LIBRARY_PATH'] = ':'.join(lib_dirs) + ':' + env.get('LD_LIBRARY_PATH', '')
@@ -305,7 +318,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
         child.wait(timeout=10)
         raise SafetyError('Frontend launch identity could not be recorded')
     state = {'identity': identity, 'port': port, 'log': str(log),
-             'source_commit': runtimes.PIN if version == runtimes.VERSION else SOURCE_COMMIT,
+             'source_commit': runtimes.PINS[version],
              'runtime_version': version, 'parallel': parallel, 'batch_groups': batch_groups, 'profile': profile,
              'config': str(run_config), 'allowed_executables': [str(python.resolve()), cfg['exe'], cfg['vision']['exe']]}
     write_state(state)
@@ -336,6 +349,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
                 next_report = time.monotonic() + 15
             time.sleep(1)
         serving = verify_serving(cfg, version, port)
+        verify_batch_groups(state, version, parallel, batch_groups)
         print(f'Strata ready: this host, port {port}, serving slots={serving}, API /v1. Ctrl+C stops only Strata.', flush=True)
         while not interrupted and child.poll() is None:
             if time.monotonic() >= next_guard:
@@ -376,9 +390,9 @@ def main():
     modes.add_argument('--status', action='store_true')
     modes.add_argument('--check-ready', action='store_true')
     modes.add_argument('--configure-native-context', action='store_true')
-    modes.add_argument('--select-runtime', choices=[runtimes.BASE_VERSION, runtimes.VERSION])
+    modes.add_argument('--select-runtime', choices=runtimes.VERSIONS)
     ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE], default=None)
-    ap.add_argument('--runtime', choices=['auto', runtimes.BASE_VERSION, runtimes.VERSION], default=os.environ.get('STRATA_RUNTIME', 'auto'))
+    ap.add_argument('--runtime', choices=['auto', *runtimes.VERSIONS], default=os.environ.get('STRATA_RUNTIME', 'auto'))
     ap.add_argument('--parallel', type=int, choices=[1, 2], default=os.environ.get('STRATA_PARALLEL', '1'))
     ap.add_argument('--batch-groups', type=int, choices=[1, 2], default=os.environ.get('STRATA_BATCH_GROUPS', '1'))
     a = ap.parse_args()

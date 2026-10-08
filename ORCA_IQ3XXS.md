@@ -1,5 +1,9 @@
 # Orca Uncensored IQ3_XXS — separate experimental Strata choice
 
+**2026-10-08 runtime follow-up:** [STRATA_V0141.md](STRATA_V0141.md) records real .41 checks. Its two-group
+concurrent-pixel/admission qualification passed at the new pin; .39 groups 2 remains refused. **.39 one slot stays
+selected**, because .41's new automatic placement regressed prefill. Original conversion/assets below are unchanged.
+
 **[4] Orca** does not replace **[3] GSQ-RCO IQ3_S**, and selecting it while Strata is running only displays status.
 
 **2026-10-05 runtime follow-up:** [STRATA_V0139.md](STRATA_V0139.md) records the side-by-side 0.1.39 upgrade and

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Build pinned 0.1.39 beside 0.1.38 using existing CUDA/private dependencies, never setup/update or inference."""
+"""Build a pinned runtime beside tested rollbacks; existing CUDA/private dependencies, no setup/update/inference."""
+import argparse
 import fcntl
 import json
 import os
@@ -10,7 +11,7 @@ import sys
 import time
 
 from engine_safety import SafetyError, docker_empty, command_output
-from strata_runtime import VERSION, PIN, LLAMA_PIN, PROFILES, digest, runtime_root
+from strata_runtime import VERSION, LEGACY_VERSION, BASE_VERSION, PINS, LLAMA_PIN, PROFILES, digest, runtime_root
 from prepare_orca import atomic_json
 
 
@@ -20,12 +21,14 @@ def record(path):
 
 
 def main():
-    if sys.argv[1:]:
-        raise SafetyError('--prepare-runtime takes no additional arguments')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--runtime', choices=[LEGACY_VERSION, VERSION], default=VERSION)
+    version = parser.parse_args().runtime
+    pin = PINS[version]
     import strata_launcher as launcher
     import hosting_lifecycle as hosting
     root = launcher.data_root()
-    folder = runtime_root(root)
+    folder = runtime_root(root, version)
     folder.mkdir(parents=True, exist_ok=True)
     with (folder / 'prepare.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -34,7 +37,7 @@ def main():
         jobs = hosting.gpu_jobs()
         if state:
             launcher.runtime_gate(state)
-            if state.get('runtime_version', '0.1.38') == VERSION and launcher.family(state):
+            if state.get('runtime_version', BASE_VERSION) == version and launcher.family(state):
                 raise SafetyError('Candidate runtime is active; preparation refuses to rewrite its executables/dependencies')
         elif jobs and not hosting.only_hive_miners(jobs):
             raise SafetyError('Unknown GPU workload; candidate preparation blocked')
@@ -51,11 +54,23 @@ def main():
             for p in [cfg_path, root / 'prepared.json', root / 'profiles/orca-iq3_xxs/prepared.json',
                       source0 / 'engine/strata', source0 / 'engine/strata-vision']:
                 protected[str(p)] = digest(p)
+        # Preserve previously tested runtime/selection and Hive files, including recorded absence.
+        for p in [root / 'runtime-selection.json', Path('/hive-config/rig.conf'), Path('/hive-config/wallet.conf'),
+                  Path('/hive-config/watchdog.conf'), Path('/run/hive/cur_miner')]:
+            protected[str(p)] = digest(p) if p.exists() else None
+        for retained in [LEGACY_VERSION, VERSION]:
+            if retained == version:
+                continue
+            other = runtime_root(root, retained)
+            for rel in ['prepared.json', 'source/engine/strata', 'source/engine/strata-vision']:
+                p = other / rel
+                if p.exists():
+                    protected[str(p)] = digest(p)
         source = folder / 'source'
         if not source.exists():
             subprocess.run(['git','clone','--no-checkout','--filter=blob:none','https://github.com/Niko1221/Strata.git',str(source)],check=True)
-            subprocess.run(['git','-C',str(source),'checkout','--detach',PIN],check=True)
-        if command_output(['git','-c',f'safe.directory={source}','-C',str(source),'rev-parse','HEAD']).strip() != PIN:
+            subprocess.run(['git','-C',str(source),'checkout','--detach',pin],check=True)
+        if command_output(['git','-c',f'safe.directory={source}','-C',str(source),'rev-parse','HEAD']).strip() != pin:
             raise SafetyError('Existing candidate source differs from release pin; not overwritten')
         if command_output(['git','-c',f'safe.directory={source}','-C',str(source),'diff','--name-only','HEAD']).strip():
             raise SafetyError('Candidate has tracked local changes; not overwritten')
@@ -81,13 +96,17 @@ def main():
                    OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1')
         env['PATH'] = str(overlay / 'bin') + ':' + str(old_venv / 'bin') + ':/usr/local/cuda-12.9/bin:' + env['PATH']
         # Optional schema validation lives only in the candidate overlay. No original/system package is modified.
-        check = "from importlib.metadata import version; print(version('jsonschema'))"
-        found = subprocess.run([str(overlay / 'bin/python'),'-c',check],env=env,capture_output=True,text=True)
-        if found.returncode or found.stdout.strip() != '4.25.1' or not (site / 'jsonschema-4.25.1.dist-info/METADATA').is_file():
-            pipenv = {k:v for k,v in env.items() if not k.startswith('PIP_')}
-            pipenv['PIP_CONFIG_FILE'] = '/dev/null'
-            subprocess.run([str(overlay / 'bin/python'),'-m','pip','install','--ignore-installed','--only-binary=:all:',
-                            '--index-url','https://pypi.org/simple','jsonschema==4.25.1'],env=pipenv,check=True)
+        packages = {'jsonschema': '4.25.1'}
+        if version == VERSION:
+            packages['psutil'] = '7.2.2'  # native-process activity checks, only in the candidate overlay
+        for name, package_version in packages.items():
+            check = f"from importlib.metadata import version; print(version({name!r}))"
+            found = subprocess.run([str(overlay / 'bin/python'),'-c',check],env=env,capture_output=True,text=True)
+            if found.returncode or found.stdout.strip() != package_version or not (site / f'{name}-{package_version}.dist-info/METADATA').is_file():
+                pipenv = {k:v for k,v in env.items() if not k.startswith('PIP_')}
+                pipenv['PIP_CONFIG_FILE'] = '/dev/null'
+                subprocess.run([str(overlay / 'bin/python'),'-m','pip','install','--ignore-installed','--only-binary=:all:',
+                                '--index-url','https://pypi.org/simple',f'{name}=={package_version}'],env=pipenv,check=True)
         # Source preparation only: get_llama_cpp extracts the explicitly pinned build dependency.
         # No setup.main(), downloads of model weights, pack conversion or system/tool installation.
         script = "import setup; assert setup.LLAMA_CPP_COMMIT == %r; setup.get_llama_cpp()" % LLAMA_PIN
@@ -124,19 +143,20 @@ def main():
             shutil.copy2(vbuild / 'bin/strata-vision',engine / 'strata-vision')
         subprocess.run([str(engine / 'strata'),'--help'],env=env,stdout=subprocess.DEVNULL,check=True)
         for name, sha in protected.items():
-            if digest(Path(name)) != sha:
+            if (digest(Path(name)) if Path(name).exists() else None) != sha:
                 raise SafetyError('Original profile/runtime changed during build; no restart or rollback attempted')
-        atomic_json(engine / 'BUILD.json', {'source':'local','version':VERSION,'archs':[86],'vision':'gpu',
+        atomic_json(engine / 'BUILD.json', {'source':'local','version':version,'archs':[86],'vision':'gpu',
             'cuda_dirs':['/usr/local/cuda-12.9/bin','/usr/local/cuda-12.9/lib64'],'toolkit':12,
             'vision_src':vision_contract['vision'],'vision_reused_identical_source':reused})
-        atomic_json(folder / 'prepared.json', {'version':VERSION,'source_commit':PIN,'llama_commit':LLAMA_PIN,
+        atomic_json(folder / 'prepared.json', {'version':version,'source_commit':pin,'llama_commit':LLAMA_PIN,
             'source':str(source),'cuda_arch':86,'cuda_toolkit':'/usr/local/cuda-12.9',
             'runtime_assets':[record(engine / 'strata'),record(engine / 'strata-vision')],
             'baseline_configs':configs,'vision_reused_identical_source':reused,'inference_tested':False,
-            'python_environment':str(overlay),'jsonschema_version':'4.25.1',
-            'python_assets':[record(overlay / 'pyvenv.cfg'),record(pth),record(site / 'jsonschema-4.25.1.dist-info/METADATA')],
+            'python_environment':str(overlay),'python_packages':packages,'jsonschema_version':'4.25.1',
+            'python_assets':[record(overlay / 'pyvenv.cfg'),record(pth)] + [record(p) for p in sorted(site.glob('*.dist-info/METADATA'))],
+            'retained_hashes_or_absences':protected,
             'prepared_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())})
-        print('0.1.39 PREPARED beside unchanged 0.1.38. No model download/repack/inference/service/system change.',flush=True)
+        print(f'{version} PREPARED beside unchanged tested rollbacks. No model download/repack/inference/service/system change.',flush=True)
 
 
 if __name__=='__main__':
