@@ -40,10 +40,13 @@ sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile swift15u-q8
 ```
 
 The menu atomically changes one `current` symlink; Hive's stable `h-run.sh`,
-configuration and metadata paths then resolve to the selected profile. It
-refuses to make a change while Hive reports a running miner, an LLM
-launcher/server is present, port 8080 is occupied, Docker or GPU compute is
-active, a HostLLM pause lease exists, or a safety check cannot be completed.
+configuration and metadata paths then resolve to the selected profile. On an
+older install with regular root-level Hive files, its first idle selection
+identifies the current profile from the exact config and safely bootstraps those
+symlinks before switching. It refuses to make a change while Hive reports a
+running miner, an LLM launcher/server is present, port 8080 is occupied,
+Docker or GPU compute is active, a HostLLM pause lease exists, or a safety
+check cannot be completed.
 Before selecting Orca, it runs the non-inference `--check-ready` gate. It
 **never** runs `miner start`, `miner stop`, `osn.service` controls, or an
 inference request. A selection takes effect on the next normal Hive miner

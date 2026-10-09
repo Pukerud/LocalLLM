@@ -38,13 +38,45 @@ profile_label() {
 }
 
 read_current_profile() {
-    [[ -L "$CURRENT_LINK" ]] || return 1
-    local target
-    target="$(readlink -- "$CURRENT_LINK")" || return 1
-    case "$target" in
-        profiles/orca-q4_k_s|profiles/swift15u-q8) printf '%s' "${target#profiles/}" ;;
-        *) return 1 ;;
-    esac
+    local target profile current_conf
+    if [[ -L "$CURRENT_LINK" ]]; then
+        target="$(readlink -- "$CURRENT_LINK")" || return 1
+        case "$target" in
+            profiles/orca-q4_k_s|profiles/swift15u-q8) printf '%s' "${target#profiles/}" ;;
+            *) return 1 ;;
+        esac
+        return
+    fi
+    [[ ! -e "$CURRENT_LINK" ]] || return 1
+    current_conf="$CUSTOM_DIR/llm-hosting.conf"
+    [[ -f "$current_conf" && ! -L "$current_conf" ]] || return 1
+    for profile in orca-q4_k_s swift15u-q8; do
+        if cmp -s <(tr -d '\r' < "$current_conf") <(tr -d '\r' < "$PROFILE_ROOT/$profile/llm-hosting.conf"); then
+            printf '%s' "$profile"
+            return 0
+        fi
+    done
+    return 1
+}
+
+validate_profile_layout() {
+    local file current
+    current="$(read_current_profile)" || fail 'existing Hive profile cannot be identified safely'
+    if [[ -L "$CURRENT_LINK" ]]; then
+        for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
+            if [[ -L "$CUSTOM_DIR/$file" ]]; then
+                [[ "$(readlink -- "$CUSTOM_DIR/$file")" == "current/$file" ]] || \
+                    fail "unexpected Hive profile link: $CUSTOM_DIR/$file"
+            else
+                [[ -f "$CUSTOM_DIR/$file" ]] || fail "Hive profile path is missing: $CUSTOM_DIR/$file"
+            fi
+        done
+    else
+        for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
+            [[ -f "$CUSTOM_DIR/$file" && ! -L "$CUSTOM_DIR/$file" ]] || \
+                fail "legacy Hive profile file is missing or symlinked: $CUSTOM_DIR/$file"
+        done
+    fi
 }
 
 check_profile_files() {
@@ -128,13 +160,9 @@ if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then usage; exit 0; fi
 [[ "$(stat -c '%u' -- "$CUSTOM_DIR")" == 0 ]] || fail 'custom miner directory is not root-owned'
 [[ -d "$PROFILE_ROOT" && ! -L "$PROFILE_ROOT" ]] || fail 'profile directory missing or symlinked'
 [[ "$(stat -c '%u' -- "$PROFILE_ROOT")" == 0 ]] || fail 'profile directory is not root-owned'
-[[ -L "$CURRENT_LINK" ]] || fail 'profile pointer is not installed; reinstall the custom miner package first'
-for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
-    [[ -L "$CUSTOM_DIR/$file" && "$(readlink -- "$CUSTOM_DIR/$file")" == "current/$file" ]] || \
-        fail "unexpected Hive profile link: $CUSTOM_DIR/$file"
-done
 check_profile_files orca-q4_k_s || fail 'Orca profile files are incomplete or symlinked'
 check_profile_files swift15u-q8 || fail 'previous Qwen profile files are incomplete or symlinked'
+validate_profile_layout
 
 case "${1:-}" in
     --list) show_profiles; exit 0 ;;
@@ -168,7 +196,12 @@ flock -n 9 || fail 'another profile selection is already running'
 assert_idle
 
 current="$(read_current_profile)" || fail 'current profile pointer is invalid'
-if [[ "$current" == "$target" ]]; then
+needs_bootstrap=0
+[[ -L "$CURRENT_LINK" ]] || needs_bootstrap=1
+for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
+    [[ -L "$CUSTOM_DIR/$file" ]] || needs_bootstrap=1
+done
+if [[ "$current" == "$target" && "$needs_bootstrap" -eq 0 ]]; then
     say "${target} is already selected; no files changed"
     exit 0
 fi
@@ -176,13 +209,31 @@ check_selected_profile_ready "$target"
 assert_idle
 [[ "$(read_current_profile)" == "$current" ]] || fail 'profile changed concurrently; no additional change made'
 
-# The sole change is an atomic symlink replacement; all five Hive files resolve
-# through the same profile directory, so the set cannot be mixed across models.
-tmp_link="${CUSTOM_DIR}/.current.$$"
-trap 'rm -f -- "${tmp_link:-}"' EXIT
-ln -s -- "profiles/$target" "$tmp_link"
-mv -Tf -- "$tmp_link" "$CURRENT_LINK"
+# A legacy install starts with regular Hive files and no pointer. Convert it
+# only after the idle checks; keep the current profile selected during bootstrap.
+tmp_links=()
+cleanup_links() { local path; for path in "${tmp_links[@]:-}"; do [[ -n "$path" ]] && rm -f -- "$path"; done; }
+trap cleanup_links EXIT
+replace_link() {
+    local link_path="$1" link_target="$2" temporary
+    temporary="${CUSTOM_DIR}/.profile-link.$$.$RANDOM"
+    tmp_links+=("$temporary")
+    ln -s -- "$link_target" "$temporary"
+    mv -Tf -- "$temporary" "$link_path"
+}
+if [[ ! -L "$CURRENT_LINK" ]]; then
+    replace_link "$CURRENT_LINK" "profiles/$current"
+fi
+for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
+    if [[ ! -L "$CUSTOM_DIR/$file" ]]; then
+        replace_link "$CUSTOM_DIR/$file" "current/$file"
+    fi
+done
+if [[ "$current" != "$target" ]]; then
+    replace_link "$CURRENT_LINK" "profiles/$target"
+fi
 trap - EXIT
+cleanup_links
 sync
 say "selected $(profile_label "$target")"
 say 'This applies on the next normal Hive miner start. No miner or service was stopped or started.'
