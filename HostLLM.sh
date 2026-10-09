@@ -91,7 +91,7 @@ run_selected() {
 }
 
 main() {
-    local active choice profile
+    local active choice profile hive_profile
     trap 'hosting release || true' EXIT
     while true; do
         [[ -t 1 ]] && clear 2>/dev/null || true
@@ -106,12 +106,15 @@ main() {
         echo '  [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
         echo '  [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
         echo '  [3] Strata IQ3_S — BF16 GPU vision | MTP | high | INT8 KV | native 262K | four-GPU split'
-        echo '  [4] Orca Uncensored IQ3_XXS (Strata) — EXPERIMENTAL | MTP | high | native 262K | INT8 streaming KV | F16 GPU vision'
+        echo '  [4] Orca Q4_K_S — Strata 0.1.39 | native 262K | CPU vision | one slot'
         echo ''
         printf '  Strata slots: %s (STRATA_PARALLEL; default 1), batch groups: %s. Runtime override: %s.\n' "${STRATA_PARALLEL:-1}" "${STRATA_BATCH_GROUPS:-1}" "${STRATA_RUNTIME:-selected default}"
         echo '  Starting hosting pauses the miner and OctaSpace automatically (never an active rental).'
         echo '  Strata LAN UI/API: http://192.168.1.69:8080/ — wait for readiness.'
         echo '  [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit'
+        echo '  [12] Set next Hive miner profile to Orca Q4_K_S'
+        echo '  [13] Restore previous Swift 1.5 Q8 Hive miner profile'
+        echo '  Hive profile changes are idle-only; they never start/stop a miner or osn.service.'
         read -r -p '  Select: ' choice || return 0
         choice="${choice//[[:space:]]/}"
         case "$choice" in
@@ -129,7 +132,7 @@ main() {
                 ;;
             3|4|s|S|o|O)
                 profile=iq3_s
-                [[ "$choice" != 4 && "$choice" != o && "$choice" != O ]] || profile=orca-iq3_xxs
+                [[ "$choice" != 4 && "$choice" != o && "$choice" != O ]] || profile=orca-q4_k_s
                 if [[ "$active" == strata ]]; then
                     "$SCRIPT_DIR/v1strata.sh" --status
                     echo 'The running Strata model was left alone. Use [9] only when you are ready to switch.'
@@ -142,6 +145,17 @@ main() {
             9) stop_owned_engines ;;
             10) check_update ;;
             11|x|X) return 0 ;;
+            12|13)
+                hive_profile=orca-q4_k_s
+                [[ "$choice" == 13 ]] && hive_profile=swift15u-q8
+                if [[ ! -x /hive/miners/custom/llm-hosting/profile-menu.sh ]]; then
+                    echo 'Hive profile menu is not installed. Install the Hive custom miner package first.'
+                elif ! command -v sudo >/dev/null 2>&1; then
+                    echo 'sudo is unavailable; run the Hive profile menu as root when the miner is idle.'
+                else
+                    sudo -- /hive/miners/custom/llm-hosting/profile-menu.sh --profile "$hive_profile"
+                fi
+                ;;
         esac
         if [[ -t 0 ]]; then
             read -r -p 'Press Enter to return to the menu...' _ || return 0

@@ -1,14 +1,16 @@
 # LocalLLM — Swift, Hauhau, Strata and Orca
 
-Four directly selectable models on `.69` (4× RTX 3090, 128 GB RAM); Orca is experimental:
+Four HostLLM engine choices on `.69` (4× RTX 3090, 128 GB RAM); Orca Q4 .39 is the recorded default profile:
 
 ```text
   [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots
   [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots
   [3] Strata IQ3_S — BF16 GPU vision | MTP | high | INT8 KV | native 262K | four-GPU split
-  [4] Orca Uncensored IQ3_XXS (Strata) — experimental | MTP | high | native 262K | INT8 streaming KV | F16 GPU vision
+  [4] Orca Q4_K_S — Strata 0.1.39 | native 262K | CPU vision | one slot
 
   [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit
+  [12] Set next Hive miner profile to Orca Q4_K_S
+  [13] Restore previous Swift 1.5 Q8 Hive miner profile
 ```
 
 ## Start hosting
@@ -16,7 +18,7 @@ Four directly selectable models on `.69` (4× RTX 3090, 128 GB RAM); Orca is exp
 ```bash
 cd /home/user/LocalLLM
 ./HostLLM.sh
-# Select 1, 2, 3 or 4. No manual miner stop is required.
+# Select 1, 2, 3 or 4 for HostLLM. Options 12/13 only change the next Hive miner profile while idle.
 ```
 
 **Starting hosting automatically pauses OctaSpace (`osn.service`) and stops the Hive miner.** This restores the
@@ -41,7 +43,7 @@ so it is safely paused too. A manually launched LLM is not mistaken for that min
 
 ## LAN web UI and APIs
 
-After **[3] Strata** reports ready:
+After **[3] Strata** or the bounded-probe Q4 **[4]** profile reports ready:
 
 - **Web UI:** <http://192.168.1.69:8080/>
 - **OpenAI API:** `http://192.168.1.69:8080/v1` (`/chat/completions`, `/models`)
@@ -62,7 +64,7 @@ Those settings belong to the launched process; no global Pi configuration is edi
 | [1] Swift | `swift15u-q8` | Q8_K_XL weights, shared BF16 vision, embedded native MTP depth 3, Q8 K/V, xhigh, two 262144-token slots |
 | [2] Hauhau | `hauhau-q8-fastmtp-q4kv-xhigh` | Q8_K_P weights, BF16 vision, matching FastMTP sidecar depth 4, Q4_0 K/V, xhigh, three 262144-token slots |
 | [3] Strata | Original Flash-Next GSQ-RCO IQ3_S | BF16 GPU vision, appropriate Flash-Next MTP `--spec 4`, INT8 KV, high reasoning, native 262144, automatic contiguous four-GPU layer split |
-| [4] Orca | `orca-iq3_xxs` | Separate uncensored Flash-Next IQ3_XXS pack/tokenizer, original Flash-Next MTP, INT8 streaming KV (32768 resident), high, native 262144, four-GPU split; F16 vision configured |
+| [4] Orca | `orca-q4_k_s` | Q4_K_S weights, Strata 0.1.39, native 262144, CPU vision, one slot; see bounded-probe limits below |
 
 Swift remains the default; Hauhau's previously verified Q4-KV/xhigh preset remains the fallback. Dense Qwen runtime
 pins, weights and normal flags are unchanged. Hauhau's alternative Q8-KV preset shares those retained weights and
@@ -77,14 +79,11 @@ by about 24% for IQ3_S and 37% for Orca. See [STRATA_V0141.md](STRATA_V0141.md) 
 No context extension or experimental CVec/speed projection is enabled. The configured 2048 MiB reserve and native
 INT8 streaming policy are retained; sampled auto-prefill free VRAM can be lower than the configured reserve.
 
-## Orca: prepared separately, no live model switch
+## Orca Q4_K_S and Hive profile switching
 
-See [ORCA_IQ3XXS.md](ORCA_IQ3XXS.md). **[4] never automatically stops a running Strata instance.** Preparing Orca is
-CPU/download-only, uses its own pinned shards/projector and compatibility pack/tokenizer, and neither rebuilds nor
-updates the shared runtime. Readiness is checked before any hosting pause; missing preparation cannot stop mining.
-Orca uses native 262144 with INT8 streaming KV (32768 resident), and shares Strata's ownership/state/port.
-The default remains one FIFO sequence; optional 0.1.39 batching uses slots in this same engine, not duplicate workers. Existing 32K preparations require an explicit cached
-`sudo ./v1strata.sh --configure-native-context --profile orca-iq3_xxs` after updating; ordinary launches do not rewrite configs. Native allocation is not a populated-context quality claim. It is not a concurrent extra worker or a replacement for [3].
+HostLLM **[4]** runs Orca Q4_K_S on Strata 0.1.39 with native 262144 context, CPU vision, and one slot after its readiness gates. A bounded text-only validation, one near-full-context tail-marker probe, and one synthetic CPU-vision image probe passed. These limited checks do not establish general quality, worst-case memory, throughput, or sustained multi-user capacity.
+
+HostLLM **[12]** selects Orca Q4_K_S for the next Hive custom-miner start; **[13]** restores the previous Swift 1.5/Qwen Q8 Hive profile. The root-only profile menu changes one atomic pointer and refuses while Hive, an LLM/API, Docker/GPU work, or a HostLLM lease is active. It never stops or starts Hive or `osn.service`; do not use it during a rental. See [hive-llm-miner/README.md](hive-llm-miner/README.md).
 
 ## Pi context metadata
 
@@ -138,14 +137,14 @@ Archived comparison profiles remain explicit CLI-only and can re-download remove
 off, not normal native-context performance. Legacy `v1llama_cpp.sh`/`v1glm53.sh` are not shared-host menu choices;
 their old stop/benchmark paths are not covered by the maintained identity-bound guards.
 
-The optional [Hive custom LLM miner](hive-llm-miner/README.md) remains separate: its direct Qwen launcher still leaves
-`osn.service` running for Hive/OctaSpace rental handoffs. This update does not install it or change the selected miner.
+The optional [Hive custom LLM miner](hive-llm-miner/README.md) uses the same custom Flight Sheet for both profiles; `osn.service` remains under Hive/OctaSpace control.
 
 ## Checks and references
 
 ```bash
 bash -n HostLLM.sh v1qwen38.sh v1strata.sh
 bash tests/retained-menu-test.sh
+bash tests/hive-miner-profile-menu-test.sh
 bash tests/swift15-profile-test.sh
 bash tests/swift15-uncensored-profile-test.sh
 bash tests/gsq-profile-test.sh

@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import sys
@@ -18,6 +19,12 @@ from engine_safety import (SafetyError, command_output, docker_empty, launch_gat
 from prepare_strata import DIGESTS
 from orca_assets import MODEL_ID as ORCA_MODEL_ID, PROFILE as ORCA_PROFILE
 from orca_profile import configure_native_context, ready_orca
+from orca_q4ks_assets import (PROFILE as ORCA_Q4KS_PROFILE, MODEL_ID as ORCA_Q4KS_MODEL_ID,
+                              RUNTIME_VERSION as ORCA_Q4KS_RUNTIME)
+from orca_q4ks_profile import (configure_native_context as configure_q4ks_native_context,
+                               configure_q4ks_vision, profile_root as q4ks_profile_root,
+                               ready_q4ks, record_32k_validation as record_q4ks_32k_validation,
+                               rollback_q4ks_vision)
 import strata_runtime as runtimes
 
 SOURCE_COMMIT = '99f3dbd0b21d1401b3769e0c0d963913607f380b'
@@ -33,6 +40,8 @@ def ready(profile='iq3_s'):
     root = data_root()
     if profile == ORCA_PROFILE:
         return ready_orca(root)
+    if profile == ORCA_Q4KS_PROFILE:
+        return ready_q4ks(root)
     if profile != 'iq3_s':
         raise SafetyError('Unknown prepared Strata profile')
     manifest = json.loads((root / 'prepared.json').read_text())
@@ -92,6 +101,13 @@ def ready(profile='iq3_s'):
 
 
 def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
+    if profile == ORCA_Q4KS_PROFILE:
+        if runtime not in ('auto', ORCA_Q4KS_RUNTIME):
+            raise SafetyError(f'Q4_K_S uses its separate pinned {ORCA_Q4KS_RUNTIME} build, not the selected-runtime manager')
+        if parallel != 1 or batch_groups != 1:
+            raise SafetyError('Q4_K_S is restricted to its initial single-slot, single-group validation profile')
+        source, path, cfg = ready_q4ks(data_root())
+        return source, path, cfg, ORCA_Q4KS_RUNTIME
     source, path, cfg = ready() if profile == 'iq3_s' else ready(profile)
     return runtimes.configure(data_root(), source, path, cfg, profile, runtime, parallel, batch_groups)
 
@@ -195,11 +211,40 @@ def guard_during_run(state):
         return True
 
 
+def require_hive_launch_identity(state):
+    """When Hive supplies a launch token, stop only that launch's server family."""
+    token = os.environ.get('HIVE_STRATA_LAUNCH_ID')
+    if token is None:
+        return
+    if not re.fullmatch(r'[a-f0-9]{48}', token):
+        raise SafetyError('Invalid Hive Strata launch identity; stop refused')
+    identity = state.get('identity', {})
+    server = proc(identity.get('pid'))
+    if not same_process(identity, server):
+        raise SafetyError('Hive Strata server identity changed; stop refused')
+    parent_pid = identity.get('ppid')
+    if type(parent_pid) is not int or server.get('ppid') != parent_pid:
+        raise SafetyError('Hive Strata launcher parent changed; stop refused')
+    parent = proc(parent_pid)
+    if (not parent or parent.get('uid') != identity.get('uid') or
+            not any('strata_launcher.py' in arg for arg in parent['cmd'])):
+        raise SafetyError('Hive Strata launcher identity is unavailable; stop refused')
+    expected = f'HIVE_STRATA_LAUNCH_ID={token}'.encode()
+    for pid in (identity['pid'], parent_pid):
+        try:
+            environment = (Path('/proc') / str(pid) / 'environ').read_bytes().split(bytes([0]))
+        except OSError as exc:
+            raise SafetyError('Cannot verify Hive Strata launch token; stop refused') from exc
+        if expected not in environment:
+            raise SafetyError('Hive Strata launch token does not match the live server; stop refused')
+
+
 def stop(expected=None):
     state = expected if expected is not None else read_state()
     if not state:
         print('Strata is not running.')
         return
+    require_hive_launch_identity(state)
     members = family(state)  # Validate the entire family before the first signal.
     current = read_state()
     if current and same_process(current['identity'], state['identity']):
@@ -233,6 +278,34 @@ def health(port):
             return response.status == 200
     except (urllib.error.URLError, TimeoutError):
         return False
+
+
+def q4_live_evidence_summary(config_path):
+    """Summarize matching operator-recorded probes without overstating their scope."""
+    report_path = q4ks_profile_root(data_root()) / 'validation-native.json'
+    try:
+        report = json.loads(report_path.read_text())
+        config_hash = hashlib.sha256(Path(config_path).read_bytes()).hexdigest()
+        full_context = report.get('full_context', {})
+        vision = report.get('vision', {})
+        matches = (
+            report.get('profile') == ORCA_Q4KS_PROFILE and
+            report.get('model_id') == ORCA_Q4KS_MODEL_ID and
+            report.get('runtime_version') == ORCA_Q4KS_RUNTIME == '0.1.39' and
+            report.get('config_sha256') == config_hash and
+            report.get('context_configured') == 262144 and
+            report.get('vision_cpu_only') is True and report.get('passed') is True and
+            full_context.get('passed') is True and full_context.get('marker_retrieved') is True and
+            vision.get('passed') is True and vision.get('cpu_only_configured') is True
+        )
+        if matches:
+            tokens = full_context.get('response_input_tokens')
+            token_text = f'{tokens:,}' if type(tokens) is int else 'near-full-context'
+            return (f'Operator-recorded evidence matches this config: one {token_text}-token tail-marker probe '
+                    'and one synthetic CPU-vision probe passed; limited probes, not general quality/load proof.')
+        return 'A native-context/CPU-vision report is missing, stale, or does not match this config; no live-evidence claim.'
+    except (OSError, ValueError, TypeError, AttributeError):
+        return 'No matching operator-recorded native-context/CPU-vision report; no live-evidence claim.'
 
 
 def verify_serving(cfg, version, port):
@@ -272,8 +345,15 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
     # A private effective config permits optional API credentials without editing the pinned source config.
     cfg['host'] = os.environ.get('STRATA_HOST', cfg.get('host', '0.0.0.0'))
     cfg['port'] = port
-    cfg['model_name'] = ORCA_MODEL_ID if profile == ORCA_PROFILE else 'qwen3.8-flash-next-iq3_s-strata'
-    cfg['aliases'] = ['orca', 'orca-strata'] if profile == ORCA_PROFILE else ['qwen38', 'strata']
+    if profile == ORCA_PROFILE:
+        cfg['model_name'] = ORCA_MODEL_ID
+        cfg['aliases'] = ['orca', 'orca-strata']
+    elif profile == ORCA_Q4KS_PROFILE:
+        cfg['model_name'] = ORCA_Q4KS_MODEL_ID
+        cfg['aliases'] = ['orca-q4ks', 'orca-q4_k_s']
+    else:
+        cfg['model_name'] = 'qwen3.8-flash-next-iq3_s-strata'
+        cfg['aliases'] = ['qwen38', 'strata']
     cfg['sampling'] = {'temperature': 1.0, 'top_p': 0.95, 'top_k': 20,
                        'experimental_speed_projection': False}
     if os.environ.get('STRATA_API_KEY'):
@@ -299,6 +379,13 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
     if profile == ORCA_PROFILE:
         print('EXPERIMENTAL Orca Uncensored IQ3_XXS | native 262144 | INT8 streaming KV (32K resident) | MTP | high | F16 GPU vision configured')
         print('EXPERIMENTAL: bounded text/vision checks are documented in ORCA_IQ3XXS.md; not populated-context quality or peak-memory proof.')
+    elif profile == ORCA_Q4KS_PROFILE:
+        context = cfg['args'][cfg['args'].index('--max-context') + 1]
+        vision_cfg = cfg.get('vision')
+        vision_state = 'CPU vision configured' if isinstance(vision_cfg, dict) and vision_cfg.get('gpu') is False else 'text-only'
+        print(f'Orca Q4_K_S | launch profile: {context} context | {vision_state} | one slot | original Flash-Next MTP')
+        print('Readiness verifies the pinned files/configuration; live evidence is separately operator-recorded and limited.')
+        print(q4_live_evidence_summary(q4ks_profile_root(data_root()) / 'config.json'))
     else:
         print('EXPERIMENTAL Strata IQ3_S | BF16 GPU vision | native 262144 | INT8 KV | MTP | high reasoning')
     print(f'Strata {version}; four-GPU layer split auto; requested slots={parallel}, batch groups={batch_groups}. Log: {log}', flush=True)
@@ -320,7 +407,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
     state = {'identity': identity, 'port': port, 'log': str(log),
              'source_commit': runtimes.PINS[version],
              'runtime_version': version, 'parallel': parallel, 'batch_groups': batch_groups, 'profile': profile,
-             'config': str(run_config), 'allowed_executables': [str(python.resolve()), cfg['exe'], cfg['vision']['exe']]}
+             'config': str(run_config), 'allowed_executables': [str(python.resolve()), cfg['exe']] +
+             ([cfg['vision']['exe']] if cfg.get('vision') else [])}
     write_state(state)
     # Serialize the launch handoff, not the whole foreground server lifetime.
     fcntl.flock(lock, fcntl.LOCK_UN)
@@ -390,8 +478,11 @@ def main():
     modes.add_argument('--status', action='store_true')
     modes.add_argument('--check-ready', action='store_true')
     modes.add_argument('--configure-native-context', action='store_true')
+    modes.add_argument('--enable-q4ks-vision', action='store_true')
+    modes.add_argument('--rollback-q4ks-vision', action='store_true')
+    modes.add_argument('--record-q4ks-32k-validation', metavar='REPORT')
     modes.add_argument('--select-runtime', choices=runtimes.VERSIONS)
-    ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE], default=None)
+    ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE, ORCA_Q4KS_PROFILE], default=None)
     ap.add_argument('--runtime', choices=['auto', *runtimes.VERSIONS], default=os.environ.get('STRATA_RUNTIME', 'auto'))
     ap.add_argument('--parallel', type=int, choices=[1, 2], default=os.environ.get('STRATA_PARALLEL', '1'))
     ap.add_argument('--batch-groups', type=int, choices=[1, 2], default=os.environ.get('STRATA_BATCH_GROUPS', '1'))
@@ -404,15 +495,37 @@ def main():
                 ready(p)
             runtimes.select(data_root(), a.select_runtime)
         elif a.configure_native_context:
-            if profile != ORCA_PROFILE:
-                raise SafetyError('Only the prepared Orca 32K-to-native migration is supported; IQ3_S already requires 262144')
-            configure_native_context(data_root())
+            if profile == ORCA_Q4KS_PROFILE:
+                configure_q4ks_native_context(data_root())
+            elif profile == ORCA_PROFILE:
+                configure_native_context(data_root())
+            else:
+                raise SafetyError('Only prepared Orca profiles support explicit native-context migration; IQ3_S already requires 262144')
+        elif a.enable_q4ks_vision:
+            if profile != ORCA_Q4KS_PROFILE:
+                raise SafetyError('CPU vision configuration is only available for --profile orca-q4_k_s')
+            configure_q4ks_vision(data_root())
+        elif a.rollback_q4ks_vision:
+            if profile != ORCA_Q4KS_PROFILE:
+                raise SafetyError('Q4 CPU-vision rollback is only available for --profile orca-q4_k_s')
+            rollback_q4ks_vision(data_root())
+        elif a.record_q4ks_32k_validation:
+            if profile != ORCA_Q4KS_PROFILE:
+                raise SafetyError('A live 32K validation report can only be recorded for --profile orca-q4_k_s')
+            record_q4ks_32k_validation(data_root(), a.record_q4ks_32k_validation)
         elif a.check_ready:
             source, config, cfg, version = ready_runtime(profile, a.runtime, a.parallel, a.batch_groups)
             print(f'Runtime ready: {version}, requested slots={a.parallel}, batch groups={a.batch_groups}')
             if profile == ORCA_PROFILE:
                 print('PREPARED: pinned Orca IQ3_XXS, own compatibility pack/tokenizer, F16 vision configured, native 262144, INT8 streaming KV.')
                 print('Readiness verifies assets/config only; bounded live results are separate in ORCA_IQ3XXS.md. No full-context quality claim.')
+            elif profile == ORCA_Q4KS_PROFILE:
+                context = cfg['args'][cfg['args'].index('--max-context') + 1]
+                vision_cfg = cfg.get('vision')
+                vision_state = 'CPU vision configured' if isinstance(vision_cfg, dict) and vision_cfg.get('gpu') is False else 'text-only'
+                print(f'READY CONFIG: pinned Q4_K_S; profile context={context}; {vision_state}; single-slot.')
+                print('Readiness verifies pinned files/configuration; live evidence is separately operator-recorded and limited.')
+                print(q4_live_evidence_summary(config))
             else:
                 print('PREPARED: pinned IQ3_S, BF16 GPU vision, native 262144, INT8 KV, MTP, four-GPU auto split.')
                 print('Readiness verifies assets/config; bounded live validation is documented in STRATA_IQ3S.md (not full-context quality).')
@@ -423,6 +536,21 @@ def main():
                       f'requested slots={state.get("parallel", 1)}); port {state["port"]}; log {state["log"]}')
             else:
                 print('Strata stopped.')
+            try:
+                q4_config = json.loads((q4ks_profile_root(data_root()) / 'config.json').read_text())
+                q4_args = q4_config.get('args', [])
+                q4_context = q4_args[q4_args.index('--max-context') + 1]
+                q4_vision_cfg = q4_config.get('vision')
+                if isinstance(q4_vision_cfg, dict) and q4_vision_cfg.get('gpu') is False:
+                    q4_vision_state = 'CPU vision configured'
+                elif '--vision' not in q4_args and q4_vision_cfg is None:
+                    q4_vision_state = 'text-only'
+                else:
+                    q4_vision_state = 'vision config unrecognized'
+                print(f'Q4_K_S profile file: context={q4_context}, {q4_vision_state}, one slot.')
+                print(q4_live_evidence_summary(q4ks_profile_root(data_root()) / 'config.json'))
+            except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError):
+                print('Q4_K_S future profile configuration is unavailable or unreadable; no readiness/live-validation claim.')
         else:
             root = strata_state()
             root.mkdir(parents=True, exist_ok=True)

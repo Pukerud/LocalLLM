@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Remove the Qwen3.8 HiveOS custom-miner integration without touching the
-# official hive-miners-custom package or the OctaSpace service.
+# Remove the HiveOS custom-miner integration only while all LLM/miner workloads
+# are idle. Never stop Hive or OctaSpace services on the operator's behalf.
 set -Eeuo pipefail
 
 if [[ "${EUID}" -ne 0 ]]; then
@@ -15,10 +15,27 @@ RIG_CONF="/hive-config/rig.conf"
 WALLET_CONF="/hive-config/wallet.conf"
 BACKUP_SUFFIX=".llm-hosting.bak"
 
-if [[ -x /hive/bin/miner ]] && [[ -f /run/hive/cur_miner ]] \
-    && grep -qx custom /run/hive/cur_miner; then
-    printf 'Stopping the active custom miner...\n'
-    /hive/bin/miner stop || true
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+[[ ! -e /run/hive/MINER_RUN ]] || fail 'Hive reports a miner running; stop it through its normal operator workflow first'
+command -v pgrep >/dev/null 2>&1 || fail 'cannot inspect LLM launcher processes; refusing uninstall'
+if pgrep -f 'strata_launcher[.]py|serve[.]server|llama_cpp[.]server|v1qwen38[.]sh|llama-server|/engine/strata(-vision)?|/hive/miners/custom/llm-hosting/h-run[.]sh' >/dev/null 2>&1; then
+    fail 'an LLM launcher/server process is present; refusing uninstall'
+fi
+[[ ! -e /home/user/.local/state/hostllm/pause.json ]] || fail 'HostLLM pause lease exists; refusing uninstall'
+if ! listeners="$(ss -Hltpn '( sport = :8080 )' 2>/dev/null)"; then
+    fail 'cannot inspect API port 8080; refusing uninstall'
+fi
+[[ -z "$listeners" ]] || fail 'API port 8080 is occupied; refusing uninstall'
+if ! command -v docker >/dev/null 2>&1 || ! containers="$(docker ps --format '{{.ID}} {{.Names}}' 2>/dev/null)"; then
+    fail 'Docker workload state unavailable; refusing uninstall'
+fi
+[[ -z "$containers" ]] || fail 'Docker workload is running; refusing uninstall'
+if ! command -v nvidia-smi >/dev/null 2>&1 || \
+   ! gpu_apps="$(nvidia-smi --query-compute-apps=pid --format=csv,noheader,nounits 2>/dev/null)"; then
+    fail 'GPU compute state unavailable; refusing uninstall'
+fi
+if grep -qvE '^[[:space:]]*(None)?[[:space:]]*$' <<< "$gpu_apps"; then
+    fail 'GPU compute processes are present; refusing uninstall'
 fi
 
 rm -rf -- "$CUSTOM_DIR"
