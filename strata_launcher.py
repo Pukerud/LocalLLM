@@ -164,7 +164,8 @@ def family(state):
             stat = (d / 'stat').read_text().rsplit(')', 1)[1].split()
             if int(stat[3]) != leader['sid'] or stat[0] in ('Z', 'X', 'x'):
                 continue
-        except FileNotFoundError:
+        except (FileNotFoundError, ProcessLookupError):
+            # A process can exit between /proc enumeration and opening stat.
             continue
         p = proc(int(d.name))
         if p is None:
@@ -190,7 +191,8 @@ def runtime_gate(state):
             fields = (Path('/proc') / str(p['pid']) / 'stat').read_text().rsplit(')', 1)[1].split()
             if int(fields[19]) == p['start_ticks'] and int(fields[2]) == p['pgid'] and int(fields[3]) == p['sid']:
                 owned.add(p['pid'])  # recorded CUDA task still tearing down; never a reusable bare PID
-        except FileNotFoundError:
+        except (FileNotFoundError, ProcessLookupError):
+            # A vanished child is not an owned live GPU process.
             pass
     text = command_output(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader,nounits'])
     for line in text.splitlines():

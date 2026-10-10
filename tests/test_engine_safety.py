@@ -271,6 +271,49 @@ class StrataState(unittest.TestCase):
             child.terminate()
             child.wait()
 
+    def test_family_skips_process_disappearing_during_proc_stat_read(self):
+        exe = str(Path(sys.executable).resolve())
+        leader = {'pid': 41001, 'start_ticks': 123, 'exe': exe, 'ppid': 1,
+                  'pgid': 41001, 'sid': 41001, 'uid': os.getuid(), 'cmd': [exe]}
+        state = {'identity': leader, 'allowed_executables': [exe], 'children': []}
+        paths = [Path('/proc/41001'), Path('/proc/41002')]
+
+        def read_stat(path, *args, **kwargs):
+            if path == Path('/proc/41001/stat'):
+                return '41001 (python) S 1 41001 41001 0'
+            if path == Path('/proc/41002/stat'):
+                raise ProcessLookupError(3, 'No such process')
+            raise AssertionError(f'unexpected proc read: {path}')
+
+        with mock.patch.object(launcher, 'proc', side_effect=lambda pid: leader if pid == 41001 else None), \
+             mock.patch.object(Path, 'iterdir', return_value=iter(paths)), \
+             mock.patch.object(Path, 'read_text', new=read_stat):
+            self.assertEqual(launcher.family(state), [leader])
+
+    def test_runtime_gate_does_not_claim_vanished_child_gpu_pid(self):
+        leader = {'pid': 41001}
+        child = {'pid': 41002, 'start_ticks': 456, 'pgid': 41001, 'sid': 41001}
+        state = {'identity': leader, 'children': [child]}
+        with mock.patch.object(launcher, 'docker_empty'), \
+             mock.patch.object(launcher, 'family', return_value=[leader]), \
+             mock.patch.object(Path, 'read_text', side_effect=ProcessLookupError(3, 'No such process')), \
+             mock.patch.object(launcher, 'command_output', return_value='41002'):
+            with self.assertRaisesRegex(guard.SafetyError, 'yielding only Strata'):
+                launcher.runtime_gate(state)
+
+    def test_stop_removes_stale_state_without_signalling_a_pid(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch.object(launcher, 'strata_state', return_value=Path(tmp)), \
+             mock.patch.object(launcher, 'family', return_value=[]), \
+             mock.patch.object(launcher, 'signal_identity') as send:
+            state = {'identity': {'pid': 41001, 'start_ticks': 123, 'exe': '/usr/bin/python3',
+                                  'uid': os.getuid(), 'cmd': ['python3'], 'pgid': 41001, 'sid': 41001}}
+            launcher.write_state(state)
+            launcher.stop()
+            self.assertFalse((Path(tmp) / 'server.json').exists())
+            send.assert_not_called()
+
 
 class ForegroundIntegration(unittest.TestCase):
     def test_cpu_http_start_request_external_stop_and_reap(self):
