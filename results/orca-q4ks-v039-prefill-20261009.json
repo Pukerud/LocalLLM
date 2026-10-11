@@ -1,0 +1,143 @@
+{
+  "profile": "orca-q4_k_s",
+  "runtime_version": "0.1.39",
+  "runtime_source_commit": "6f32ec070f23ced9f50e704d854d775da52591ab",
+  "model": "qwen3.8-flash-next-orca-q4_k_s-strata",
+  "configured_context": 262144,
+  "parallel": 1,
+  "batch_groups": 1,
+  "max_output_tokens": 16,
+  "temperature": 1.0,
+  "top_p": 0.95,
+  "top_k": 20,
+  "reasoning_effort": "high",
+  "config_sha256": "2accf0ead745d34316e926774ff7aaaf7031fb54f56bd64a4360a7ae74296cea",
+  "health": {
+    "status": "ok",
+    "max_context": 262144,
+    "model": "qwen3.8-flash-next-orca-q4_k_s-strata",
+    "images": true,
+    "api_key": false,
+    "loaded": true,
+    "service": "strata"
+  },
+  "scope": "Three sequential ~5.3K-token uncached-prefill measurements; not full-context or sustained-load qualification.",
+  "warmup": {
+    "label": "fixture_ledger_q4_warmup",
+    "prompt_chars": 12417,
+    "prompt_sha256": "39ead7ba382bec28354098838e7dc69ed54dd9b2c3da1163c9f262b794fa6813",
+    "elapsed_s": 5.8664,
+    "ttft_s": 5.717,
+    "usage": {
+      "prompt_tokens": 5295,
+      "completion_tokens": 16,
+      "total_tokens": 5311,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    },
+    "timings": {
+      "cache_n": 0,
+      "prompt_n": 5295,
+      "prompt_ms": 5560.3,
+      "prompt_per_token_ms": 1.05,
+      "prompt_per_second": 952.3,
+      "predicted_n": 16,
+      "predicted_ms": 161.2,
+      "predicted_per_token_ms": 10.075,
+      "predicted_per_second": 99.3,
+      "draft_n": 18,
+      "draft_n_accepted": 10
+    }
+  },
+  "runs": [
+    {
+      "label": "fixture_ledger_q4_00",
+      "prompt_chars": 12413,
+      "prompt_sha256": "60b41959995f4dd2167e733e0c1755fc3f6f97243194add89224d1b3a880521b",
+      "elapsed_s": 5.6996,
+      "ttft_s": 5.5496,
+      "usage": {
+        "prompt_tokens": 5295,
+        "completion_tokens": 16,
+        "total_tokens": 5311,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 5295,
+        "prompt_ms": 5523.4,
+        "prompt_per_token_ms": 1.043,
+        "prompt_per_second": 958.6,
+        "predicted_n": 16,
+        "predicted_ms": 161.7,
+        "predicted_per_token_ms": 10.106,
+        "predicted_per_second": 98.9,
+        "draft_n": 18,
+        "draft_n_accepted": 10
+      }
+    },
+    {
+      "label": "fixture_ledger_q4_01",
+      "prompt_chars": 12413,
+      "prompt_sha256": "782d949c83d46358b01a511812a2b158e214dd6c8206ec6d6d1933cbc667fab6",
+      "elapsed_s": 5.79,
+      "ttft_s": 5.6697,
+      "usage": {
+        "prompt_tokens": 5295,
+        "completion_tokens": 16,
+        "total_tokens": 5311,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 5295,
+        "prompt_ms": 5643.3,
+        "prompt_per_token_ms": 1.066,
+        "prompt_per_second": 938.3,
+        "predicted_n": 16,
+        "predicted_ms": 132.0,
+        "predicted_per_token_ms": 8.25,
+        "predicted_per_second": 121.2,
+        "draft_n": 15,
+        "draft_n_accepted": 11
+      }
+    },
+    {
+      "label": "fixture_ledger_q4_02",
+      "prompt_chars": 12413,
+      "prompt_sha256": "76502913b46371794735f3465f478b295e4d774fa780333790fcb60bbd753482",
+      "elapsed_s": 5.7068,
+      "ttft_s": 5.5627,
+      "usage": {
+        "prompt_tokens": 5295,
+        "completion_tokens": 16,
+        "total_tokens": 5311,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 5295,
+        "prompt_ms": 5536.4,
+        "prompt_per_token_ms": 1.046,
+        "prompt_per_second": 956.4,
+        "predicted_n": 16,
+        "predicted_ms": 156.0,
+        "predicted_per_token_ms": 9.75,
+        "predicted_per_second": 102.6,
+        "draft_n": 18,
+        "draft_n_accepted": 11
+      }
+    }
+  ],
+  "started_at_utc": "2026-10-09T08:47:37Z",
+  "passed": true,
+  "median_prefill_tps": 956.4,
+  "finished_at_utc": "2026-10-09T08:48:00Z"
+}

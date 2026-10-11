@@ -138,6 +138,28 @@ def launch_gate(port=8080):
     docker_empty()
 
 
+def qwen_command_port(args):
+    ports = []
+    args = list(args)
+    for index, arg in enumerate(args):
+        if arg == '--port':
+            if index + 1 >= len(args):
+                raise SafetyError('Qwen command line has an incomplete --port; stop refused')
+            raw = args[index + 1]
+            try:
+                ports.append(int(raw))
+            except ValueError as exc:
+                raise SafetyError('Qwen command line has an invalid --port; stop refused') from exc
+        elif arg.startswith('--port='):
+            try:
+                ports.append(int(arg.split('=', 1)[1]))
+            except ValueError as exc:
+                raise SafetyError('Qwen command line has an invalid --port; stop refused') from exc
+    if len(ports) > 1 or (ports and not 1 <= ports[0] <= 65535):
+        raise SafetyError('Qwen command line has an ambiguous/invalid API port; stop refused')
+    return ports[0] if ports else 8080
+
+
 def qwen_record():
     info = qwen_state() / 'server.info'
     if not info.exists():
@@ -156,6 +178,12 @@ def qwen_record():
     args = p['cmd']
     if '--model' not in args or args[args.index('--model') + 1] != fields.get('model'):
         raise SafetyError('Qwen model/command identity does not match its state')
+    try:
+        state_port = int(fields['port'])
+    except (KeyError, ValueError) as exc:
+        raise SafetyError('Qwen state lacks its API port; stop refused') from exc
+    if not 1 <= state_port <= 65535 or qwen_command_port(args) != state_port:
+        raise SafetyError('Qwen API port does not match its live command line; stop refused')
     return p
 
 

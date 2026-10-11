@@ -20,6 +20,66 @@ import engine_safety as guard
 import strata_launcher as launcher
 
 
+class HiveLaunchToken(unittest.TestCase):
+    def setUp(self):
+        self.token = 'a' * 48
+        self.identity = {'pid': 101, 'start_ticks': 10, 'exe': '/usr/bin/python3', 'uid': os.getuid(),
+                         'cmd': ['/venv/bin/python', '-m', 'serve.server', '--engine', 'strata',
+                                 '--config', '/state/run-config.json', '--host', '0.0.0.0',
+                                 '--port', '8080'], 'ppid': 202, 'pgid': 101, 'sid': 101}
+        self.server = dict(self.identity)
+        self.parent = {'pid': 202, 'start_ticks': 9, 'exe': '/usr/bin/python3', 'uid': os.getuid(),
+                       'pgid': 101, 'sid': 101, 'cmd': ['python3', '/home/user/LocalLLM/strata_launcher.py', '--quickstart',
+                               '--profile', 'orca-q4_k_s']}
+
+    def test_generic_stop_without_token_is_unchanged(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop('HIVE_STRATA_LAUNCH_ID', None)
+            launcher.require_hive_launch_identity({})
+
+    def test_invalid_token_fails_closed(self):
+        with mock.patch.dict(os.environ, {'HIVE_STRATA_LAUNCH_ID': 'wrong'}, clear=False):
+            with self.assertRaisesRegex(guard.SafetyError, 'Invalid Hive'):
+                launcher.require_hive_launch_identity({})
+
+    def test_live_server_and_parent_must_carry_matching_token(self):
+        with (
+            mock.patch.dict(os.environ, {'HIVE_STRATA_LAUNCH_ID': self.token}, clear=False),
+            mock.patch.object(launcher, 'proc', side_effect=[self.server, self.parent]),
+            mock.patch.object(Path, 'read_bytes', return_value=b'OTHER=1' + bytes([0])),
+        ):
+            with self.assertRaisesRegex(guard.SafetyError, 'token does not match'):
+                launcher.require_hive_launch_identity({'identity': self.identity})
+
+    def test_matching_live_server_and_parent_token_is_accepted(self):
+        token_env = f'HIVE_STRATA_LAUNCH_ID={self.token}'.encode() + bytes([0])
+        with (
+            mock.patch.dict(os.environ, {'HIVE_STRATA_LAUNCH_ID': self.token}, clear=False),
+            mock.patch.object(launcher, 'proc', side_effect=[self.server, self.parent]),
+            mock.patch.object(Path, 'read_bytes', return_value=token_env),
+        ):
+            launcher.require_hive_launch_identity({'identity': self.identity})
+
+    def test_recorded_hive_stop_requires_the_same_token_and_parent_identity(self):
+        import hashlib
+        token_env = f'HIVE_STRATA_LAUNCH_ID={self.token}'.encode() + bytes([0])
+        state = {'identity': self.identity,
+                 'hive_launch_id_sha256': hashlib.sha256(self.token.encode()).hexdigest(),
+                 'hive_launcher_identity': self.parent}
+        with mock.patch.dict(os.environ, {'HIVE_STRATA_LAUNCH_ID': self.token}, clear=False), \
+             mock.patch.object(launcher, 'proc', side_effect=[self.server, self.parent]), \
+             mock.patch.object(Path, 'read_bytes', return_value=token_env):
+            launcher.require_hive_launch_identity(state)
+        wrong = dict(state, hive_launch_id_sha256='0' * 64)
+        with mock.patch.dict(os.environ, {'HIVE_STRATA_LAUNCH_ID': self.token}, clear=False):
+            with self.assertRaisesRegex(guard.SafetyError, 'does not match recorded'):
+                launcher.require_hive_launch_identity(wrong)
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop('HIVE_STRATA_LAUNCH_ID', None)
+            with self.assertRaisesRegex(guard.SafetyError, 'token is missing'):
+                launcher.require_hive_launch_identity(state)
+
+
 class Gates(unittest.TestCase):
     def test_docker_unknown_blocks_before_gpu(self):
         with mock.patch.object(guard, 'docker_empty', side_effect=guard.SafetyError('unknown')), \
@@ -145,6 +205,13 @@ class ProcessIdentity(unittest.TestCase):
             with self.assertRaisesRegex(guard.SafetyError, 'provenance'):
                 guard.qwen_record()
 
+    def test_qwen_command_line_api_port_is_parsed_and_ambiguous_values_refused(self):
+        self.assertEqual(guard.qwen_command_port(['llama-server']), 8080)
+        self.assertEqual(guard.qwen_command_port(['llama-server', '--port', '8091']), 8091)
+        self.assertEqual(guard.qwen_command_port(['llama-server', '--port=8092']), 8092)
+        with self.assertRaisesRegex(guard.SafetyError, 'ambiguous'):
+            guard.qwen_command_port(['llama-server', '--port', '8091', '--port', '8092'])
+
 
 class QwenOwnedStop(unittest.TestCase):
     @classmethod
@@ -167,7 +234,8 @@ class QwenOwnedStop(unittest.TestCase):
         state.mkdir(exist_ok=True)
         p = guard.proc(child.pid)
         (state / 'server.info').write_text(f'pid={child.pid}\nstart_ticks={p["start_ticks"] + int(change_ticks)}\n'
-                                           f'model={self.root / ("wrong.gguf" if change_model else "test.gguf")}\n')
+                                           f'model={self.root / ("wrong.gguf" if change_model else "test.gguf")}\n'
+                                           'port=8080\n')
         (state / 'server.pid').write_text(str(child.pid))
         try:
             with mock.patch.object(guard, 'qwen_state', return_value=state):
@@ -314,6 +382,17 @@ class StrataState(unittest.TestCase):
             self.assertFalse((Path(tmp) / 'server.json').exists())
             send.assert_not_called()
 
+    def test_foreground_cleanup_is_idempotent_after_external_stop_removed_state(self):
+        identity = {'pid': 41001, 'start_ticks': 123, 'exe': '/usr/bin/python3',
+                    'uid': os.getuid(), 'cmd': ['python3'], 'pgid': 41001, 'sid': 41001}
+        with mock.patch.object(launcher, 'read_state', return_value=None), \
+             mock.patch.object(launcher, 'proc', return_value=None), \
+             mock.patch.object(launcher, 'require_hive_launch_identity') as token_check, \
+             mock.patch.object(launcher, 'signal_identity') as send:
+            launcher.stop(expected={'identity': identity, 'hive_launch_id_sha256': 'a' * 64})
+        token_check.assert_not_called()
+        send.assert_not_called()
+
 
 class ForegroundIntegration(unittest.TestCase):
     def test_cpu_http_start_request_external_stop_and_reap(self):
@@ -321,6 +400,9 @@ class ForegroundIntegration(unittest.TestCase):
 
     def test_cpu_orca_profile_request_external_stop_and_reap(self):
         self.run_case('orca-iq3_xxs')
+
+    def test_cpu_q4ks_text_only_profile_request_external_stop_and_reap(self):
+        self.run_case('orca-q4_k_s')
 
     def run_case(self, profile):
         """Fake CPU frontend exercises the real launcher lifecycle, not model inference."""
@@ -331,15 +413,67 @@ class ForegroundIntegration(unittest.TestCase):
             (source / '.venv/bin/python').symlink_to(sys.executable)
             (source / 'serve').mkdir()
             (source / 'serve/__init__.py').write_text('')
-            (source / 'serve/server.py').write_text('''import argparse,json\nfrom http.server import HTTPServer,BaseHTTPRequestHandler\np=argparse.ArgumentParser();p.add_argument('--port',type=int);a,_=p.parse_known_args()\nclass H(BaseHTTPRequestHandler):\n def do_GET(self):\n  self.send_response(200);self.end_headers();self.wfile.write(b'{"status":"ok"}')\n def do_POST(self):\n  self.rfile.read(int(self.headers.get('Content-Length','0')));self.send_response(200);self.end_headers();self.wfile.write(b'{"choices":[{"message":{"content":"ANSWER=42"}}]}')\nHTTPServer(('127.0.0.1',a.port),H).serve_forever()\n''')
+            (source / 'serve/server.py').write_text('''import argparse,json\nfrom http.server import HTTPServer,BaseHTTPRequestHandler\np=argparse.ArgumentParser();p.add_argument('--port',type=int);a,_=p.parse_known_args()\nclass H(BaseHTTPRequestHandler):\n def do_GET(self):\n  self.send_response(200);self.end_headers();self.wfile.write(b'{"engine":"0.1.39","concurrency":{"serving":1},"status":"ok"}' if self.path == '/v1/status' else b'{"status":"ok"}')\n def do_POST(self):\n  self.rfile.read(int(self.headers.get('Content-Length','0')));self.send_response(200);self.end_headers();self.wfile.write(b'{"choices":[{"message":{"content":"ANSWER=42"}}]}')\nHTTPServer(('127.0.0.1',a.port),H).serve_forever()\n''')
             with socket.socket() as sock:
                 sock.bind(('127.0.0.1', 0))
                 port = sock.getsockname()[1]
             state_root = root / 'state'
-            cfg = {'args': [], 'exe': '/bin/sleep', 'vision': {'exe': '/bin/sleep'}, 'host': '127.0.0.1', 'port': port}
+            cfg = {'args': ['--max-context', '32768'] if profile == 'orca-q4_k_s' else [],
+                   'exe': '/bin/sleep', 'host': '127.0.0.1', 'port': port}
+            if profile != 'orca-q4_k_s':
+                cfg['vision'] = {'exe': '/bin/sleep'}
             driver = root / 'driver.py'
-            driver.write_text(f'''import sys,pathlib,fcntl\nsys.path.insert(0,{str(ROOT)!r})\nimport strata_launcher as s\ns.ready=lambda *args: (pathlib.Path({str(source)!r}),pathlib.Path('unused'),{cfg!r})\ns.launch_gate=lambda port: None\ns.runtime_gate=lambda state: None\ns.main()\n''')
-            env = dict(os.environ, STRATA_DATA_ROOT=str(root), STRATA_STATE_ROOT=str(state_root), STRATA_HEALTH_TIMEOUT='10')
+            host_state_root = root / 'hostllm-state'
+            host_state_root.mkdir()
+            release_probe = root / 'release_probe.py'
+            release_probe.write_text(f'''import fcntl,json,os,sys
+from pathlib import Path
+sys.path.insert(0,{str(ROOT)!r})
+from engine_safety import proc,same_process
+lock_fd=os.open(sys.argv[1],os.O_RDONLY)
+try:
+    fcntl.flock(lock_fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+except BlockingIOError:
+    Path(sys.argv[3]).write_text('contended')
+else:
+    raise SystemExit('release probe acquired the lock before startup handoff')
+fcntl.flock(lock_fd,fcntl.LOCK_EX)
+state=json.loads(Path(sys.argv[2]).read_text())
+if not same_process(state['identity'],proc(state['identity']['pid'])):
+    raise SystemExit('launcher released before durable identity verification')
+Path(sys.argv[4]).write_text('identity-recorded')
+os.close(lock_fd)
+''')
+            driver.write_text(f'''import contextlib,pathlib,subprocess,sys,time
+sys.path.insert(0,{str(ROOT)!r})
+import strata_launcher as s
+s.ready=lambda *args: (pathlib.Path({str(source)!r}),pathlib.Path('unused'),{cfg!r})
+s.ready_q4ks=lambda root: (pathlib.Path({str(source)!r}),pathlib.Path('unused'),{cfg!r})
+s.launch_gate=lambda port: None
+s.runtime_gate=lambda state: None
+original=s.host_lifecycle.launch_reservation
+@contextlib.contextmanager
+def observed_reservation():
+    with original() as lock:
+        probe=subprocess.Popen([sys.executable,{str(release_probe)!r},{str(host_state_root / 'lifecycle.lock')!r},
+                                {str(state_root / 'server.json')!r},{str(root / 'release-attempted')!r},
+                                {str(root / 'release-observed')!r}])
+        deadline=time.monotonic()+5
+        while not pathlib.Path({str(root / 'release-attempted')!r}).exists():
+            if probe.poll() is not None or time.monotonic() >= deadline:
+                raise RuntimeError('release probe did not confirm lock contention')
+            time.sleep(0.01)
+        try:
+            yield lock
+        finally:
+            probe.wait(timeout=5)
+            if probe.returncode:
+                raise RuntimeError('concurrent release probe failed')
+s.host_lifecycle.launch_reservation=observed_reservation
+s.main()
+''')
+            env = dict(os.environ, STRATA_DATA_ROOT=str(root), STRATA_STATE_ROOT=str(state_root),
+                       HOSTLLM_STATE_ROOT=str(host_state_root), STRATA_HEALTH_TIMEOUT='10')
             with (root / 'driver.log').open('w') as log:
                 driver_proc = subprocess.Popen([sys.executable, str(driver), '--quickstart', '--profile', profile],
                                                env=env, stdout=log, stderr=log)
@@ -353,6 +487,11 @@ class ForegroundIntegration(unittest.TestCase):
                     time.sleep(0.1)
                 else:
                     self.fail('CPU fixture health timeout')
+                handoff_deadline = time.monotonic() + 3
+                while time.monotonic() < handoff_deadline and not (root / 'release-observed').exists():
+                    time.sleep(0.01)
+                self.assertTrue((root / 'release-attempted').exists())
+                self.assertTrue((root / 'release-observed').exists(), 'release crossed startup before identity handoff')
                 req = urllib.request.Request(f'http://127.0.0.1:{port}/v1/chat/completions',
                                              data=b'{"messages":[],"max_tokens":32}',
                                              headers={'Content-Type': 'application/json'})
@@ -362,15 +501,20 @@ class ForegroundIntegration(unittest.TestCase):
                 state = json.loads((state_root / 'server.json').read_text())
                 effective = json.loads((state_root / 'run-config.json').read_text())
                 self.assertEqual(state['profile'], profile)
-                self.assertEqual(effective['model_name'], 'qwen3.8-flash-next-orca-iq3_xxs-strata' if profile ==
-                                 'orca-iq3_xxs' else 'qwen3.8-flash-next-iq3_s-strata')
-                wrong = 'iq3_s' if profile == 'orca-iq3_xxs' else 'orca-iq3_xxs'
+                expected_model = {'orca-iq3_xxs': 'qwen3.8-flash-next-orca-iq3_xxs-strata',
+                                  'orca-q4_k_s': 'qwen3.8-flash-next-orca-q4_k_s-strata'}
+                self.assertEqual(effective['model_name'], expected_model.get(profile, 'qwen3.8-flash-next-iq3_s-strata'))
+                if profile == 'orca-q4_k_s':
+                    self.assertNotIn('--vision', effective['args'])
+                    self.assertNotIn('vision', effective)
+                wrong = {'orca-iq3_xxs': 'iq3_s', 'orca-q4_k_s': 'orca-iq3_xxs'}.get(profile, 'orca-iq3_xxs')
                 refused = subprocess.run([sys.executable, str(ROOT / 'strata_launcher.py'), '--stop', '--profile', wrong],
                                           env=env, capture_output=True, timeout=5)
                 self.assertNotEqual(refused.returncode, 0)
                 self.assertTrue(launcher.health(port))
+                refused_version = '0.1.41' if profile == 'orca-q4_k_s' else '0.1.39'
                 refused_runtime = subprocess.run([sys.executable, str(ROOT / 'strata_launcher.py'), '--stop',
-                                                   '--runtime', '0.1.39'],env=env,capture_output=True,timeout=5)
+                                                   '--runtime', refused_version],env=env,capture_output=True,timeout=5)
                 self.assertNotEqual(refused_runtime.returncode,0)
                 self.assertTrue(launcher.health(port))
                 subprocess.run([sys.executable, str(ROOT / 'strata_launcher.py'), '--stop'], env=env,

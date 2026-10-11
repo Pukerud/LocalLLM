@@ -16,11 +16,27 @@ LLM_ROOT='/home/user/LocalLLM'
 say() { printf '[llm-hosting-profile] %s\n' "$*"; }
 fail() { say "ERROR: $*" >&2; exit 1; }
 
+secure_root_dir() {
+    local path="$1" owner mode
+    [[ -d "$path" && ! -L "$path" ]] || return 1
+    owner="$(stat -c '%u' -- "$path")" || return 1
+    mode="$(stat -c '%a' -- "$path")" || return 1
+    [[ "$owner" == 0 && "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+    (( (8#$mode & 0022) == 0 ))
+}
+
+assert_secure_layout() {
+    local path
+    for path in /hive /hive/miners /hive/miners/custom "$CUSTOM_DIR" "$PROFILE_ROOT"; do
+        secure_root_dir "$path" || fail "unsafe root-owned directory or writable parent: $path"
+    done
+}
+
 usage() {
     cat <<'EOF'
 Usage:
   profile-menu.sh                 Show the interactive selector
-  profile-menu.sh --profile NAME  Select orca-q4_k_s or swift15u-q8
+  profile-menu.sh --profile NAME  Select orca-q4_k_s, orca-q4_k_s-v0141, or swift15u-q8
   profile-menu.sh --list          Show installed profiles and current selection
   profile-menu.sh --help          Show this help
 
@@ -31,7 +47,8 @@ EOF
 
 profile_label() {
     case "$1" in
-        orca-q4_k_s) printf '%s' 'Orca Uncensored Q4_K_S — Strata 0.1.39, native 262K, CPU vision, one slot' ;;
+        orca-q4_k_s) printf '%s' 'Orca Uncensored Q4_K_S — Strata 0.1.39, native 262K, CPU vision, one serving slot' ;;
+        orca-q4_k_s-v0141) printf '%s' 'Orca Uncensored Q4_K_S — Strata 0.1.41, native 262K, CPU vision, 8 GiB conversation cache, one serving slot' ;;
         swift15u-q8) printf '%s' 'Previous Qwen3.8 Swift 1.5 Uncensored Q8_K_XL profile' ;;
         *) return 1 ;;
     esac
@@ -42,7 +59,7 @@ read_current_profile() {
     if [[ -L "$CURRENT_LINK" ]]; then
         target="$(readlink -- "$CURRENT_LINK")" || return 1
         case "$target" in
-            profiles/orca-q4_k_s|profiles/swift15u-q8) printf '%s' "${target#profiles/}" ;;
+            profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/swift15u-q8) printf '%s' "${target#profiles/}" ;;
             *) return 1 ;;
         esac
         return
@@ -50,7 +67,7 @@ read_current_profile() {
     [[ ! -e "$CURRENT_LINK" ]] || return 1
     current_conf="$CUSTOM_DIR/llm-hosting.conf"
     [[ -f "$current_conf" && ! -L "$current_conf" ]] || return 1
-    for profile in orca-q4_k_s swift15u-q8; do
+    for profile in orca-q4_k_s orca-q4_k_s-v0141 swift15u-q8; do
         if cmp -s <(tr -d '\r' < "$current_conf") <(tr -d '\r' < "$PROFILE_ROOT/$profile/llm-hosting.conf"); then
             printf '%s' "$profile"
             return 0
@@ -98,6 +115,7 @@ show_profiles() {
     current="$(read_current_profile 2>/dev/null || printf 'unconfigured')"
     printf 'Current profile: %s\n' "$current"
     printf '  orca-q4_k_s: %s\n' "$(profile_label orca-q4_k_s)"
+    printf '  orca-q4_k_s-v0141: %s\n' "$(profile_label orca-q4_k_s-v0141)"
     printf '  swift15u-q8: %s\n' "$(profile_label swift15u-q8)"
 }
 
@@ -116,6 +134,22 @@ check_selected_profile_ready() {
                 --runtime 0.1.39 --parallel 1 --batch-groups 1; then
                 fail 'Orca Q4_K_S readiness check failed; profile unchanged'
             fi
+            ;;
+        orca-q4_k_s-v0141)
+            [[ -x "$LLM_ROOT/v1strata.sh" ]] || fail "Strata launcher not found: $LLM_ROOT/v1strata.sh"
+            command -v runuser >/dev/null 2>&1 || fail 'runuser is unavailable; Q4 .41 readiness cannot be checked'
+            local readiness
+            readiness="$(runuser -u user -- env -i \
+                HOME=/home/user USER=user LOGNAME=user \
+                PATH='/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin' \
+                STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata \
+                STRATA_STATE_ROOT=/home/user/.local/state/localllm-strata \
+                STRATA_RUNTIME=0.1.41 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 STRATA_PORT=8080 \
+                "$LLM_ROOT/v1strata.sh" --check-ready --profile orca-q4_k_s \
+                --runtime 0.1.41 --parallel 1 --batch-groups 1)" || \
+                fail 'Orca Q4_K_S .41 readiness check failed; profile unchanged'
+            [[ "$readiness" == *'READY CONFIG: pinned Q4_K_S; future profile context=262144; CPU vision configured; single-slot; conversation cache=8192 MiB / 4 cache slots.'* ]] || \
+                fail 'Orca Q4_K_S .41 native-context/CPU-vision/cache gates are incomplete; profile unchanged'
             ;;
         swift15u-q8)
             [[ -x "$LLM_ROOT/v1qwen38.sh" ]] || fail "Qwen launcher not found: $LLM_ROOT/v1qwen38.sh"
@@ -156,11 +190,9 @@ assert_idle() {
 
 if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then usage; exit 0; fi
 [[ "$EUID" -eq 0 ]] || fail 'run as root'
-[[ -d "$CUSTOM_DIR" && ! -L "$CUSTOM_DIR" ]] || fail "custom miner directory missing or symlinked: $CUSTOM_DIR"
-[[ "$(stat -c '%u' -- "$CUSTOM_DIR")" == 0 ]] || fail 'custom miner directory is not root-owned'
-[[ -d "$PROFILE_ROOT" && ! -L "$PROFILE_ROOT" ]] || fail 'profile directory missing or symlinked'
-[[ "$(stat -c '%u' -- "$PROFILE_ROOT")" == 0 ]] || fail 'profile directory is not root-owned'
+assert_secure_layout
 check_profile_files orca-q4_k_s || fail 'Orca profile files are incomplete or symlinked'
+check_profile_files orca-q4_k_s-v0141 || fail 'Orca .41 profile files are incomplete or symlinked'
 check_profile_files swift15u-q8 || fail 'previous Qwen profile files are incomplete or symlinked'
 validate_profile_layout
 
@@ -175,11 +207,13 @@ case "${1:-}" in
         show_profiles
         printf '\n  [1] %s\n' "$(profile_label orca-q4_k_s)"
         printf '  [2] %s\n' "$(profile_label swift15u-q8)"
+        printf '  [3] %s\n' "$(profile_label orca-q4_k_s-v0141)"
         printf '  [q] Quit\n'
         read -r -p 'Select profile for the next Hive miner start: ' choice || exit 0
         case "${choice//[[:space:]]/}" in
             1|orca-q4_k_s) target='orca-q4_k_s' ;;
             2|swift15u-q8) target='swift15u-q8' ;;
+            3|orca-q4_k_s-v0141) target='orca-q4_k_s-v0141' ;;
             q|Q|'') exit 0 ;;
             *) fail 'invalid selection; no files changed' ;;
         esac
@@ -201,13 +235,15 @@ needs_bootstrap=0
 for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
     [[ -L "$CUSTOM_DIR/$file" ]] || needs_bootstrap=1
 done
+check_selected_profile_ready "$target"
 if [[ "$current" == "$target" && "$needs_bootstrap" -eq 0 ]]; then
     say "${target} is already selected; no files changed"
     exit 0
 fi
-check_selected_profile_ready "$target"
 assert_idle
 [[ "$(read_current_profile)" == "$current" ]] || fail 'profile changed concurrently; no additional change made'
+assert_secure_layout
+check_profile_files "$target" || fail "profile files changed or became unsafe: $target"
 
 # A legacy install starts with regular Hive files and no pointer. Convert it
 # only after the idle checks; keep the current profile selected during bootstrap.

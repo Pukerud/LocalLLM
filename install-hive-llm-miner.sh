@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Install the HiveOS custom miner with an Orca Q4 default and a selectable
-# previous Swift/Qwen Q8 profile. This never starts/stops miner or osn.service.
+# Install the HiveOS custom miner with Orca Q4 .39 as default, optional .41,
+# and the previous Swift/Qwen Q8 profile. Never starts/stops miner or osn.service.
 set -Eeuo pipefail
 
 if [[ "${EUID}" -ne 0 ]]; then
@@ -55,7 +55,7 @@ assert_idle() {
 }
 assert_idle
 
-for profile in orca-q4_k_s swift15u-q8; do
+for profile in orca-q4_k_s orca-q4_k_s-v0141 swift15u-q8; do
     for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
         [[ -f "$SOURCE_DIR/profiles/$profile/$file" && ! -L "$SOURCE_DIR/profiles/$profile/$file" ]] || \
             fail "profile file missing or symlinked: profiles/$profile/$file"
@@ -86,15 +86,16 @@ done
 assert_idle
 
 [[ ! -L "$CUSTOM_ROOT" && ! -L "$CUSTOM_DIR" ]] || fail 'custom miner path is symlinked; refusing package update'
-[[ ! -L "$CUSTOM_DIR/profiles" && ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s" && ! -L "$CUSTOM_DIR/profiles/swift15u-q8" ]] || \
+[[ ! -L "$CUSTOM_DIR/profiles" && ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s" && \
+   ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v0141" && ! -L "$CUSTOM_DIR/profiles/swift15u-q8" ]] || \
     fail 'custom miner profile path is symlinked; refusing package update'
-for profile in orca-q4_k_s swift15u-q8; do
+for profile in orca-q4_k_s orca-q4_k_s-v0141 swift15u-q8; do
     for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
         [[ ! -L "$CUSTOM_DIR/profiles/$profile/$file" ]] || fail "installed profile file is symlinked: $profile/$file"
     done
 done
 install -d -m 755 "$CUSTOM_DIR" "$CUSTOM_DIR/profiles" /var/log/miner/custom/llm-hosting
-for profile in orca-q4_k_s swift15u-q8; do
+for profile in orca-q4_k_s orca-q4_k_s-v0141 swift15u-q8; do
     install -d -m 755 "$CUSTOM_DIR/profiles/$profile"
     for file in h-manifest.conf llm-hosting.conf; do
         install -m 644 "$SOURCE_DIR/profiles/$profile/$file" "$CUSTOM_DIR/profiles/$profile/$file"
@@ -145,5 +146,6 @@ printf '  CUSTOM_MINER=%s\n' "$CUSTOM_NAME"
 printf '  Profile: orca-q4_k_s (default)\n'
 printf '  Switch menu: %s/profile-menu.sh\n' "$CUSTOM_DIR"
 printf '  Previous profile: swift15u-q8\n'
+printf '  Optional profile: orca-q4_k_s-v0141 (explicit opt-in; readiness-gated)\n'
 printf '  No miner start/stop command was run; osn.service was not modified.\n'
 printf '\nThe profile menu refuses changes while Hive, the API, Docker, or GPU compute is active.\n'

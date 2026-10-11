@@ -4,7 +4,7 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 export QWEN38_DATA_ROOT="$scratch/data" QWEN38_STATE_ROOT="$scratch/state"
-source <(head -n -1 "$root/v1qwen38.sh")
+source <(head -n -1 "$root/v1qwen38.sh" | tr -d '\r')
 GPU_COUNT=4
 GPU_INDICES=(0 1 2 3)
 GPU_NAMES=('NVIDIA GeForce RTX 3090' 'NVIDIA GeForce RTX 3090' 'NVIDIA GeForce RTX 3090' 'NVIDIA GeForce RTX 3090')

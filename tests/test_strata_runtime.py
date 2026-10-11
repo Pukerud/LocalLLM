@@ -176,13 +176,13 @@ class Runtime(unittest.TestCase):
     def test_effective_slot_fallback_refused(self):
         import strata_launcher as s
         response=io.BytesIO(json.dumps({'engine':r.VERSION,'concurrency':{'serving':1}}).encode())
-        with mock.patch.object(s.urllib.request,'urlopen',return_value=response):
+        with mock.patch.object(s,'open_local_api',return_value=response):
             with self.assertRaisesRegex(SafetyError,'silent single-slot'):s.verify_serving({'parallel':2},r.VERSION,18080)
 
     def test_effective_slots_checked_with_private_api_auth(self):
         import strata_launcher as s
         response=io.BytesIO(json.dumps({'engine':r.VERSION,'concurrency':{'serving':2}}).encode())
-        with mock.patch.object(s.urllib.request,'urlopen',return_value=response) as opened:
+        with mock.patch.object(s,'open_local_api',return_value=response) as opened:
             self.assertEqual(s.verify_serving({'parallel':2,'api_key':'cpu-fixture'},r.VERSION,18080),2)
         self.assertEqual(opened.call_args.args[0].get_header('Authorization'),'Bearer cpu-fixture')
 
@@ -199,7 +199,7 @@ class Runtime(unittest.TestCase):
     def test_wrong_effective_runtime_refused(self):
         import strata_launcher as s
         response=io.BytesIO(json.dumps({'engine':'0.1.38','concurrency':{'serving':1}}).encode())
-        with mock.patch.object(s.urllib.request,'urlopen',return_value=response):
+        with mock.patch.object(s,'open_local_api',return_value=response):
             with self.assertRaises(SafetyError):s.verify_serving({'parallel':1},r.VERSION,18080)
 
     def test_promotion_requires_real_checks_on_both_models(self):

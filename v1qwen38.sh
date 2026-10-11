@@ -22,6 +22,8 @@ fi
 
 DATA_ROOT="${QWEN38_DATA_ROOT:-${qwen38_home}/.local/share/localllm-qwen38}"
 STATE_ROOT="${QWEN38_STATE_ROOT:-${qwen38_home}/.local/state/locallm-qwen38}"
+HOSTLLM_STATE_ROOT="${HOSTLLM_STATE_ROOT:-${qwen38_home}/.local/state/hostllm}"
+export HOSTLLM_STATE_ROOT
 RUNTIME_ROOT="${DATA_ROOT}/runtimes"
 MODEL_ROOT="${DATA_ROOT}/models"
 LOG_ROOT="${DATA_ROOT}/logs"
@@ -91,6 +93,8 @@ readonly GSQ_MMPROJ="mmproj-Qwen3.8-Flash-Next-BF16.gguf"
 # Set by configure_profile.
 PROFILE_LABEL=""
 RUNTIME_KIND=""
+QWEN_LAUNCH_LOCK_FD=""
+QWEN_LAUNCH_LOCK_OWNED=0
 MODEL_PATH=""
 MMPROJ_PATH=""
 DRAFT_PATH=""
@@ -859,6 +863,7 @@ pid=$SERVER_PID
 start_ticks=$start_ticks
 port=$PORT
 host=$BIND_HOST
+hosting_lease_id=${HOSTLLM_LAUNCH_LEASE_ID:-}
 model=$MODEL_PATH
 mmproj=$MMPROJ_PATH
 context=$FULL_CTX
@@ -870,6 +875,7 @@ speculation=$SPEC_MODE
 log=$SERVER_LOG
 EOF
     printf '%s\n' "$SERVER_PID" > "${STATE_ROOT}/server.pid"
+    release_hostllm_launch_reservation || return 1
 }
 
 running_pid() {
@@ -894,6 +900,40 @@ stop_server() {
     else
         sudo -n env QWEN38_STATE_ROOT="$STATE_ROOT" python3 "$SCRIPT_DIR/engine_safety.py" stop-qwen --owner-stop
     fi
+}
+
+acquire_hostllm_launch_reservation() {
+    local lock_path
+    if [[ -n "${HOSTLLM_LAUNCH_LOCK_FD:-}" ]]; then
+        [[ "$HOSTLLM_LAUNCH_LOCK_FD" =~ ^[0-9]+$ &&
+           "${HOSTLLM_LAUNCH_LEASE_ID:-}" =~ ^[a-f0-9]{64}$ ]] || return 1
+        QWEN_LAUNCH_LOCK_FD="$HOSTLLM_LAUNCH_LOCK_FD"
+        python3 - "$QWEN_LAUNCH_LOCK_FD" "$HOSTLLM_STATE_ROOT/lifecycle.lock" <<'PY' || return 1
+import fcntl, os, stat, sys
+fd = int(sys.argv[1])
+opened, expected = os.fstat(fd), os.stat(sys.argv[2], follow_symlinks=False)
+if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino):
+    raise SystemExit('inherited descriptor is not HostLLM lifecycle.lock')
+fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+PY
+        flock -x "$QWEN_LAUNCH_LOCK_FD" || return 1
+        return 0
+    fi
+    [[ -z "${HOSTLLM_LAUNCH_LEASE_ID:-}" ]] || return 1
+    mkdir -p "$HOSTLLM_STATE_ROOT" || return 1
+    lock_path="${HOSTLLM_STATE_ROOT}/lifecycle.lock"
+    if [[ ! -e "$lock_path" ]]; then ( umask 022; : > "$lock_path" ) || return 1; fi
+    exec {QWEN_LAUNCH_LOCK_FD}<"$lock_path" || return 1
+    flock -x "$QWEN_LAUNCH_LOCK_FD" || { exec {QWEN_LAUNCH_LOCK_FD}<&-; QWEN_LAUNCH_LOCK_FD=""; return 1; }
+    QWEN_LAUNCH_LOCK_OWNED=1
+}
+
+release_hostllm_launch_reservation() {
+    [[ -n "$QWEN_LAUNCH_LOCK_FD" ]] || return 0
+    flock -u "$QWEN_LAUNCH_LOCK_FD" || return 1
+    if (( QWEN_LAUNCH_LOCK_OWNED )); then exec {QWEN_LAUNCH_LOCK_FD}<&-; fi
+    QWEN_LAUNCH_LOCK_FD=""
+    QWEN_LAUNCH_LOCK_OWNED=0
 }
 
 check_port_free() {
@@ -1045,7 +1085,7 @@ wait_for_health() {
 }
 
 start_server() {
-    local bin="$RUNTIME_DIR/source/build/bin/llama-server"
+    local bin="$RUNTIME_DIR/source/build/bin/llama-server" active
     refresh_gpu_layout || die "NVIDIA GPU inventory unavailable; refusing to start Qwen3.8"
     [[ -x "$bin" ]] || die "runtime is not built: $bin"
     [[ -f "$MODEL_PATH" ]] || die "model is missing: $MODEL_PATH"
@@ -1060,10 +1100,29 @@ start_server() {
         say "Qwen3.8 server is already running (PID $SERVER_PID)"
         return 0
     fi
+    acquire_hostllm_launch_reservation || die "Could not reserve HostLLM lifecycle during Qwen startup"
+    active="$(python3 "$SCRIPT_DIR/engine_safety.py" active)" || {
+        release_hostllm_launch_reservation || true
+        return 1
+    }
+    if [[ "$active" != none ]]; then
+        release_hostllm_launch_reservation || true
+        warn "another LLM session became active during Qwen startup ($active)"
+        return 1
+    fi
+    if [[ -n "${HOSTLLM_LAUNCH_LEASE_ID:-}" ]]; then
+        python3 "$SCRIPT_DIR/hosting_lifecycle.py" verify-lease --lease-id "$HOSTLLM_LAUNCH_LEASE_ID" || {
+            release_hostllm_launch_reservation || true
+            return 1
+        }
+    fi
     rm -f "${STATE_ROOT}/server.pid" "${STATE_ROOT}/server.info"
     check_port_free
     # Also protect direct CLI starts, not just starts through HostLLM.
-    python3 "$SCRIPT_DIR/engine_safety.py" preflight --port "$PORT" || return 1
+    python3 "$SCRIPT_DIR/engine_safety.py" preflight --port "$PORT" || {
+        release_hostllm_launch_reservation || true
+        return 1
+    }
     make_server_args
 
     SERVER_LOG="${LOG_ROOT}/${PROFILE}-$(date +%Y%m%d-%H%M%S).log"

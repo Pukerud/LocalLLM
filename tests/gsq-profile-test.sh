@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 # Load definitions without executing main (no downloads/GPU operations).
-source <(head -n -1 "$root/v1qwen38.sh")
+source <(head -n -1 "$root/v1qwen38.sh" | tr -d '\r')
 GPU_DEVICE_LIST=CUDA0,CUDA1,CUDA2,CUDA3
 GPU_TENSOR_SPLIT=1,1,1,1
 for p in gsq-q2 gsq-iq2 gsq-iq3; do

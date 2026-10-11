@@ -81,7 +81,7 @@ def _assert_tool_path(root, path, label):
     return path
 
 
-def check_record(path, saved, expected_sha=None, *, hash_file=False, sealed=False):
+def check_record(path, saved, expected_sha=None, *, hash_file=False, sealed=False, ignore_ctime=False):
     path = Path(path)
     if path.is_symlink() or not saved or saved.get('path') != str(path) or not path.is_file():
         raise SafetyError(f'Q4_K_S asset missing or changed: {path}')
@@ -89,6 +89,10 @@ def check_record(path, saved, expected_sha=None, *, hash_file=False, sealed=Fals
     identity = {'bytes': st.st_size, 'mtime_ns': st.st_mtime_ns, 'ctime_ns': st.st_ctime_ns,
                 'device': st.st_dev, 'inode': st.st_ino, 'mode': stat.S_IMODE(st.st_mode),
                 'uid': st.st_uid, 'gid': st.st_gid}
+    # Hardlink creation/removal changes inode ctime without changing projector contents.
+    # Vision readiness still checks the pinned SHA, inode, mode, ownership, size, and mtime.
+    if ignore_ctime:
+        identity.pop('ctime_ns')
     if any(saved.get(key) != value for key, value in identity.items()) or \
             (expected_sha and saved.get('sha256') != expected_sha):
         raise SafetyError(f'Q4_K_S asset missing or changed: {path}')
@@ -466,7 +470,7 @@ def _validate_vision_sidecar(root, pr):
             target_info.st_mode & 0o222):
         raise SafetyError('Q4_K_S projector is not the verified read-only IQ3_XXS hardlink')
     check_record(target_projector, projector.get('record'), VISION_PROJECTOR_SHA256,
-                 hash_file=True, sealed=True)
+                 hash_file=True, sealed=True, ignore_ctime=True)
     return engine
 
 

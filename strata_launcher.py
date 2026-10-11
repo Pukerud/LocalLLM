@@ -16,20 +16,25 @@ import urllib.request
 
 from engine_safety import (SafetyError, command_output, docker_empty, launch_gate, owner_home,
                            proc, same_process, signal_identity, strata_state)
+from local_api_client import open_local_api
+import hosting_lifecycle as host_lifecycle
 from prepare_strata import DIGESTS
 from orca_assets import MODEL_ID as ORCA_MODEL_ID, PROFILE as ORCA_PROFILE
 from orca_profile import configure_native_context, ready_orca
 from orca_q4ks_assets import (PROFILE as ORCA_Q4KS_PROFILE, MODEL_ID as ORCA_Q4KS_MODEL_ID,
+                              SOURCE_COMMIT as ORCA_Q4KS_SOURCE_COMMIT,
                               RUNTIME_VERSION as ORCA_Q4KS_RUNTIME)
 from orca_q4ks_profile import (configure_native_context as configure_q4ks_native_context,
                                configure_q4ks_vision, profile_root as q4ks_profile_root,
                                ready_q4ks, record_32k_validation as record_q4ks_32k_validation,
                                rollback_q4ks_vision)
+import orca_q4ks_v0141_profile as q4ks_v0141
 import strata_runtime as runtimes
 
 SOURCE_COMMIT = '99f3dbd0b21d1401b3769e0c0d963913607f380b'
 MODEL_REVISION = 'ed59f92082b1e93c0e96d60a8b11aab089b52f09'
 MODEL = 'Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S'
+HIVE_CUR_MINER = Path('/run/hive/cur_miner')
 
 
 def data_root():
@@ -100,16 +105,162 @@ def ready(profile='iq3_s'):
     return source, config_path, cfg
 
 
+def _effective_host(profile, version, configured_host):
+    requested = os.environ.get('STRATA_HOST')
+    if profile == ORCA_Q4KS_PROFILE and version == '0.1.41':
+        if requested not in (None, '127.0.0.1', '0.0.0.0'):
+            raise SafetyError('Q4 .41 STRATA_HOST may only be 127.0.0.1 or 0.0.0.0')
+        return requested or '127.0.0.1'
+    return requested or configured_host
+
+
 def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
     if profile == ORCA_Q4KS_PROFILE:
-        if runtime not in ('auto', ORCA_Q4KS_RUNTIME):
-            raise SafetyError(f'Q4_K_S uses its separate pinned {ORCA_Q4KS_RUNTIME} build, not the selected-runtime manager')
+        if runtime not in ('auto', ORCA_Q4KS_RUNTIME, '0.1.41'):
+            raise SafetyError(f'Q4_K_S supports its preserved .39 baseline or the explicit .41 candidate only')
         if parallel != 1 or batch_groups != 1:
-            raise SafetyError('Q4_K_S is restricted to its initial single-slot, single-group validation profile')
+            raise SafetyError('Q4_K_S is restricted to its single-slot, single-group profile')
+        if runtime == '0.1.41':
+            source, path, cfg = q4ks_v0141.ready_q4ks_v0141(data_root())
+            return source, path, cfg, '0.1.41'
         source, path, cfg = ready_q4ks(data_root())
         return source, path, cfg, ORCA_Q4KS_RUNTIME
     source, path, cfg = ready() if profile == 'iq3_s' else ready(profile)
     return runtimes.configure(data_root(), source, path, cfg, profile, runtime, parallel, batch_groups)
+
+
+def _q4ks_recorded_identity_valid(value):
+    return (isinstance(value, dict) and type(value.get('pid')) is int and value['pid'] > 0 and
+            type(value.get('start_ticks')) is int and value['start_ticks'] > 0 and
+            isinstance(value.get('exe'), str) and value['exe'].startswith('/'))
+
+
+def q4ks_evidence_summary(root, config_path):
+    """Summarize stored, config-hash-bound Q4 live reports without turning readiness into a quality claim."""
+    pr = q4ks_profile_root(root)
+    lines = []
+    validation32 = pr / 'validation-32k.json'
+    if not validation32.is_symlink() and validation32.is_file():
+        try:
+            report = json.loads(validation32.read_text())
+            if not isinstance(report, dict):
+                raise TypeError('report root must be an object')
+            initial = pr / 'context-config-before.json'
+            evidence_config = initial if initial.is_file() and not initial.is_symlink() else config_path
+            checks, mtp = report.get('checks'), report.get('mtp')
+            if not isinstance(checks, dict) or not isinstance(mtp, dict):
+                raise TypeError('checks and MTP must be objects')
+            drafted, accepted = mtp.get('drafted_tokens'), mtp.get('accepted_tokens')
+            valid = (report.get('profile') == ORCA_Q4KS_PROFILE and
+                     report.get('model_id') == ORCA_Q4KS_MODEL_ID and
+                     report.get('source_commit') == ORCA_Q4KS_SOURCE_COMMIT and
+                     report.get('runtime_version') == ORCA_Q4KS_RUNTIME and
+                     report.get('config_sha256') == hashlib.sha256(evidence_config.read_bytes()).hexdigest() and
+                     report.get('context') == 32768 and report.get('parallel') == 1 and
+                     report.get('text_only') is True and report.get('passed') is True and
+                     all(checks.get(name) is True for name in
+                         ('health', 'arithmetic', 'strict_json', 'tool_call', 'memory_recorded')) and
+                     type(report.get('memory_peak_mib')) is int and report['memory_peak_mib'] > 0 and
+                     type(drafted) is int and drafted > 0 and type(accepted) is int and
+                     0 <= accepted <= drafted and
+                     _q4ks_recorded_identity_valid(report.get('recorded_server_identity')))
+            if valid:
+                lines.append(f'Recorded 32K text-only gate passed (MTP {accepted}/{drafted}; '
+                             f'per-GPU peak {report["memory_peak_mib"]} MiB). Historical 32K evidence only.')
+            else:
+                lines.append('Stored 32K report is stale/incomplete and is not counted as live evidence.')
+        except (OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError):
+            lines.append('Stored 32K report is unreadable and is not counted as live evidence.')
+    else:
+        lines.append('No recorded live 32K text-only validation; native-context migration remains gated.')
+
+    native = pr / 'validation-native.json'
+    if not native.is_symlink() and native.is_file():
+        try:
+            report = json.loads(native.read_text())
+            if not isinstance(report, dict):
+                raise TypeError('report root must be an object')
+            vision, full = report.get('vision'), report.get('full_context')
+            health, resources = report.get('health'), report.get('resource_measurement')
+            if not all(isinstance(item, dict) for item in (vision, full, health, resources)):
+                raise TypeError('vision/context/health/resources must be objects')
+            marker = full.get('expected_tail_marker')
+            answer = vision.get('answer')
+            magenta_answer = (isinstance(answer, str) and
+                              answer.strip().strip(' .,!?:;').casefold() == 'magenta')
+            response_tokens = full.get('response_input_tokens')
+            full_answer = full.get('answer')
+            valid = (report.get('profile') == ORCA_Q4KS_PROFILE and
+                     report.get('model_id') == ORCA_Q4KS_MODEL_ID and
+                     report.get('source_commit') == ORCA_Q4KS_SOURCE_COMMIT and
+                     report.get('runtime_version') == ORCA_Q4KS_RUNTIME and
+                     report.get('config_sha256') == hashlib.sha256(config_path.read_bytes()).hexdigest() and
+                     report.get('context_configured') == 262144 and
+                     report.get('vision_configured') is True and report.get('vision_cpu_only') is True and
+                     report.get('passed') is True and
+                     _q4ks_recorded_identity_valid(report.get('live_server_identity')) and
+                     health.get('status') == 'ok' and health.get('loaded') is True and
+                     health.get('max_context') == 262144 and health.get('images') is True and
+                     vision.get('passed') is True and vision.get('expected') == 'magenta' and
+                     vision.get('cpu_only_configured') is True and magenta_answer and
+                     full.get('passed') is True and full.get('count_match') is True and
+                     full.get('counted_prompt_tokens') == response_tokens and
+                     full.get('marker_retrieved') is True and isinstance(marker, str) and marker and
+                     isinstance(full_answer, str) and marker in full_answer and
+                     type(response_tokens) is int and 255000 <= response_tokens <= 262080 and
+                     resources.get('sampler_errors') == [])
+            if valid:
+                fill_ratio = response_tokens / 262144
+                lines.append(f'Recorded native/CPU-vision probes match this config: synthetic image passed; '
+                             f'{response_tokens:,}/262,144 tokens ({fill_ratio:.2%}) '
+                             'with tail-marker retrieval. One probe, not general quality/sustained-load validation.')
+            else:
+                lines.append('Stored native/vision report is stale/incomplete for this config; no matching live-test claim.')
+        except (OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError):
+            lines.append('Stored native/vision report is unreadable and is not counted as live evidence.')
+    else:
+        lines.append('No matching native-context/CPU-vision live report is recorded.')
+    return lines
+
+
+def require_q4ks_candidate_lease(port, expected_lease_id=None):
+    lease = host_lifecycle.read_lease()
+    lease_id = lease.get('lease_id') if isinstance(lease, dict) else None
+    if (not isinstance(lease, dict) or lease.get('phase') != 'held' or lease.get('port') != port or
+            not isinstance(lease_id, str) or not re.fullmatch(r'[a-f0-9]{64}', lease_id) or
+            (expected_lease_id is not None and lease_id != expected_lease_id)):
+        raise SafetyError('Q4 .41 candidate requires its matching active HostLLM pause lease')
+    return lease_id
+
+
+def require_q4ks_candidate_authorization(port, expected_lease_id=None, *, host_launch_reserved=False):
+    """Check HostLLM's inherited reservation or the Hive profile's token/marker coordination gate."""
+    token = os.environ.get('HIVE_STRATA_LAUNCH_ID')
+    if token is None:
+        if not host_launch_reserved or not expected_lease_id:
+            raise SafetyError('Q4 .41 candidate requires a reserved HostLLM lease or per-run Hive launch token')
+        return {'authorization': 'hostllm',
+                'lease_id': require_q4ks_candidate_lease(port, expected_lease_id)}
+    if (not re.fullmatch(r'[a-f0-9]{48}', token) or host_launch_reserved or expected_lease_id is not None or
+            'HOSTLLM_LAUNCH_LOCK_FD' in os.environ or 'HOSTLLM_LAUNCH_LEASE_ID' in os.environ):
+        raise SafetyError('Q4 .41 Hive launch token is invalid or conflicts with HostLLM authorization')
+    run_marker = host_lifecycle.RUN
+    if run_marker.is_symlink() or not run_marker.is_file():
+        raise SafetyError('Q4 .41 Hive authorization requires /run/hive/MINER_RUN')
+    stop_marker = host_lifecycle.STOP
+    if stop_marker.is_symlink() or stop_marker.exists():
+        raise SafetyError('Q4 .41 Hive authorization refuses a pending Hive stop marker')
+    if HIVE_CUR_MINER.is_symlink() or not HIVE_CUR_MINER.is_file():
+        raise SafetyError('Q4 .41 Hive authorization requires a readable /run/hive/cur_miner')
+    try:
+        selected = HIVE_CUR_MINER.read_text().strip()
+    except OSError as exc:
+        raise SafetyError('Q4 .41 Hive miner selection cannot be verified') from exc
+    if selected != 'custom':
+        raise SafetyError('Q4 .41 Hive authorization requires cur_miner == custom')
+    if host_lifecycle.read_lease() is not None:
+        raise SafetyError('Q4 .41 Hive authorization refuses a conflicting HostLLM lease')
+    return {'authorization': 'hive', 'launch_id': token}
 
 
 def read_state():
@@ -192,7 +343,7 @@ def runtime_gate(state):
             if int(fields[19]) == p['start_ticks'] and int(fields[2]) == p['pgid'] and int(fields[3]) == p['sid']:
                 owned.add(p['pid'])  # recorded CUDA task still tearing down; never a reusable bare PID
         except (FileNotFoundError, ProcessLookupError):
-            # A vanished child is not an owned live GPU process.
+            # Do not treat a vanished recorded PID as an owned live GPU process.
             pass
     text = command_output(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader,nounits'])
     for line in text.splitlines():
@@ -209,18 +360,18 @@ def guard_during_run(state):
         current = read_state()
         if not current or not same_process(current['identity'], state['identity']) or current.get('stop_requested'):
             return False
+        if state.get('profile') == ORCA_Q4KS_PROFILE and state.get('runtime_version') == '0.1.41':
+            if state.get('hive_launch_id_sha256'):
+                if host_lifecycle.read_lease() is not None:
+                    raise SafetyError('Hive Q4 .41 session conflicts with a HostLLM pause lease')
+                require_hive_launch_identity(state)
+            else:
+                require_q4ks_candidate_lease(state.get('port'), state.get('hosting_lease_id'))
         runtime_gate(state)
         return True
 
 
-def require_hive_launch_identity(state):
-    """When Hive supplies a launch token, stop only that launch's server family."""
-    token = os.environ.get('HIVE_STRATA_LAUNCH_ID')
-    if token is None:
-        return
-    if not re.fullmatch(r'[a-f0-9]{48}', token):
-        raise SafetyError('Invalid Hive Strata launch identity; stop refused')
-    identity = state.get('identity', {})
+def _verified_hive_process_parent(identity, token, expected_parent=None):
     server = proc(identity.get('pid'))
     if not same_process(identity, server):
         raise SafetyError('Hive Strata server identity changed; stop refused')
@@ -231,14 +382,33 @@ def require_hive_launch_identity(state):
     if (not parent or parent.get('uid') != identity.get('uid') or
             not any('strata_launcher.py' in arg for arg in parent['cmd'])):
         raise SafetyError('Hive Strata launcher identity is unavailable; stop refused')
+    if expected_parent is not None and not same_process(expected_parent, parent):
+        raise SafetyError('Hive Strata launcher process identity changed; stop refused')
     expected = f'HIVE_STRATA_LAUNCH_ID={token}'.encode()
     for pid in (identity['pid'], parent_pid):
         try:
-            environment = (Path('/proc') / str(pid) / 'environ').read_bytes().split(bytes([0]))
+            environment = (Path('/proc') / str(pid) / 'environ').read_bytes().split(b'\0')
         except OSError as exc:
             raise SafetyError('Cannot verify Hive Strata launch token; stop refused') from exc
         if expected not in environment:
             raise SafetyError('Hive Strata launch token does not match the live server; stop refused')
+    return parent
+
+
+def require_hive_launch_identity(state):
+    """When Hive supplies a launch token, stop only that token- and process-bound server family."""
+    token = os.environ.get('HIVE_STRATA_LAUNCH_ID')
+    recorded_hash = state.get('hive_launch_id_sha256')
+    if token is None:
+        if recorded_hash is not None:
+            raise SafetyError('Hive Strata launch token is missing; stop refused')
+        return
+    if not re.fullmatch(r'[a-f0-9]{48}', token):
+        raise SafetyError('Invalid Hive Strata launch identity; stop refused')
+    if recorded_hash is not None and recorded_hash != hashlib.sha256(token.encode()).hexdigest():
+        raise SafetyError('Hive Strata launch token does not match recorded process identity; stop refused')
+    identity = state.get('identity', {})
+    _verified_hive_process_parent(identity, token, state.get('hive_launcher_identity'))
 
 
 def stop(expected=None):
@@ -246,6 +416,17 @@ def stop(expected=None):
     if not state:
         print('Strata is not running.')
         return
+    current = read_state()
+    if expected is not None and (not current or
+                                 not same_process(current.get('identity'), state.get('identity'))):
+        identity = state.get('identity', {})
+        live = proc(identity.get('pid')) if identity else None
+        if live and same_process(identity, live):
+            raise SafetyError('Strata ownership state changed while its recorded process is live; stop refused')
+        print('Recorded Strata identity is no longer active/owned; no process was signalled.')
+        return
+    if current and same_process(current.get('identity'), state.get('identity')):
+        state = current
     require_hive_launch_identity(state)
     members = family(state)  # Validate the entire family before the first signal.
     current = read_state()
@@ -276,38 +457,10 @@ def stop(expected=None):
 
 def health(port):
     try:
-        with urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=3) as response:
+        with open_local_api(f'http://127.0.0.1:{port}/health', timeout=3) as response:
             return response.status == 200
     except (urllib.error.URLError, TimeoutError):
         return False
-
-
-def q4_live_evidence_summary(config_path):
-    """Summarize matching operator-recorded probes without overstating their scope."""
-    report_path = q4ks_profile_root(data_root()) / 'validation-native.json'
-    try:
-        report = json.loads(report_path.read_text())
-        config_hash = hashlib.sha256(Path(config_path).read_bytes()).hexdigest()
-        full_context = report.get('full_context', {})
-        vision = report.get('vision', {})
-        matches = (
-            report.get('profile') == ORCA_Q4KS_PROFILE and
-            report.get('model_id') == ORCA_Q4KS_MODEL_ID and
-            report.get('runtime_version') == ORCA_Q4KS_RUNTIME == '0.1.39' and
-            report.get('config_sha256') == config_hash and
-            report.get('context_configured') == 262144 and
-            report.get('vision_cpu_only') is True and report.get('passed') is True and
-            full_context.get('passed') is True and full_context.get('marker_retrieved') is True and
-            vision.get('passed') is True and vision.get('cpu_only_configured') is True
-        )
-        if matches:
-            tokens = full_context.get('response_input_tokens')
-            token_text = f'{tokens:,}' if type(tokens) is int else 'near-full-context'
-            return (f'Operator-recorded evidence matches this config: one {token_text}-token tail-marker probe '
-                    'and one synthetic CPU-vision probe passed; limited probes, not general quality/load proof.')
-        return 'A native-context/CPU-vision report is missing, stale, or does not match this config; no live-evidence claim.'
-    except (OSError, ValueError, TypeError, AttributeError):
-        return 'No matching operator-recorded native-context/CPU-vision report; no live-evidence claim.'
 
 
 def verify_serving(cfg, version, port):
@@ -316,7 +469,7 @@ def verify_serving(cfg, version, port):
         return 1
     headers = {'Authorization': 'Bearer ' + cfg['api_key']} if cfg.get('api_key') else {}
     request = urllib.request.Request(f'http://127.0.0.1:{port}/v1/status', headers=headers)
-    with urllib.request.urlopen(request, timeout=5) as response:
+    with open_local_api(request, timeout=5) as response:
         status = json.load(response)
     count = (status.get('concurrency') or {}).get('serving')
     if status.get('engine') != version or type(count) is not int or count != cfg.get('parallel', 1):
@@ -335,17 +488,40 @@ def verify_batch_groups(state, version, parallel, groups):
         raise SafetyError('Native batching must receive the explicit requested groups; automatic grouping refused')
 
 
-def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
+def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hosting_lock=None):
+    if os.geteuid() == 0 and profile == ORCA_Q4KS_PROFILE:
+        raise SafetyError('Q4 Strata starts must run as the normal operator; use sudo only for identity-bound administration')
+    inherited_fd = host_lifecycle.inherited_launch_reservation_fd()
+    requested_lease_id = os.environ.get('HOSTLLM_LAUNCH_LEASE_ID')
+    if (inherited_fd is None) != (requested_lease_id is None):
+        raise SafetyError('HostLLM launch lease/reservation must be supplied together')
+    if requested_lease_id is not None:
+        lease = host_lifecycle.read_lease()
+        if (not re.fullmatch(r'[a-f0-9]{64}', requested_lease_id) or not isinstance(lease, dict) or
+                lease.get('phase') != 'held' or lease.get('lease_id') != requested_lease_id):
+            raise SafetyError('HostLLM launch lease changed before model startup')
     source, config_path, cfg, version = ready_runtime(profile, runtime, parallel, batch_groups)
     state = read_state()
     if state and family(state):
         raise SafetyError('Strata is already running; use its existing web UI')
+    active = host_lifecycle.active_engine()
+    if active != 'none':
+        raise SafetyError(f'Another LLM session is active ({active}); start refused')
     port = int(os.environ.get('STRATA_PORT', cfg.get('port', 8080)))
+    hosting_lease_id = None
+    hive_launch_id = None
+    if profile == ORCA_Q4KS_PROFILE and version == '0.1.41':
+        authorization = require_q4ks_candidate_authorization(
+            port, requested_lease_id, host_launch_reserved=inherited_fd is not None)
+        if authorization['authorization'] == 'hostllm':
+            hosting_lease_id = authorization['lease_id']
+        else:
+            hive_launch_id = authorization['launch_id']
     launch_gate(port)
     state_root = strata_state()
     state_root.mkdir(parents=True, exist_ok=True)
     # A private effective config permits optional API credentials without editing the pinned source config.
-    cfg['host'] = os.environ.get('STRATA_HOST', cfg.get('host', '0.0.0.0'))
+    cfg['host'] = _effective_host(profile, version, cfg.get('host', '0.0.0.0'))
     cfg['port'] = port
     if profile == ORCA_PROFILE:
         cfg['model_name'] = ORCA_MODEL_ID
@@ -385,9 +561,12 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
         context = cfg['args'][cfg['args'].index('--max-context') + 1]
         vision_cfg = cfg.get('vision')
         vision_state = 'CPU vision configured' if isinstance(vision_cfg, dict) and vision_cfg.get('gpu') is False else 'text-only'
-        print(f'Orca Q4_K_S | launch profile: {context} context | {vision_state} | one slot | original Flash-Next MTP')
-        print('Readiness verifies the pinned files/configuration; live evidence is separately operator-recorded and limited.')
-        print(q4_live_evidence_summary(q4ks_profile_root(data_root()) / 'config.json'))
+        print(f'Orca Q4_K_S | profile config: {context} context | {vision_state} | one slot | original Flash-Next MTP')
+        print('Readiness verifies assets/configuration; stored live reports describe bounded probes, not general quality/load.')
+        evidence = (q4ks_v0141.candidate_evidence_summary(data_root()) if version == '0.1.41'
+                    else q4ks_evidence_summary(data_root(), config_path))
+        for evidence_line in evidence:
+            print(evidence_line)
     else:
         print('EXPERIMENTAL Strata IQ3_S | BF16 GPU vision | native 262144 | INT8 KV | MTP | high reasoning')
     print(f'Strata {version}; four-GPU layer split auto; requested slots={parallel}, batch groups={batch_groups}. Log: {log}', flush=True)
@@ -406,13 +585,29 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
         child.terminate()
         child.wait(timeout=10)
         raise SafetyError('Frontend launch identity could not be recorded')
+    hive_parent_identity = None
+    if hive_launch_id:
+        try:
+            hive_parent_identity = _verified_hive_process_parent(identity, hive_launch_id)
+        except Exception:
+            signal_identity(identity, signal.SIGTERM)
+            child.wait(timeout=10)
+            raise
     state = {'identity': identity, 'port': port, 'log': str(log),
              'source_commit': runtimes.PINS[version],
              'runtime_version': version, 'parallel': parallel, 'batch_groups': batch_groups, 'profile': profile,
              'config': str(run_config), 'allowed_executables': [str(python.resolve()), cfg['exe']] +
              ([cfg['vision']['exe']] if cfg.get('vision') else [])}
+    if hosting_lease_id or requested_lease_id:
+        state['hosting_lease_id'] = hosting_lease_id or requested_lease_id
+    if hive_launch_id:
+        state['hive_launch_id_sha256'] = hashlib.sha256(hive_launch_id.encode()).hexdigest()
+        state['hive_launcher_identity'] = hive_parent_identity
     write_state(state)
     # Serialize the launch handoff, not the whole foreground server lifetime.
+    host_lifecycle.release_inherited_launch_reservation()
+    if hosting_lock is not None:
+        fcntl.flock(hosting_lock.fileno(), fcntl.LOCK_UN)
     fcntl.flock(lock, fcntl.LOCK_UN)
     interrupted = False
     def interrupt(signum, frame):
@@ -483,6 +678,10 @@ def main():
     modes.add_argument('--enable-q4ks-vision', action='store_true')
     modes.add_argument('--rollback-q4ks-vision', action='store_true')
     modes.add_argument('--record-q4ks-32k-validation', metavar='REPORT')
+    modes.add_argument('--validate-q4ks141-32k', action='store_true')
+    modes.add_argument('--configure-q4ks141-native-context', action='store_true')
+    modes.add_argument('--enable-q4ks141-vision', action='store_true')
+    modes.add_argument('--rollback-q4ks141-vision', action='store_true')
     modes.add_argument('--select-runtime', choices=runtimes.VERSIONS)
     ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE, ORCA_Q4KS_PROFILE], default=None)
     ap.add_argument('--runtime', choices=['auto', *runtimes.VERSIONS], default=os.environ.get('STRATA_RUNTIME', 'auto'))
@@ -490,6 +689,10 @@ def main():
     ap.add_argument('--batch-groups', type=int, choices=[1, 2], default=os.environ.get('STRATA_BATCH_GROUPS', '1'))
     a = ap.parse_args()
     profile = a.profile or 'iq3_s'
+    q4_mutation = not (a.stop or a.status or a.check_ready or a.select_runtime)
+    if os.geteuid() == 0 and profile == ORCA_Q4KS_PROFILE and q4_mutation:
+        print('BLOCKED: Q4 starts/configuration/evidence updates must run as the normal operator; use sudo only for identity-bound administration.', file=sys.stderr)
+        return 1
     try:
         if a.select_runtime:
             # No running model is stopped/reconfigured. An active session reads its existing private run-config.
@@ -515,6 +718,23 @@ def main():
             if profile != ORCA_Q4KS_PROFILE:
                 raise SafetyError('A live 32K validation report can only be recorded for --profile orca-q4_k_s')
             record_q4ks_32k_validation(data_root(), a.record_q4ks_32k_validation)
+        elif a.validate_q4ks141_32k:
+            if profile != ORCA_Q4KS_PROFILE:
+                raise SafetyError('The live .41 32K gate is only available for --profile orca-q4_k_s')
+            import orca_q4ks_v0141_validation
+            orca_q4ks_v0141_validation.run(data_root())
+        elif a.configure_q4ks141_native_context:
+            if profile != ORCA_Q4KS_PROFILE:
+                raise SafetyError('.41 native-context migration is only available for --profile orca-q4_k_s')
+            q4ks_v0141.configure_native_context(data_root())
+        elif a.enable_q4ks141_vision:
+            if profile != ORCA_Q4KS_PROFILE:
+                raise SafetyError('.41 CPU vision is only available for --profile orca-q4_k_s')
+            q4ks_v0141.configure_cpu_vision(data_root())
+        elif a.rollback_q4ks141_vision:
+            if profile != ORCA_Q4KS_PROFILE:
+                raise SafetyError('.41 CPU-vision rollback is only available for --profile orca-q4_k_s')
+            q4ks_v0141.rollback_cpu_vision(data_root())
         elif a.check_ready:
             source, config, cfg, version = ready_runtime(profile, a.runtime, a.parallel, a.batch_groups)
             print(f'Runtime ready: {version}, requested slots={a.parallel}, batch groups={a.batch_groups}')
@@ -525,21 +745,35 @@ def main():
                 context = cfg['args'][cfg['args'].index('--max-context') + 1]
                 vision_cfg = cfg.get('vision')
                 vision_state = 'CPU vision configured' if isinstance(vision_cfg, dict) and vision_cfg.get('gpu') is False else 'text-only'
-                print(f'READY CONFIG: pinned Q4_K_S; profile context={context}; {vision_state}; single-slot.')
-                print('Readiness verifies pinned files/configuration; live evidence is separately operator-recorded and limited.')
-                print(q4_live_evidence_summary(config))
+                if version == '0.1.41':
+                    cache_args = cfg.get('args', [])
+                    cache_index = cache_args.index('--conversation-cache-mib')
+                    cache_budget = cache_args[cache_index + 1]
+                    cache_slots = cache_args[cache_args.index('--conversation-cache-slots') + 1]
+                    print(f'READY CONFIG: pinned Q4_K_S; future profile context={context}; {vision_state}; '
+                          f'single-slot; conversation cache={cache_budget} MiB / {cache_slots} cache slots.')
+                else:
+                    print(f'READY CONFIG: pinned Q4_K_S; future profile context={context}; {vision_state}; single-slot.')
+                print('Readiness verifies pinned files/configuration only; it is not a general quality or sustained-load test.')
+                evidence = (q4ks_v0141.candidate_evidence_summary(data_root()) if version == '0.1.41'
+                            else q4ks_evidence_summary(data_root(), config))
+                for evidence_line in evidence:
+                    print(evidence_line)
             else:
                 print('PREPARED: pinned IQ3_S, BF16 GPU vision, native 262144, INT8 KV, MTP, four-GPU auto split.')
                 print('Readiness verifies assets/config; bounded live validation is documented in STRATA_IQ3S.md (not full-context quality).')
         elif a.status:
             state = read_state()
+            live_state = None
             if state and family(state):
+                live_state = state
                 print(f'Strata running ({state.get("profile", "iq3_s")}, runtime {state.get("runtime_version", "0.1.38")}, '
                       f'requested slots={state.get("parallel", 1)}); port {state["port"]}; log {state["log"]}')
             else:
                 print('Strata stopped.')
             try:
-                q4_config = json.loads((q4ks_profile_root(data_root()) / 'config.json').read_text())
+                q4_config_path = q4ks_profile_root(data_root()) / 'config.json'
+                q4_config = json.loads(q4_config_path.read_text())
                 q4_args = q4_config.get('args', [])
                 q4_context = q4_args[q4_args.index('--max-context') + 1]
                 q4_vision_cfg = q4_config.get('vision')
@@ -549,10 +783,45 @@ def main():
                     q4_vision_state = 'text-only'
                 else:
                     q4_vision_state = 'vision config unrecognized'
-                print(f'Q4_K_S profile file: context={q4_context}, {q4_vision_state}, one slot.')
-                print(q4_live_evidence_summary(q4ks_profile_root(data_root()) / 'config.json'))
-            except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError):
-                print('Q4_K_S future profile configuration is unavailable or unreadable; no readiness/live-validation claim.')
+                print(f'Q4 .39 baseline profile file: context={q4_context}, {q4_vision_state}.')
+                for evidence_line in q4ks_evidence_summary(data_root(), q4_config_path):
+                    print(evidence_line)
+                candidate_path = q4ks_v0141.profile_root(data_root()) / 'config.json'
+                if candidate_path.is_file() and not candidate_path.is_symlink():
+                    candidate_config = json.loads(candidate_path.read_text())
+                    candidate_args = candidate_config.get('args', [])
+                    candidate_context = candidate_args[candidate_args.index('--max-context') + 1]
+                    candidate_vision = candidate_config.get('vision')
+                    if isinstance(candidate_vision, dict) and candidate_vision.get('gpu') is False:
+                        candidate_vision_state = 'CPU vision configured'
+                    elif candidate_vision is None and '--vision' not in candidate_args:
+                        candidate_vision_state = 'text-only'
+                    else:
+                        candidate_vision_state = 'unrecognized vision config'
+                    active_candidate = bool(live_state and live_state.get('profile') == ORCA_Q4KS_PROFILE and
+                                            live_state.get('runtime_version') == '0.1.41')
+                    print(f'Separate Q4 .41 candidate profile file: context={candidate_context}, '
+                          f'{candidate_vision_state}; never selected by auto.')
+                    if active_candidate:
+                        live_config_path = Path(live_state.get('config', ''))
+                        if (live_config_path.is_file() and not live_config_path.is_symlink() and
+                                live_config_path.resolve().is_relative_to(strata_state().resolve())):
+                            active_config = json.loads(live_config_path.read_text())
+                            active_args = active_config.get('args', [])
+                            active_context = active_args[active_args.index('--max-context') + 1]
+                            active_vision = active_config.get('vision')
+                            active_vision_state = ('CPU vision configured' if isinstance(active_vision, dict) and
+                                                    active_vision.get('gpu') is False else
+                                                    'text-only' if active_vision is None and '--vision' not in active_args
+                                                    else 'unrecognized vision config')
+                            print(f'Active Q4 .41 private run-config: context={active_context}, '
+                                  f'{active_vision_state}.')
+                        else:
+                            print('Active Q4 .41 private run-config is unavailable/unverified.')
+                    for evidence_line in q4ks_v0141.candidate_evidence_summary(data_root()):
+                        print(evidence_line)
+            except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError, SafetyError):
+                print('Q4 profile configuration is unavailable or unreadable; no readiness/live-validation claim.')
         else:
             root = strata_state()
             root.mkdir(parents=True, exist_ok=True)
@@ -568,7 +837,8 @@ def main():
                         raise SafetyError('A different Strata runtime is running; runtime-specific stop refused')
                     stop()
                 else:
-                    start(lock, profile, a.runtime, a.parallel, a.batch_groups)
+                    with host_lifecycle.launch_reservation() as hosting_lock:
+                        start(lock, profile, a.runtime, a.parallel, a.batch_groups, hosting_lock)
     except (SafetyError, FileNotFoundError, PermissionError, ValueError, TypeError, KeyError, IndexError, BlockingIOError) as exc:
         print(f'BLOCKED: {exc}', file=sys.stderr)
         return 1

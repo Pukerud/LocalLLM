@@ -1,10 +1,18 @@
-# Orca Uncensored IQ3_XXS — separate experimental Strata choice
+# Orca Uncensored IQ3_XXS — historical profile (model/pack removed from .69)
+
+The IQ3_XXS model shards and compatibility pack were removed from `.69`; any remaining profile/evidence metadata is
+not a runnable rollback. The previously verified Swift/Qwen Q8 profile is the explicit fallback. HostLLM [4] now routes
+to the separate Q4_K_S .39 profile, and [5] is the explicit .41 candidate. See [ORCA_Q4KS.md](ORCA_Q4KS.md) and
+[ORCA_Q4KS_V0141.md](ORCA_Q4KS_V0141.md) for their separate gates and bounded evidence.
 
 **2026-10-08 runtime follow-up:** [STRATA_V0141.md](STRATA_V0141.md) records real .41 checks. Its two-group
 concurrent-pixel/admission qualification passed at the new pin; .39 groups 2 remains refused. **.39 one slot stays
-selected**, because .41's new automatic placement regressed prefill. Original conversion/assets below are unchanged.
+selected**, because .41's new automatic placement regressed prefill. The model/pack are no longer present on `.69`; the
+asset pins and preparation notes below are historical instructions, not proof that those files remain installed.
 
-**[4] Orca** does not replace **[3] GSQ-RCO IQ3_S**, and selecting it while Strata is running only displays status.
+The historical IQ3_XXS CLI profile does not replace **[3] GSQ-RCO IQ3_S**. HostLLM [4] routes to Q4 .39 and [5]
+explicitly opts into Q4 .41. Do not attempt `v1strata.sh --profile orca-iq3_xxs` unless its assets are restored and
+its readiness checks pass.
 
 **2026-10-05 runtime follow-up:** [STRATA_V0139.md](STRATA_V0139.md) records the side-by-side 0.1.39 upgrade and
 single/two-slot measurements. One slot remains default; Orca's two-group pipeline failed concurrent-image validation
@@ -55,11 +63,11 @@ preparation. Original runtime identity and protected configuration/service/marke
 
 ## Hosting and limits
 
-After preparation, reopen HostLLM to see **[4]**. The menu will not automatically switch away from a running model.
-When no other Strata worker is running, the same identity/rental guards and persistent miner/OctaSpace pause lease
-apply. Missing preparation fails **before** the pause. [9] stops the owned engine and safely restores prior state.
-The two Strata profiles share a single ownership/state root; simultaneous blind launches are intentionally blocked.
-An explicit profile-specific CLI stop refuses a different live profile.
+HostLLM [4] no longer selects IQ3_XXS. The old assets were removed, so this profile is not a rollback on `.69`.
+Restore the exact pinned files and pass readiness before any explicit CLI start. Raw `v1strata.sh --quickstart` is a
+low-level launcher and does not acquire HostLLM's miner/OctaSpace pause lease. The runnable Q4 .39/.41 profiles share
+a single ownership/state root; simultaneous blind launches are intentionally blocked. An explicit profile-specific CLI
+stop refuses a different live profile.
 
 Orca settings: **native 262144 context, INT8 streaming KV with 32768 resident, prefill 512, four-GPU contiguous
 automatic split, 2048 MiB reserve, MTP `--spec 4 --spec-min-p 0.5`, high maximum thinking**. Its publisher F16 GPU vision is configured with 1024 image
