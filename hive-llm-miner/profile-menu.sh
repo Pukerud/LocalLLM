@@ -21,7 +21,15 @@ secure_root_dir() {
     [[ -d "$path" && ! -L "$path" ]] || return 1
     owner="$(stat -c '%u' -- "$path")" || return 1
     mode="$(stat -c '%a' -- "$path")" || return 1
-    [[ "$owner" == 0 && "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+    [[ "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+    if [[ "$path" == /hive && "$owner" != 0 ]]; then
+        # HiveOS ships /hive owned by its trusted operator; all mutable miner descendants stay root-owned.
+        local hive_user_uid
+        hive_user_uid="$(id -u user 2>/dev/null)" || return 1
+        [[ "$owner" == "$hive_user_uid" && "$mode" == 755 ]] || return 1
+    else
+        [[ "$owner" == 0 ]] || return 1
+    fi
     (( (8#$mode & 0022) == 0 ))
 }
 
