@@ -88,7 +88,7 @@ run_selected() {
         return 1
     fi
     if [[ "$launcher" == v1strata.sh ]]; then
-        local arg previous='' i candidate_041=0
+        local arg previous='' i candidate_041=0 requested_parallel=1 requested_groups=1
         local -a check_args=(--check-ready)
         for arg in "$@"; do
             case "$previous" in
@@ -97,9 +97,13 @@ run_selected() {
             previous="$arg"
         done
         for ((i=0; i<${#check_args[@]}; i++)); do
-            if [[ "${check_args[i]}" == --runtime && "${check_args[i+1]:-}" == 0.1.41 ]]; then
-                candidate_041=1
-            fi
+            case "${check_args[i]}" in
+                --runtime)
+                    [[ "${check_args[i+1]:-}" == 0.1.41 ]] && candidate_041=1
+                    ;;
+                --parallel) requested_parallel="${check_args[i+1]:-1}" ;;
+                --batch-groups) requested_groups="${check_args[i+1]:-1}" ;;
+            esac
         done
         if [[ "$candidate_041" -eq 1 ]]; then
             local requested_host="${STRATA_HOST:-127.0.0.1}" readiness expected_readiness
@@ -108,13 +112,18 @@ run_selected() {
                 *) echo 'Q4 .41 only permits loopback or explicit 0.0.0.0 binding; refusing before service pause.' >&2; return 1 ;;
             esac
             if [[ "${Q4KS_V0141_VALIDATION_ONLY:-0}" == 1 ]]; then
-                [[ "$requested_host" == 127.0.0.1 ]] || {
-                    echo 'The initial .41 validation server is loopback-only; refusing before service pause.' >&2
+                [[ "$requested_host" == 127.0.0.1 && "$requested_parallel" == 1 && "$requested_groups" == 1 ]] || {
+                    echo 'The initial .41 validation server is loopback-only and single-slot; refusing before service pause.' >&2
                     return 1
                 }
                 expected_readiness='READY CONFIG: pinned Q4_K_S; future profile context=32768; text-only; single-slot; conversation cache=8192 MiB / 4 cache slots.'
-            else
+            elif [[ "$requested_parallel" == 2 && "$requested_groups" == 2 ]]; then
+                expected_readiness='READY CONFIG: pinned Q4_K_S; future profile context=262144; CPU vision configured; 2 serving slots; batch groups=2; conversation cache=8192 MiB / 4 cache slots.'
+            elif [[ "$requested_parallel" == 1 && "$requested_groups" == 1 ]]; then
                 expected_readiness='READY CONFIG: pinned Q4_K_S; future profile context=262144; CPU vision configured; single-slot; conversation cache=8192 MiB / 4 cache slots.'
+            else
+                echo 'Q4 .41 supports only the single-slot profile or the tested 2-slot/2-group profile.' >&2
+                return 1
             fi
             readiness="$("$SCRIPT_DIR/$launcher" "${check_args[@]}")" || return 1
             printf '%s\n' "$readiness"
@@ -280,7 +289,8 @@ main() {
         echo '  [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
         echo '  [3] Strata IQ3_S — BF16 GPU vision | MTP | high | INT8 KV | native 262K | four-GPU split'
         echo '  [4] Orca Q4_K_S — Strata 0.1.39 recorded default | native 262K | CPU vision | one serving slot'
-        echo '  [5] Orca Q4_K_S — Strata 0.1.41 | native 262K | CPU vision | 8 GiB conversation cache (4 cache slots) | one serving slot'
+        echo '  [5] Orca Q4_K_S — Strata 0.1.41 | native 262K | CPU vision | 8 GiB conversation cache | one serving slot'
+        echo '  [6] Orca Q4_K_S — Strata 0.1.41 | two serving slots / two batch groups | experimental, very low VRAM headroom'
         echo ''
         printf '  Strata slots: %s (STRATA_PARALLEL; default 1), batch groups: %s. Runtime override: %s.\n' "${STRATA_PARALLEL:-1}" "${STRATA_BATCH_GROUPS:-1}" "${STRATA_RUNTIME:-selected default}"
         echo '  Starting hosting pauses the miner and OctaSpace automatically (never an active rental).'
@@ -289,7 +299,8 @@ main() {
         echo '  [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit'
         echo '  [12] Set next Hive miner profile to Orca Q4_K_S'
         echo '  [13] Restore previous Swift 1.5 Q8 Hive miner profile'
-        echo '  [14] Set next Hive miner profile to Orca Q4_K_S .41 (native 262K, CPU vision)'
+        echo '  [14] Set next Hive miner profile to Orca Q4_K_S .41 (native 262K, CPU vision, one slot)'
+        echo '  [15] Set next Hive miner profile to Orca Q4_K_S .41 (native 262K, two slots / two groups)'
         echo '  Hive profile changes are idle-only; they never start/stop a miner or osn.service.'
         read -r -p '  Select: ' choice || return 0
         choice="${choice//[[:space:]]/}"
@@ -306,9 +317,9 @@ main() {
                     run_selected v1qwen38.sh --quickstart --profile "$profile"
                 fi
                 ;;
-            3|4|5|s|S|o|O)
+            3|4|5|6|s|S|o|O)
                 profile=iq3_s
-                [[ "$choice" != 4 && "$choice" != o && "$choice" != O && "$choice" != 5 ]] || profile=orca-q4_k_s
+                [[ "$choice" != 4 && "$choice" != o && "$choice" != O && "$choice" != 5 && "$choice" != 6 ]] || profile=orca-q4_k_s
                 if [[ "$active" == strata ]]; then
                     "$SCRIPT_DIR/v1strata.sh" --status
                     echo 'The running Strata model was left alone. Use [9] only when you are ready to switch.'
@@ -317,7 +328,9 @@ main() {
                 elif [[ "$active" != none ]] && ! hosting managed-qwen; then
                     echo 'Another/unmanaged LLM is running. Stop it in its own verified lifecycle first.'
                 elif [[ "$choice" == 5 ]]; then
-                    Q4KS_V0141_VALIDATION_ONLY=0 STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.41
+                    Q4KS_V0141_VALIDATION_ONLY=0 STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.41 --parallel 1 --batch-groups 1
+                elif [[ "$choice" == 6 ]]; then
+                    Q4KS_V0141_VALIDATION_ONLY=0 STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.41 --parallel 2 --batch-groups 2
                 elif [[ "$profile" == orca-q4_k_s ]]; then
                     run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.39
                 else
@@ -327,10 +340,11 @@ main() {
             9) stop_owned_engines ;;
             10) check_update ;;
             11|x|X) return 0 ;;
-            12|13|14)
+            12|13|14|15)
                 hive_profile=orca-q4_k_s
                 [[ "$choice" == 13 ]] && hive_profile=swift15u-q8
                 [[ "$choice" == 14 ]] && hive_profile=orca-q4_k_s-v0141
+                [[ "$choice" == 15 ]] && hive_profile=orca-q4_k_s-v0141-2slot
                 if [[ ! -x /hive/miners/custom/llm-hosting/profile-menu.sh ]]; then
                     echo 'Hive profile menu is not installed. Install the Hive custom miner package first.'
                 elif ! command -v sudo >/dev/null 2>&1; then

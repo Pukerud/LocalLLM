@@ -118,11 +118,16 @@ def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
     if profile == ORCA_Q4KS_PROFILE:
         if runtime not in ('auto', ORCA_Q4KS_RUNTIME, '0.1.41'):
             raise SafetyError(f'Q4_K_S supports its preserved .39 baseline or the explicit .41 candidate only')
-        if parallel != 1 or batch_groups != 1:
-            raise SafetyError('Q4_K_S is restricted to its single-slot, single-group profile')
         if runtime == '0.1.41':
+            if (parallel, batch_groups) not in ((1, 1), (2, 2)):
+                raise SafetyError('Q4 .41 supports only the single-slot profile or the tested 2-slot/2-group profile')
             source, path, cfg = q4ks_v0141.ready_q4ks_v0141(data_root())
+            if parallel == 2:
+                cfg['parallel'] = parallel
+                cfg['args'] += ['--batch-groups', str(batch_groups)]
             return source, path, cfg, '0.1.41'
+        if parallel != 1 or batch_groups != 1:
+            raise SafetyError('The preserved Q4 .39 profile is restricted to one slot and one batch group')
         source, path, cfg = ready_q4ks(data_root())
         return source, path, cfg, ORCA_Q4KS_RUNTIME
     source, path, cfg = ready() if profile == 'iq3_s' else ready(profile)
@@ -561,7 +566,10 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         context = cfg['args'][cfg['args'].index('--max-context') + 1]
         vision_cfg = cfg.get('vision')
         vision_state = 'CPU vision configured' if isinstance(vision_cfg, dict) and vision_cfg.get('gpu') is False else 'text-only'
-        print(f'Orca Q4_K_S | profile config: {context} context | {vision_state} | one slot | original Flash-Next MTP')
+        slot_state = 'one slot' if parallel == 1 else f'{parallel} serving slots / {batch_groups} batch groups (experimental)'
+        print(f'Orca Q4_K_S | profile config: {context} context | {vision_state} | {slot_state} | original Flash-Next MTP')
+        if parallel == 2 and version == '0.1.41':
+            print('Experimental 2-slot profile: one bounded 4.5K-prompt probe left only 457 MiB reported VRAM free; no throughput gain is established.')
         print('Readiness verifies assets/configuration; stored live reports describe bounded probes, not general quality/load.')
         evidence = (q4ks_v0141.candidate_evidence_summary(data_root()) if version == '0.1.41'
                     else q4ks_evidence_summary(data_root(), config_path))
@@ -750,8 +758,12 @@ def main():
                     cache_index = cache_args.index('--conversation-cache-mib')
                     cache_budget = cache_args[cache_index + 1]
                     cache_slots = cache_args[cache_args.index('--conversation-cache-slots') + 1]
+                    if cfg.get('parallel', 1) == 2:
+                        slot_state = '2 serving slots; batch groups=2'
+                    else:
+                        slot_state = 'single-slot'
                     print(f'READY CONFIG: pinned Q4_K_S; future profile context={context}; {vision_state}; '
-                          f'single-slot; conversation cache={cache_budget} MiB / {cache_slots} cache slots.')
+                          f'{slot_state}; conversation cache={cache_budget} MiB / {cache_slots} cache slots.')
                 else:
                     print(f'READY CONFIG: pinned Q4_K_S; future profile context={context}; {vision_state}; single-slot.')
                 print('Readiness verifies pinned files/configuration only; it is not a general quality or sustained-load test.')

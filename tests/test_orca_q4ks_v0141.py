@@ -187,13 +187,33 @@ class RuntimeRouting(unittest.TestCase):
             with self.assertRaisesRegex(SafetyError, 'reserved HostLLM lease'):
                 launcher.require_q4ks_candidate_authorization(8080, lease_id, host_launch_reserved=False)
 
-    def test_q4_refuses_other_runtime_overrides_and_multi_slot(self):
+    def test_q4_slot_profiles_keep_039_single_and_allow_only_041_two_by_two(self):
         import strata_launcher as launcher
-        with mock.patch.object(launcher, 'data_root', return_value=Path('/tmp/unused')):
-            with self.assertRaisesRegex(SafetyError, 'baseline or the explicit .41'):
-                launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.38', parallel=1, batch_groups=1)
-            with self.assertRaisesRegex(SafetyError, 'single-slot'):
-                launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.41', parallel=2, batch_groups=1)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            candidate_config = {'args': ['--max-context', '262144', '--conversation-cache-mib', '8192',
+                                         '--conversation-cache-slots', '4'],
+                                'vision': {'gpu': False}}
+            with mock.patch.object(launcher, 'data_root', return_value=root), \
+                 mock.patch.object(launcher.q4ks_v0141, 'ready_q4ks_v0141',
+                                   return_value=(Path('/candidate'), Path('/candidate/config.json'),
+                                                 json.loads(json.dumps(candidate_config)))):
+                with self.assertRaisesRegex(SafetyError, 'baseline or the explicit .41'):
+                    launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.38', parallel=1, batch_groups=1)
+                with self.assertRaisesRegex(SafetyError, 'preserved Q4 .39.*one slot'):
+                    launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.39', parallel=2, batch_groups=2)
+                with self.assertRaisesRegex(SafetyError, 'single-slot profile or the tested 2-slot/2-group'):
+                    launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.41', parallel=2, batch_groups=1)
+                source, path, single, version = launcher.ready_runtime(
+                    assets.HOST_PROFILE, runtime='0.1.41', parallel=1, batch_groups=1)
+                self.assertEqual(version, '0.1.41')
+                self.assertNotIn('parallel', single)
+                self.assertNotIn('--batch-groups', single['args'])
+                source, path, dual, version = launcher.ready_runtime(
+                    assets.HOST_PROFILE, runtime='0.1.41', parallel=2, batch_groups=2)
+                self.assertEqual(version, '0.1.41')
+                self.assertEqual(dual['parallel'], 2)
+                self.assertEqual(dual['args'][-2:], ['--batch-groups', '2'])
 
 
 class BoundGates(unittest.TestCase):
