@@ -94,6 +94,34 @@ class Runtime(unittest.TestCase):
         self.assertEqual(prepared_source, source)
         self.assertEqual(prepared_manifest['python_environment'], str(environment))
 
+    def test_orca_043_helper_preparation_requires_only_the_q4_baseline(self):
+        import prepare_strata_runtime as prepare_runtime
+        import strata_launcher as launcher
+        q4 = self.root / 'profiles/orca-q4_k_s'
+        q4.mkdir(parents=True)
+        config = q4 / 'config.json'
+        config.write_text('{}')
+        (q4 / 'prepared.json').write_text('{}')
+        (self.root / 'prepared.json').write_text('{}')
+        source = self.root / 'runtimes/orca-q4_k_s-0.1.39/source'
+        native_engine = source / 'engine/strata'
+        native_engine.parent.mkdir(parents=True, exist_ok=True)
+        native_engine.write_text('native Q4 engine')
+        helper = self.root / 'runtimes/0.1.39/source/engine/strata-vision'
+        helper.parent.mkdir(parents=True, exist_ok=True)
+        helper.write_text('pinned baseline helper')
+        q4_cfg = {'vision': {'exe': str(helper)}}
+        with mock.patch.object(launcher, 'ready_q4ks', return_value=(source, config, q4_cfg)) as ready_q4, \
+             mock.patch.object(launcher, 'ready', side_effect=AssertionError('unrelated generic profile loaded')):
+            source0, configs, protected = prepare_runtime.baseline_inputs(self.root, r.ORCA_Q4KS_VERSION, launcher)
+        ready_q4.assert_called_once_with(self.root)
+        self.assertEqual(source0, source)
+        self.assertEqual(set(configs), {launcher.ORCA_Q4KS_PROFILE})
+        self.assertIn(str(config), protected)
+        self.assertIn(str(native_engine), protected)
+        self.assertIn(str(helper), protected)
+        self.assertNotIn(str(source / 'engine/strata-vision'), protected)
+
     def test_generic_runtime_preparer_lists_043_without_changing_its_default(self):
         import prepare_strata_runtime as prepare_runtime
         with mock.patch.object(sys, 'argv', ['prepare_strata_runtime.py', '--help']):

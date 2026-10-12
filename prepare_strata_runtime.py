@@ -21,6 +21,34 @@ def record(path):
     return {'path':str(path),'bytes':st.st_size,'mtime_ns':st.st_mtime_ns,'sha256':digest(path)}
 
 
+def baseline_inputs(root, version, launcher):
+    configs = {}
+    protected = {}
+    if version == ORCA_Q4KS_VERSION:
+        # The .43 helper is isolated to the Q4 candidate; unrelated IQ3 model assets are not prerequisites.
+        source0, cfg_path, cfg = launcher.ready_q4ks(root)
+        configs[launcher.ORCA_Q4KS_PROFILE] = {'path':str(cfg_path),'sha256':digest(cfg_path)}
+        paths = [cfg_path, root / 'prepared.json', root / 'profiles/orca-q4_k_s/prepared.json',
+                 source0 / 'engine/strata']
+        vision = cfg.get('vision')
+        if isinstance(vision, dict):
+            helper = Path(vision.get('exe', ''))
+            if not helper.is_file() or not helper.resolve().is_relative_to(root.resolve()):
+                raise SafetyError('Pinned Q4 baseline vision helper is missing or outside STRATA_DATA_ROOT')
+            paths.append(helper)
+    else:
+        source0 = None
+        paths = []
+        for profile in PROFILES:
+            source0, cfg_path, _ = launcher.ready(profile)
+            configs[profile] = {'path':str(cfg_path),'sha256':digest(cfg_path)}
+            paths.extend([cfg_path, root / 'prepared.json', root / 'profiles/orca-iq3_xxs/prepared.json',
+                          source0 / 'engine/strata', source0 / 'engine/strata-vision'])
+    for path in paths:
+        protected[str(path)] = digest(path)
+    return source0, configs, protected
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runtime', choices=[LEGACY_VERSION, VERSION, ORCA_Q4KS_VERSION], default=VERSION)
@@ -47,14 +75,7 @@ def main():
         available = int(next(x.split()[1] for x in Path('/proc/meminfo').read_text().splitlines() if x.startswith('MemAvailable:')))
         if available < 16 * 1024**2:
             raise SafetyError('Need at least 16 GiB available RAM; no live model/miner is stopped to make room')
-        configs = {}
-        protected = {}
-        for profile in PROFILES:
-            source0, cfg_path, cfg = launcher.ready(profile)
-            configs[profile] = {'path':str(cfg_path),'sha256':digest(cfg_path)}
-            for p in [cfg_path, root / 'prepared.json', root / 'profiles/orca-iq3_xxs/prepared.json',
-                      source0 / 'engine/strata', source0 / 'engine/strata-vision']:
-                protected[str(p)] = digest(p)
+        source0, configs, protected = baseline_inputs(root, version, launcher)
         # Preserve previously tested runtime/selection and Hive files, including recorded absence.
         for p in [root / 'runtime-selection.json', Path('/hive-config/rig.conf'), Path('/hive-config/wallet.conf'),
                   Path('/hive-config/watchdog.conf'), Path('/run/hive/cur_miner')]:
@@ -76,7 +97,8 @@ def main():
         if command_output(['git','-c',f'safe.directory={source}','-C',str(source),'diff','--name-only','HEAD']).strip():
             raise SafetyError('Candidate has tracked local changes; not overwritten')
         venv = source / '.venv'
-        old_venv = source0 / '.venv'
+        old_venv = (root / 'source-99f3dbd0b21d/.venv' if version == ORCA_Q4KS_VERSION
+                    else source0 / '.venv')
         overlay = folder / 'python'
         if not (overlay / 'bin/python').is_file():
             subprocess.run(['python3','-m','venv',str(overlay)],check=True)
@@ -128,11 +150,13 @@ def main():
         # Reuse the proven GPU helper only when both pinned source/build contracts match exactly.
         script = "import setup,json; print(json.dumps({'llama':setup.LLAMA_CPP_COMMIT,'vision':setup.source_hash(setup.VISION_SOURCES)}))"
         vision_contract = json.loads(subprocess.check_output([str(venv / 'bin/python'),'-c',script],cwd=source,env=env,text=True))
-        old_meta = json.loads((source0 / 'engine/BUILD.json').read_text())
-        reused = vision_contract['vision'] == old_meta.get('vision_src')
-        if reused:
-            old_script = "import setup; print(setup.LLAMA_CPP_COMMIT)"
-            reused = subprocess.check_output([str(old_venv / 'bin/python'),'-c',old_script],cwd=source0,env=env,text=True).strip() == LLAMA_PIN
+        reused = False
+        if version != ORCA_Q4KS_VERSION:
+            old_meta = json.loads((source0 / 'engine/BUILD.json').read_text())
+            reused = vision_contract['vision'] == old_meta.get('vision_src')
+            if reused:
+                old_script = "import setup; print(setup.LLAMA_CPP_COMMIT)"
+                reused = subprocess.check_output([str(old_venv / 'bin/python'),'-c',old_script],cwd=source0,env=env,text=True).strip() == LLAMA_PIN
         if reused:
             shutil.copy2(source0 / 'engine/strata-vision',engine / 'strata-vision')
         else:
