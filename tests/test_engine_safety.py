@@ -382,6 +382,23 @@ class StrataState(unittest.TestCase):
             self.assertFalse((Path(tmp) / 'server.json').exists())
             send.assert_not_called()
 
+    def test_stale_hive_state_is_removed_without_launch_token_or_signals(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch.object(launcher, 'strata_state', return_value=Path(tmp)), \
+             mock.patch.object(launcher, 'family', return_value=[]), \
+             mock.patch.object(launcher, 'require_hive_launch_identity') as token_check, \
+             mock.patch.object(launcher, 'signal_identity') as send:
+            identity = {'pid': 41001, 'start_ticks': 123, 'exe': '/usr/bin/python3',
+                        'uid': os.getuid(), 'cmd': ['python3'], 'pgid': 41001, 'sid': 41001}
+            state = {'identity': identity, 'hive_launch_id_sha256': 'a' * 64,
+                     'hive_launcher_identity': {'pid': 41000, 'start_ticks': 456}}
+            launcher.write_state(state)
+            launcher.stop()
+            self.assertFalse((Path(tmp) / 'server.json').exists())
+        token_check.assert_not_called()
+        send.assert_not_called()
+
     def test_foreground_cleanup_is_idempotent_after_external_stop_removed_state(self):
         identity = {'pid': 41001, 'start_ticks': 123, 'exe': '/usr/bin/python3',
                     'uid': os.getuid(), 'cmd': ['python3'], 'pgid': 41001, 'sid': 41001}

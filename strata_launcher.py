@@ -457,8 +457,16 @@ def stop(expected=None):
         return
     if current and same_process(current.get('identity'), state.get('identity')):
         state = current
-    require_hive_launch_identity(state)
     members = family(state)  # Validate the entire family before the first signal.
+    if not members:
+        current = read_state()
+        if current != state:
+            raise SafetyError('Strata ownership state changed during stale-state cleanup; stop refused')
+        (strata_state() / 'server.json').unlink(missing_ok=True)
+        print('Recorded Strata identity is no longer active/owned; no process was signalled.')
+        return
+    require_hive_launch_identity(state)
+    members = family(state)  # Recheck identities after authorization and before the first signal.
     current = read_state()
     if current and same_process(current['identity'], state['identity']):
         state = dict(current, stop_requested=True)
