@@ -1,0 +1,173 @@
+{
+  "profile": "orca-q4_k_s-v0141",
+  "runtime_version": "0.1.41",
+  "model": "qwen3.8-flash-next-orca-q4_k_s-strata",
+  "temperature": 1.0,
+  "top_p": 0.95,
+  "top_k": 20,
+  "reasoning_effort": "high",
+  "max_output_tokens": 16,
+  "evidence_class": "operator_self_attestation",
+  "cryptographic_attestation": false,
+  "baseline": {
+    "report_path": "results/orca-q4ks-v039-prefill-20261009.json",
+    "report_sha256": "92264ec5cc4f571bd0773fe6457b05fbc2192240fa463db2f5cdb75e21757740",
+    "runtime_version": "0.1.39",
+    "configured_context": 262144,
+    "text_only": false,
+    "parallel": 1,
+    "warmup_prompt_sha256": "39ead7ba382bec28354098838e7dc69ed54dd9b2c3da1163c9f262b794fa6813",
+    "prompt_sha256": [
+      "60b41959995f4dd2167e733e0c1755fc3f6f97243194add89224d1b3a880521b",
+      "782d949c83d46358b01a511812a2b158e214dd6c8206ec6d6d1933cbc667fab6",
+      "76502913b46371794735f3465f478b295e4d774fa780333790fcb60bbd753482"
+    ],
+    "median_prefill_tps": 956.4
+  },
+  "candidate": {
+    "runtime_version": "0.1.41",
+    "configured_context": 32768,
+    "text_only": true,
+    "parallel": 1,
+    "source_commit": "fb58e0dbc8399662c0e47c76578c6e878b14f6cf",
+    "source_runtime_sha256": "a022062ccfb9d7aa536b49d326d68a21527c9c7f3051f80369014687b3f58298",
+    "config_sha256": "7eefbdaccc755f8a5b321a2a6563e39ef718b479d24fc7ec51217c00b512527d",
+    "health": {
+      "status": "ok",
+      "max_context": 32768,
+      "model": "qwen3.8-flash-next-orca-q4_k_s-strata",
+      "images": false,
+      "api_key": false,
+      "loaded": true,
+      "service": "strata"
+    }
+  },
+  "warmup": {
+    "prompt_chars": 12417,
+    "prompt_sha256": "39ead7ba382bec28354098838e7dc69ed54dd9b2c3da1163c9f262b794fa6813",
+    "elapsed_s": 6.1885,
+    "ttft_s": 6.0672,
+    "usage": {
+      "prompt_tokens": 5295,
+      "completion_tokens": 16,
+      "total_tokens": 5311,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    },
+    "timings": {
+      "cache_n": 0,
+      "prompt_n": 5295,
+      "prompt_ms": 6042.4,
+      "prompt_per_token_ms": 1.141,
+      "prompt_per_second": 876.3,
+      "predicted_n": 16,
+      "predicted_ms": 141.1,
+      "predicted_per_token_ms": 8.819,
+      "predicted_per_second": 113.4,
+      "draft_n": 12,
+      "draft_n_accepted": 12
+    },
+    "finish_reason": "length",
+    "answer_chars": 0,
+    "reasoning_chars": 69
+  },
+  "runs": [
+    {
+      "prompt_chars": 12413,
+      "prompt_sha256": "60b41959995f4dd2167e733e0c1755fc3f6f97243194add89224d1b3a880521b",
+      "elapsed_s": 6.7938,
+      "ttft_s": 6.6689,
+      "usage": {
+        "prompt_tokens": 5295,
+        "completion_tokens": 16,
+        "total_tokens": 5311,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 5295,
+        "prompt_ms": 6653.6,
+        "prompt_per_token_ms": 1.257,
+        "prompt_per_second": 795.8,
+        "predicted_n": 16,
+        "predicted_ms": 136.1,
+        "predicted_per_token_ms": 8.506,
+        "predicted_per_second": 117.6,
+        "draft_n": 15,
+        "draft_n_accepted": 11
+      },
+      "finish_reason": "length",
+      "answer_chars": 0,
+      "reasoning_chars": 71
+    },
+    {
+      "prompt_chars": 12413,
+      "prompt_sha256": "782d949c83d46358b01a511812a2b158e214dd6c8206ec6d6d1933cbc667fab6",
+      "elapsed_s": 5.5607,
+      "ttft_s": 5.4704,
+      "usage": {
+        "prompt_tokens": 5295,
+        "completion_tokens": 16,
+        "total_tokens": 5311,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 5295,
+        "prompt_ms": 5455.2,
+        "prompt_per_token_ms": 1.03,
+        "prompt_per_second": 970.6,
+        "predicted_n": 16,
+        "predicted_ms": 101.3,
+        "predicted_per_token_ms": 6.331,
+        "predicted_per_second": 157.9,
+        "draft_n": 12,
+        "draft_n_accepted": 12
+      },
+      "finish_reason": "length",
+      "answer_chars": 0,
+      "reasoning_chars": 69
+    },
+    {
+      "prompt_chars": 12413,
+      "prompt_sha256": "76502913b46371794735f3465f478b295e4d774fa780333790fcb60bbd753482",
+      "elapsed_s": 5.8066,
+      "ttft_s": 5.6773,
+      "usage": {
+        "prompt_tokens": 5295,
+        "completion_tokens": 16,
+        "total_tokens": 5311,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 5295,
+        "prompt_ms": 5662.3,
+        "prompt_per_token_ms": 1.069,
+        "prompt_per_second": 935.1,
+        "predicted_n": 16,
+        "predicted_ms": 140.2,
+        "predicted_per_token_ms": 8.762,
+        "predicted_per_second": 114.1,
+        "draft_n": 15,
+        "draft_n_accepted": 10
+      },
+      "finish_reason": "length",
+      "answer_chars": 0,
+      "reasoning_chars": 52
+    }
+  ],
+  "median_prefill_tps": 935.1,
+  "delta_vs_saved_039_median_percent": -2.23,
+  "scope": "Exact prompt SHA-256 matches and token counts reproduce the three saved .39 prefill fixtures. The saved .39 profile used 262144 context with CPU vision configured; this .41 candidate uses 32768 context and text-only. Therefore this is not a runtime-only controlled comparison, and it establishes neither general quality nor full-context/sustained-load performance.",
+  "recorded_at_utc": "2026-10-09T12:40:01Z",
+  "source_report_sha256": "ecc2ed72a17b26cf5aa94fce0773c52f48868bfeeddb9fde70fbc4f756a66ef4",
+  "redaction_note": "Transient process and lease identifiers intentionally omitted."
+}

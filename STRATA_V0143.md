@@ -28,8 +28,20 @@ sudo -n ./v1strata.sh --prepare-runtime --runtime 0.1.43
 ./HostLLM.sh --verify-q4ks143-parity
 ```
 
-Start the initial 32K text-only server with `./HostLLM.sh --run-q4ks143-32k-validation` (it binds loopback only). In another terminal run `./v1strata.sh --validate-orca-q4ks-143-32k`, then stop the server with Ctrl+C. The launcher independently rejects explicit LAN binding while the .43 candidate remains at this unvalidated 32K stage. Only after its evidence gate passes, migrate and enable CPU vision with `--configure-orca-q4ks-143-native-context` and `--enable-orca-q4ks-143-vision`; validate native behavior before LAN serving via `./HostLLM.sh --run-q4ks143-candidate` and `./v1strata.sh --validate-orca-q4ks-143-native`. The bounded two-slot route is `./HostLLM.sh --run-q4ks143-two-slot` and remains experimental pending its own memory/performance checks.
+Start the initial 32K text-only server with `./HostLLM.sh --run-q4ks143-32k-validation` (it binds loopback only). In another terminal run `./v1strata.sh --validate-orca-q4ks-143-32k`, then stop the server with Ctrl+C. The launcher independently rejects explicit LAN binding while the .43 candidate remains at this 32K stage. Native-context/CPU-vision migration (`--configure-orca-q4ks-143-native-context`, `--enable-orca-q4ks-143-vision`) and the 2/2 route (`./HostLLM.sh --run-q4ks143-two-slot`) are implemented but remain unrun. A passing 32K functional gate does not authorize those steps: the bounded prefill comparison below is a negative signal, so keep .43 at 32K/text-only pending a controlled performance rerun and separate review.
 
 HostLLM/Hive menu entries remain unchanged until a separate qualification/review.
 
-No .43 build, parity run, GPU inference, or node operation is claimed by this source-only integration.
+## Recorded node evidence and decision (2026-10-12)
+
+These are bounded operator-reported results from the 4× RTX 3090 node. They are not cryptographic attestations or general quality/capacity/load qualifications.
+
+- **Exact-shard parity passed:** both `native_expert_parity` and `ple_q5_parity` passed against the pinned Q4 assets. See `results/orca-q4ks-v0143-parity-20261012.json`.
+- **32K functional gate passed:** health, arithmetic, strict JSON, tool call, conversation-cache configuration and A/B/A/B reuse, and memory checks passed. MTP drafted 35 tokens and accepted 31. Peak GPU memory was 23,732 / 19,036 / 21,944 / 23,160 MiB (87,872 MiB aggregate). This is single-slot, text-only, 32K evidence only; see `results/orca-q4ks-v0143-validation-32k-20261012.json`.
+- **Bounded prefill result:** the same three saved .39 fixture prompts (5,295 input tokens each; exact hashes; `cache_n=0`; 16 output tokens) measured **590.5 / 675.1 / 547.1 tok/s** on .43, median **590.5 tok/s**. The saved .41 comparison measured **795.8 / 970.6 / 935.1 tok/s**, median **935.1 tok/s**; .43's median is **36.85% lower**, and all three .43 samples were below all three saved .41 samples. See `results/orca-q4ks-v0143-prefill-20261012.json` and the sanitized prior measurement `results/orca-q4ks-v0141-prefill-20261009.json`.
+
+The validation report hashes the candidate's profile preset; the prefill report hashes HostLLM's live run-config. Those hashes intentionally differ only in the host binding (`0.0.0.0` preset vs `127.0.0.1` loopback) and server-log path. The live-candidate guard checked the model/runtime arguments against the exact 32K preset before and after each prefill request.
+
+This is an observed negative signal, **not a causal runtime-version estimate**: according to the operator record, the .41 probe ran on the same node about 71 hours earlier, not as an interleaved A/B run. The .39 reference (median 956.4 tok/s; .43 is 38.26% lower) used 262144 context with CPU vision, unlike the 32768 text-only .43 candidate, so that comparison is especially not runtime-only. The .43 launcher also leaves route-tail-skip at the upstream default; the probe does not establish whether it activated, explain the measured difference, or qualify answer quality. All probes were short and one-slot.
+
+**Decision: do not promote .43.** Keep it isolated; leave .39 as default and .41 as opt-in. No native-context, CPU-vision, multi-slot, LAN, HostLLM-menu, or Hive-menu promotion was performed. Reconsider only after a controlled, contemporaneous comparison and the candidate's separate qualification gates.

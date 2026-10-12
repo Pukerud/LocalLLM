@@ -1,0 +1,184 @@
+{
+  "profile": "orca-q4_k_s-v0143",
+  "runtime_version": "0.1.43",
+  "model": "qwen3.8-flash-next-orca-q4_k_s-strata",
+  "temperature": 1.0,
+  "top_p": 0.95,
+  "top_k": 20,
+  "reasoning_effort": "high",
+  "max_output_tokens": 16,
+  "evidence_class": "operator_self_attestation",
+  "cryptographic_attestation": false,
+  "baseline": {
+    "report_path": "results/orca-q4ks-v039-prefill-20261009.json",
+    "report_sha256": "92264ec5cc4f571bd0773fe6457b05fbc2192240fa463db2f5cdb75e21757740",
+    "runtime_version": "0.1.39",
+    "configured_context": 262144,
+    "text_only": false,
+    "parallel": 1,
+    "warmup_prompt_sha256": "39ead7ba382bec28354098838e7dc69ed54dd9b2c3da1163c9f262b794fa6813",
+    "prompt_sha256": [
+      "60b41959995f4dd2167e733e0c1755fc3f6f97243194add89224d1b3a880521b",
+      "782d949c83d46358b01a511812a2b158e214dd6c8206ec6d6d1933cbc667fab6",
+      "76502913b46371794735f3465f478b295e4d774fa780333790fcb60bbd753482"
+    ],
+    "median_prefill_tps": 956.4
+  },
+  "candidate": {
+    "runtime_version": "0.1.43",
+    "configured_context": 32768,
+    "text_only": true,
+    "parallel": 1,
+    "source_commit": "7695859aa13afb248bdb4d36f9b2e95707db079d",
+    "source_runtime_sha256": "b9e503346db848ce2ab0067e70e08345d40a69f26f5ed3a792593c08ff1301b4",
+    "config_sha256": "32cd7baa325cf4dcc1f967a01ac9cdfd8fc32c69492ba005a150c0b10414e963",
+    "health": {
+      "status": "ok",
+      "max_context": 32768,
+      "model": "qwen3.8-flash-next-orca-q4_k_s-strata",
+      "images": false,
+      "api_key": false,
+      "loaded": true,
+      "service": "strata"
+    }
+  },
+  "warmup": {
+    "prompt_chars": 12417,
+    "prompt_sha256": "39ead7ba382bec28354098838e7dc69ed54dd9b2c3da1163c9f262b794fa6813",
+    "elapsed_s": 8.1494,
+    "ttft_s": 7.8967,
+    "usage": {
+      "prompt_tokens": 5295,
+      "completion_tokens": 16,
+      "total_tokens": 5311,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    },
+    "timings": {
+      "cache_n": 0,
+      "prompt_n": 5295,
+      "prompt_ms": 7861.6,
+      "prompt_per_token_ms": 1.485,
+      "prompt_per_second": 673.5,
+      "predicted_n": 16,
+      "predicted_ms": 281.2,
+      "predicted_per_token_ms": 17.575,
+      "predicted_per_second": 56.9,
+      "draft_n": 20,
+      "draft_n_accepted": 14
+    },
+    "finish_reason": "length",
+    "answer_chars": 0,
+    "reasoning_chars": 57
+  },
+  "runs": [
+    {
+      "prompt_chars": 12413,
+      "prompt_sha256": "60b41959995f4dd2167e733e0c1755fc3f6f97243194add89224d1b3a880521b",
+      "elapsed_s": 9.2376,
+      "ttft_s": 8.9908,
+      "usage": {
+        "prompt_tokens": 5295,
+        "completion_tokens": 16,
+        "total_tokens": 5311,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 5295,
+        "prompt_ms": 8967.6,
+        "prompt_per_token_ms": 1.694,
+        "prompt_per_second": 590.5,
+        "predicted_n": 16,
+        "predicted_ms": 265.3,
+        "predicted_per_token_ms": 16.581,
+        "predicted_per_second": 60.3,
+        "draft_n": 18,
+        "draft_n_accepted": 9
+      },
+      "finish_reason": "length",
+      "answer_chars": 0,
+      "reasoning_chars": 75
+    },
+    {
+      "prompt_chars": 12413,
+      "prompt_sha256": "782d949c83d46358b01a511812a2b158e214dd6c8206ec6d6d1933cbc667fab6",
+      "elapsed_s": 8.0156,
+      "ttft_s": 7.8661,
+      "usage": {
+        "prompt_tokens": 5295,
+        "completion_tokens": 16,
+        "total_tokens": 5311,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 5295,
+        "prompt_ms": 7843.0,
+        "prompt_per_token_ms": 1.481,
+        "prompt_per_second": 675.1,
+        "predicted_n": 16,
+        "predicted_ms": 167.9,
+        "predicted_per_token_ms": 10.494,
+        "predicted_per_second": 95.3,
+        "draft_n": 12,
+        "draft_n_accepted": 12
+      },
+      "finish_reason": "length",
+      "answer_chars": 0,
+      "reasoning_chars": 69
+    },
+    {
+      "prompt_chars": 12413,
+      "prompt_sha256": "76502913b46371794735f3465f478b295e4d774fa780333790fcb60bbd753482",
+      "elapsed_s": 9.8916,
+      "ttft_s": 9.7024,
+      "usage": {
+        "prompt_tokens": 5295,
+        "completion_tokens": 16,
+        "total_tokens": 5311,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 5295,
+        "prompt_ms": 9679.1,
+        "prompt_per_token_ms": 1.828,
+        "prompt_per_second": 547.1,
+        "predicted_n": 16,
+        "predicted_ms": 207.7,
+        "predicted_per_token_ms": 12.981,
+        "predicted_per_second": 77.0,
+        "draft_n": 15,
+        "draft_n_accepted": 11
+      },
+      "finish_reason": "length",
+      "answer_chars": 0,
+      "reasoning_chars": 71
+    }
+  ],
+  "median_prefill_tps": 590.5,
+  "delta_vs_saved_039_median_percent": -38.26,
+  "prior_041_comparison": {
+    "report_path": "results/orca-q4ks-v0141-prefill-20261009.json",
+    "report_sha256": "807af6d5ff718ded5e0d88431c2bba6393349c20173601585c3d478aa2177a20",
+    "source_report_sha256": "ecc2ed72a17b26cf5aa94fce0773c52f48868bfeeddb9fde70fbc4f756a66ef4",
+    "runtime_version": "0.1.41",
+    "source_commit": "fb58e0dbc8399662c0e47c76578c6e878b14f6cf",
+    "configured_context": 32768,
+    "text_only": true,
+    "parallel": 1,
+    "median_prefill_tps": 935.1
+  },
+  "delta_vs_saved_041_median_percent": -36.85,
+  "route_tail_skip": "0.1.43 follows upstream default; launcher does not force it off",
+  "scope": "Exact prompt SHA-256/token-count matches reproduce the three saved .39 prefill fixtures. The .39 reference used 262144 context with CPU vision configured; .41 and .43 candidates use 32768 context, text-only, and one slot. This is a bounded one-host prefill comparison, not a runtime-only comparison to .39; .43 also leaves route-tail-skip at upstream default. It establishes neither general quality nor full-context/sustained-load performance.",
+  "recorded_at_utc": "2026-10-12T11:36:30Z"
+}

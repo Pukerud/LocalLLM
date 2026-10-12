@@ -1,0 +1,59 @@
+{
+  "profile": "orca-q4_k_s-v0143",
+  "model_id": "qwen3.8-flash-next-orca-q4_k_s-strata",
+  "source_commit": "7695859aa13afb248bdb4d36f9b2e95707db079d",
+  "runtime_version": "0.1.43",
+  "runtime_sha256": "b9e503346db848ce2ab0067e70e08345d40a69f26f5ed3a792593c08ff1301b4",
+  "asset_sha256": {
+    "Qwen3.8-Flash-Next-Uncensored-Q4_K_S-00001-of-00003.gguf": "8f940bf64c9a62a4dce1935999ac8ed287bb90ff5a4e5cc22ddac767cd56557d",
+    "Qwen3.8-Flash-Next-Uncensored-Q4_K_S-00002-of-00003.gguf": "d19d80982e5fa2416a21342be71e5d8041c0c088720ac5cc54bca79a9eafb10c",
+    "Qwen3.8-Flash-Next-Uncensored-Q4_K_S-00003-of-00003.gguf": "6be547f9575cfdf23314426d62fb65ef4052841dd156f7b77dd79a93da3e4087"
+  },
+  "config_sha256": "34e3078d137f6f67cb5a7fb81bbbcc8869a6344667bff06f3bf10c992ee88a5c",
+  "context": 32768,
+  "parallel": 1,
+  "text_only": true,
+  "passed": true,
+  "evidence_class": "operator_self_attestation",
+  "cryptographic_attestation": false,
+  "checks": {
+    "health": true,
+    "conversation_cache_configuration": true,
+    "arithmetic": true,
+    "strict_json": true,
+    "tool_call": true,
+    "conversation_reuse": true,
+    "memory_recorded": true
+  },
+  "memory_peak_mib": 23732,
+  "gpu_memory_peak_mib_by_gpu": [
+    23732,
+    19036,
+    21944,
+    23160
+  ],
+  "gpu_memory_peak_aggregate_mib": 87872,
+  "ram_available_min_mib": 47460,
+  "mtp": {
+    "drafted_tokens": 35,
+    "accepted_tokens": 31
+  },
+  "live_status": {
+    "context": 32768,
+    "vision_enabled": false,
+    "serving_slots": 1,
+    "conversation_cache": {
+      "enabled": true,
+      "budget_mib": 8192,
+      "slots": 4,
+      "park_events": 4,
+      "restored_conversations": 2,
+      "reused_requests": 2,
+      "reused_tokens": 40
+    }
+  },
+  "validation_runner_sha256": "17da22dd31e147057dae9d5d778b37aa15eca54d260af7a547fd6489bb02c83a",
+  "local_api_client_sha256": "343de86ff0b998649b6a8ec2416f803c9b05217b15ef5a5113e33ef33a4635c2",
+  "api_key_enabled": false,
+  "recorded_at": "2026-10-12T11:26:50Z"
+}
