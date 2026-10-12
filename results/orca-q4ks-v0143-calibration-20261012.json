@@ -1,0 +1,171 @@
+{
+  "metadata": {
+    "profile": "orca-q4_k_s-v0143",
+    "runtime_version": "0.1.43",
+    "source_commit": "7695859aa13afb248bdb4d36f9b2e95707db079d",
+    "calibrate_tool_sha256": "41f71f0d3fa4a3aff033365c7111974dae4f1c879627011a62ab447df5b354ec",
+    "profile_config_sha256_before": "34e3078d137f6f67cb5a7fb81bbbcc8869a6344667bff06f3bf10c992ee88a5c",
+    "input_config_sha256": "218403271fc369b58ff5a29bd206394c9fab57a005340293a44460d8968554a1",
+    "runtime_selection_before": "0.1.39",
+    "measurement_only": true,
+    "settings_persisted": false,
+    "measurement_scope": "decode throughput only; not prompt/prefill speed",
+    "recorded_at_utc": "2026-10-12T13:07:18Z",
+    "profile_config_sha256_after": "34e3078d137f6f67cb5a7fb81bbbcc8869a6344667bff06f3bf10c992ee88a5c",
+    "calibrate_tool_sha256_after": "41f71f0d3fa4a3aff033365c7111974dae4f1c879627011a62ab447df5b354ec",
+    "persistence_check": "candidate profile config, pinned calibration code, shared settings, and runtime selection unchanged",
+    "shared_settings_unchanged": true,
+    "post_test_cleanup": {
+      "hive_profile": "custom LLM-hosting profile",
+      "strata_runtime": "0.1.41",
+      "serving_slots": 2,
+      "health": "ok",
+      "hostllm_pause_active": false,
+      "osn_service": "active",
+      "generic_runtime_selection": "0.1.39"
+    },
+    "run_method": "Invoked the pinned tools/calibrate.py directly with a temporary copy of the candidate config; measurement-only.",
+    "setup_cli_not_used_because": "setup.py --calibrate by default refreshes the installed engine, writes tuned arguments to the selected run config, and persists settings in shared settings.json.",
+    "route_tail_skip": "Environment override unset; upstream default retained; activation not verified."
+  },
+  "settings": {},
+  "report": {
+    "default": {
+      "pcie_frac": 0.09,
+      "spec_min_p": 0.5,
+      "pool_workers": 5
+    },
+    "pcie_sweep": {
+      "0.0": [
+        105.59313644613101,
+        121.5689999050242,
+        121.67300380228136
+      ],
+      "0.09": [
+        122.60536398467433,
+        121.46517365724048,
+        121.67300380228136
+      ],
+      "0.2": [
+        122.39433926180914,
+        121.97446159710309,
+        121.58054711246201
+      ],
+      "0.35": [
+        121.1318254944639,
+        121.74243865322426,
+        121.63831606956191
+      ],
+      "0.55": [
+        123.77913161202979,
+        113.04424622449882,
+        116.75636230958679
+      ],
+      "0.75": [
+        124.03100775193798,
+        109.45784162818539,
+        111.80015721897108
+      ],
+      "0.9": [
+        124.00697539236582,
+        109.94674454561071,
+        111.81969074866777
+      ],
+      "1.0": [
+        104.25150676005865,
+        110.64050479730314,
+        111.101466886555
+      ]
+    },
+    "min_p_sweep": {
+      "0.3": [
+        112.30040357957537,
+        116.09977324263038,
+        116.04714415231187
+      ],
+      "0.5": [
+        121.71928489920123,
+        121.67300380228136,
+        121.62675788673508
+      ],
+      "0.7": [
+        119.8614102444049,
+        120.86874409820587,
+        120.89157536834152
+      ]
+    },
+    "confirm": {
+      "0.09/0.5": [
+        121.6845707766898,
+        121.63831606956191,
+        121.69613995056096
+      ],
+      "0.2/0.5": [
+        121.64987644934423,
+        121.69613995056096,
+        121.61520190023754
+      ]
+    },
+    "workers": {
+      "5": [
+        119.71567527123081,
+        105.59313644613101
+      ],
+      "3": [
+        118.52949347161773,
+        105.65414775072225
+      ],
+      "2": [
+        119.46985252940077,
+        105.60184803234057
+      ]
+    },
+    "adapt": {
+      "default": [
+        99.09711517286941,
+        109.76563553493891
+      ],
+      "1/80/0.97": [
+        97.94273396129152,
+        105.4828391897103
+      ],
+      "1/160/0.97": [
+        97.25001163277652,
+        104.79817899078226
+      ]
+    },
+    "seconds": 727,
+    "tok_s": 104.4
+  },
+  "interpretation": {
+    "calibration_threshold_percent": 3.0,
+    "selected_settings": {},
+    "outcome": "No candidate setting exceeded the documented >3% improvement threshold; keep the .43 defaults.",
+    "decode_only": true,
+    "prefill_effect": "This calibration does not tune prompt/prefill throughput; the earlier 932.4 tok/s prefill result is unchanged.",
+    "pcie_confirm_median_tok_s": {
+      "default_0.09": 121.68,
+      "candidate_0.2": 121.65,
+      "candidate_delta_percent": -0.03
+    },
+    "draft_floor_medians_tok_s": {
+      "0.3": 116.05,
+      "0.5": 121.67,
+      "0.7": 120.87
+    },
+    "worker_medians_tok_s": {
+      "5": 112.65,
+      "3": 112.09,
+      "2": 112.54
+    },
+    "adaptive_tier_medians_tok_s": {
+      "default": 104.43,
+      "1/80/0.97": 101.71,
+      "1/160/0.97": 101.02
+    },
+    "final_report_tok_s": 104.4,
+    "final_report_tok_s_scope": "The tool reports the winning final calibration stage; this is not directly comparable to the prior API benchmark or the earlier 128-token sweep.",
+    "elapsed_seconds": 727
+  },
+  "evidence_scope": "One pinned .43 32K text-only, one-slot calibration run on the 4x RTX 3090 node. It measured short generated outputs and adaptive-tier 512-token tests; not quality, context, concurrency, or sustained-load qualification."
+}
