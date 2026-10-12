@@ -285,6 +285,40 @@ grep -qx -- '--check-ready --profile orca-q4_k_s --runtime 0.1.41' "$ready_trace
   if run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.41; then exit 1; fi
 )
 [[ "$(wc -l < "$ready_trace")" -eq 3 ]]
+# .43 candidate readiness is also checked before the lifecycle pause; its initial validation route rejects LAN binding.
+(
+  SCRIPT_DIR="$scratch/unprepared-menu"
+  STRATA_HOST=127.0.0.1
+  Q4KS_V0143_VALIDATION_ONLY=1
+  if run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.43 --parallel 1 --batch-groups 1; then exit 1; fi
+)
+grep -qx -- '--check-ready --profile orca-q4_k_s --runtime 0.1.43 --parallel 1 --batch-groups 1' "$ready_trace"
+[[ "$(wc -l < "$ready_trace")" -eq 4 ]]
+# An environment-only runtime override must not bypass candidate-specific preflight.
+(
+  SCRIPT_DIR="$scratch/unprepared-menu"
+  STRATA_RUNTIME=0.1.43 STRATA_HOST=127.0.0.1
+  export STRATA_RUNTIME STRATA_HOST
+  unset STRATA_PARALLEL STRATA_BATCH_GROUPS
+  if run_selected v1strata.sh --quickstart --profile=orca-q4_k_s; then exit 1; fi
+)
+grep -qx -- '--check-ready --profile orca-q4_k_s --runtime 0.1.43' "$ready_trace"
+[[ "$(wc -l < "$ready_trace")" -eq 5 ]]
+# Argparse abbreviations and malformed flags are rejected before readiness/pause, preventing preflight mismatch.
+(
+  SCRIPT_DIR="$scratch/unprepared-menu"
+  if run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runt=0.1.43 --par=2 --batch-g=2; then exit 1; fi
+  if run_selected v1strata.sh --quickstart --profile orca-q4_k_s --parallel; then exit 1; fi
+  if run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.41 --runtime 0.1.43; then exit 1; fi
+)
+[[ "$(wc -l < "$ready_trace")" -eq 5 ]]
+(
+  SCRIPT_DIR="$scratch/unprepared-menu"
+  STRATA_HOST=0.0.0.0
+  Q4KS_V0143_VALIDATION_ONLY=1
+  if run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.43 --parallel 1 --batch-groups 1; then exit 1; fi
+)
+[[ "$(wc -l < "$ready_trace")" -eq 5 ]]
 # A unique lease and inherited exclusive lock span HostLLM launch until the child records identity.
 launch_root="$scratch/launch-reservation"
 mkdir -p "$launch_root/state"
@@ -310,7 +344,7 @@ grep -qx "release --lease-id $lease_id" "$launch_root/host"
   if run_selected v1strata.sh --quickstart --profile iq3_s --runtime 0.1.39 --parallel 2 --batch-groups 2; then exit 1; fi
 )
 grep -qx -- '--check-ready --profile iq3_s --runtime 0.1.39 --parallel 2 --batch-groups 2' "$ready_trace"
-[[ "$(wc -l < "$ready_trace")" -eq 4 ]]
+[[ "$(wc -l < "$ready_trace")" -eq 6 ]]
 # IQ3_XXS remains an explicit CLI rollback, never the new [4]/[5] route.
 (
   SCRIPT_DIR="$scratch/xxs-cli"
@@ -320,5 +354,5 @@ grep -qx -- '--check-ready --profile iq3_s --runtime 0.1.39 --parallel 2 --batch
   if run_selected v1strata.sh --quickstart --profile orca-iq3_xxs; then exit 1; fi
 )
 grep -qx -- '--check-ready --profile orca-iq3_xxs' "$ready_trace"
-[[ "$(wc -l < "$ready_trace")" -eq 5 ]]
+[[ "$(wc -l < "$ready_trace")" -eq 7 ]]
 echo 'HostLLM [4] .39 default, [5]/[6] .41 one/two-slot routes, preflight-before-hosting and running-Strata preservation: PASS'

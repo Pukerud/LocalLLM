@@ -48,6 +48,60 @@ class Runtime(unittest.TestCase):
         self.assertEqual(r.selected_version(self.root),r.BASE_VERSION)
         self.assertEqual(self.cfg('auto')[0],self.base)
 
+    def test_orca_043_pin_is_explicit_prepare_only_not_generic_default_or_promotion(self):
+        self.assertEqual(r.VERSION, '0.1.41')
+        self.assertEqual(r.PINS[r.ORCA_Q4KS_VERSION], '7695859aa13afb248bdb4d36f9b2e95707db079d')
+        self.assertEqual(r.selected_version(self.root), r.BASE_VERSION)
+        with self.assertRaisesRegex(SafetyError, 'isolated to the explicit Orca Q4 candidate'):
+            r.selected_version(self.root, r.ORCA_Q4KS_VERSION)
+        with self.assertRaisesRegex(SafetyError, 'cannot be promoted'):
+            r.select(self.root, r.ORCA_Q4KS_VERSION)
+        with self.assertRaisesRegex(SafetyError, 'isolated to the explicit Orca Q4 candidate'):
+            self.cfg(r.ORCA_Q4KS_VERSION)
+        self.assertFalse((self.root / 'runtime-selection.json').exists())
+        (self.root / 'runtime-selection.json').write_text(json.dumps({'version': r.ORCA_Q4KS_VERSION}))
+        with self.assertRaisesRegex(SafetyError, 'isolated to the explicit Orca Q4 candidate'):
+            r.selected_version(self.root, 'auto')
+
+    def test_orca_043_runtime_env_keeps_route_tail_skip_upstream_default(self):
+        env = r.runtime_env(r.ORCA_Q4KS_VERSION, 1)
+        self.assertEqual(env['STRATA_VERIFY_ALL_RESIDENT'], '1')
+        self.assertEqual(env['STRATA_BATCH_MTP'], '0')
+        self.assertNotIn('STRATA_ROUTE_TAIL_SKIP', env)
+        self.assertNotIn('STRATA_ROUTE_TAIL_SKIP', r.SAFE_ENV)
+
+    def test_orca_043_overlay_matches_generic_runtime_preparation_contract(self):
+        folder = r.runtime_root(self.root, r.ORCA_Q4KS_VERSION)
+        source = folder / 'source'
+        source.mkdir(parents=True)
+        environment = folder / 'python'
+        python = environment / 'bin/python'
+        python.parent.mkdir(parents=True)
+        python.symlink_to(self.base / '.venv/bin/python')
+        (source / '.venv').symlink_to(environment, target_is_directory=True)
+        assets = []
+        for name in ('strata', 'strata-vision'):
+            path = source / 'engine' / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(name)
+            assets.append({'path': str(path), 'bytes': path.stat().st_size, 'sha256': r.digest(path)})
+        manifest = {'version': r.ORCA_Q4KS_VERSION, 'source_commit': r.PINS[r.ORCA_Q4KS_VERSION],
+                    'llama_commit': r.LLAMA_PIN, 'source': str(source), 'cuda_arch': 86,
+                    'cuda_toolkit': '/usr/local/cuda-12.9', 'runtime_assets': assets,
+                    'python_environment': str(environment), 'python_assets': []}
+        (folder / 'prepared.json').write_text(json.dumps(manifest))
+        prepared_source, prepared_manifest = r.prepared_runtime(self.root, r.ORCA_Q4KS_VERSION)
+        self.assertEqual(prepared_source, source)
+        self.assertEqual(prepared_manifest['python_environment'], str(environment))
+
+    def test_generic_runtime_preparer_lists_043_without_changing_its_default(self):
+        import prepare_strata_runtime as prepare_runtime
+        with mock.patch.object(sys, 'argv', ['prepare_strata_runtime.py', '--help']):
+            with self.assertRaises(SystemExit) as exited:
+                prepare_runtime.main()
+        self.assertEqual(exited.exception.code, 0)
+        self.assertEqual(r.VERSION, '0.1.41')
+
     def test_candidate_solo_preserves_model_vision_context_and_mtp(self):
         src,path,cfg,version=self.cfg()
         self.assertEqual(src,self.source);self.assertEqual(path,self.config);self.assertEqual(version,r.VERSION)

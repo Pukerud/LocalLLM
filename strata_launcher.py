@@ -29,7 +29,10 @@ from orca_q4ks_profile import (configure_native_context as configure_q4ks_native
                                ready_q4ks, record_32k_validation as record_q4ks_32k_validation,
                                rollback_q4ks_vision)
 import orca_q4ks_v0141_profile as q4ks_v0141
+import orca_q4ks_v0143_profile as q4ks_v0143
 import strata_runtime as runtimes
+
+Q4KS_CANDIDATE_RUNTIMES = ('0.1.41', '0.1.43')
 
 SOURCE_COMMIT = '99f3dbd0b21d1401b3769e0c0d963913607f380b'
 MODEL_REVISION = 'ed59f92082b1e93c0e96d60a8b11aab089b52f09'
@@ -105,27 +108,39 @@ def ready(profile='iq3_s'):
     return source, config_path, cfg
 
 
-def _effective_host(profile, version, configured_host):
+def _effective_host(profile, version, configured_host, context=None):
     requested = os.environ.get('STRATA_HOST')
-    if profile == ORCA_Q4KS_PROFILE and version == '0.1.41':
+    if profile == ORCA_Q4KS_PROFILE and version in Q4KS_CANDIDATE_RUNTIMES:
         if requested not in (None, '127.0.0.1', '0.0.0.0'):
-            raise SafetyError('Q4 .41 STRATA_HOST may only be 127.0.0.1 or 0.0.0.0')
+            raise SafetyError(f'Q4 .{version.rsplit(".", 1)[1]} STRATA_HOST may only be 127.0.0.1 or 0.0.0.0')
+        if context == 32768 and requested == '0.0.0.0':
+            raise SafetyError(f'Initial Q4 .{version.rsplit(".", 1)[1]} 32K validation must remain loopback-only')
         return requested or '127.0.0.1'
     return requested or configured_host
 
 
 def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
+    if runtime == runtimes.ORCA_Q4KS_VERSION and profile != ORCA_Q4KS_PROFILE:
+        raise SafetyError('Strata 0.1.43 is isolated to the explicit Orca Q4 candidate, not generic profile launches')
     if profile == ORCA_Q4KS_PROFILE:
-        if runtime not in ('auto', ORCA_Q4KS_RUNTIME, '0.1.41'):
-            raise SafetyError(f'Q4_K_S supports its preserved .39 baseline or the explicit .41 candidate only')
-        if runtime == '0.1.41':
+        if runtime not in ('auto', ORCA_Q4KS_RUNTIME, *Q4KS_CANDIDATE_RUNTIMES):
+            raise SafetyError('Q4_K_S supports its preserved .39 baseline or an explicit isolated .41/.43 candidate')
+        if runtime in Q4KS_CANDIDATE_RUNTIMES:
+            version_suffix = runtime.rsplit('.', 1)[1]
             if (parallel, batch_groups) not in ((1, 1), (2, 2)):
-                raise SafetyError('Q4 .41 supports only the single-slot profile or the tested 2-slot/2-group profile')
-            source, path, cfg = q4ks_v0141.ready_q4ks_v0141(data_root())
+                raise SafetyError(f'Q4 .{version_suffix} supports only the 1/1 or 2/2 slot/group presets')
+            candidate = q4ks_v0141 if runtime == '0.1.41' else q4ks_v0143
+            ready_candidate = (candidate.ready_q4ks_v0141 if runtime == '0.1.41'
+                               else candidate.ready_q4ks_v0143)
+            source, path, cfg = ready_candidate(data_root())
+            context = int(cfg['args'][cfg['args'].index('--max-context') + 1])
+            if context == 32768 and (parallel, batch_groups) != (1, 1):
+                raise SafetyError(f'Q4 .{version_suffix} 32K validation is restricted to one slot and one batch group')
+            _effective_host(profile, runtime, cfg.get('host', '0.0.0.0'), context=context)
             if parallel == 2:
                 cfg['parallel'] = parallel
                 cfg['args'] += ['--batch-groups', str(batch_groups)]
-            return source, path, cfg, '0.1.41'
+            return source, path, cfg, runtime
         if parallel != 1 or batch_groups != 1:
             raise SafetyError('The preserved Q4 .39 profile is restricted to one slot and one batch group')
         source, path, cfg = ready_q4ks(data_root())
@@ -228,43 +243,50 @@ def q4ks_evidence_summary(root, config_path):
     return lines
 
 
-def require_q4ks_candidate_lease(port, expected_lease_id=None):
+def require_q4ks_candidate_lease(port, expected_lease_id=None, *, runtime_version='0.1.41'):
+    label = runtime_version.rsplit('.', 1)[1]
+    if runtime_version not in Q4KS_CANDIDATE_RUNTIMES:
+        raise SafetyError('Unknown isolated Q4 candidate runtime')
     lease = host_lifecycle.read_lease()
     lease_id = lease.get('lease_id') if isinstance(lease, dict) else None
     if (not isinstance(lease, dict) or lease.get('phase') != 'held' or lease.get('port') != port or
             not isinstance(lease_id, str) or not re.fullmatch(r'[a-f0-9]{64}', lease_id) or
             (expected_lease_id is not None and lease_id != expected_lease_id)):
-        raise SafetyError('Q4 .41 candidate requires its matching active HostLLM pause lease')
+        raise SafetyError(f'Q4 .{label} candidate requires its matching active HostLLM pause lease')
     return lease_id
 
 
-def require_q4ks_candidate_authorization(port, expected_lease_id=None, *, host_launch_reserved=False):
-    """Check HostLLM's inherited reservation or the Hive profile's token/marker coordination gate."""
+def require_q4ks_candidate_authorization(port, expected_lease_id=None, *, host_launch_reserved=False,
+                                         runtime_version='0.1.41'):
+    """Check HostLLM's inherited reservation or Hive token/marker gate for this exact candidate version."""
+    label = runtime_version.rsplit('.', 1)[1]
+    if runtime_version not in Q4KS_CANDIDATE_RUNTIMES:
+        raise SafetyError('Unknown isolated Q4 candidate runtime')
     token = os.environ.get('HIVE_STRATA_LAUNCH_ID')
     if token is None:
         if not host_launch_reserved or not expected_lease_id:
-            raise SafetyError('Q4 .41 candidate requires a reserved HostLLM lease or per-run Hive launch token')
+            raise SafetyError(f'Q4 .{label} candidate requires a reserved HostLLM lease or per-run Hive launch token')
         return {'authorization': 'hostllm',
-                'lease_id': require_q4ks_candidate_lease(port, expected_lease_id)}
+                'lease_id': require_q4ks_candidate_lease(port, expected_lease_id, runtime_version=runtime_version)}
     if (not re.fullmatch(r'[a-f0-9]{48}', token) or host_launch_reserved or expected_lease_id is not None or
             'HOSTLLM_LAUNCH_LOCK_FD' in os.environ or 'HOSTLLM_LAUNCH_LEASE_ID' in os.environ):
-        raise SafetyError('Q4 .41 Hive launch token is invalid or conflicts with HostLLM authorization')
+        raise SafetyError(f'Q4 .{label} Hive launch token is invalid or conflicts with HostLLM authorization')
     run_marker = host_lifecycle.RUN
     if run_marker.is_symlink() or not run_marker.is_file():
-        raise SafetyError('Q4 .41 Hive authorization requires /run/hive/MINER_RUN')
+        raise SafetyError(f'Q4 .{label} Hive authorization requires /run/hive/MINER_RUN')
     stop_marker = host_lifecycle.STOP
     if stop_marker.is_symlink() or stop_marker.exists():
-        raise SafetyError('Q4 .41 Hive authorization refuses a pending Hive stop marker')
+        raise SafetyError(f'Q4 .{label} Hive authorization refuses a pending Hive stop marker')
     if HIVE_CUR_MINER.is_symlink() or not HIVE_CUR_MINER.is_file():
-        raise SafetyError('Q4 .41 Hive authorization requires a readable /run/hive/cur_miner')
+        raise SafetyError(f'Q4 .{label} Hive authorization requires a readable /run/hive/cur_miner')
     try:
         selected = HIVE_CUR_MINER.read_text().strip()
     except OSError as exc:
-        raise SafetyError('Q4 .41 Hive miner selection cannot be verified') from exc
+        raise SafetyError(f'Q4 .{label} Hive miner selection cannot be verified') from exc
     if selected != 'custom':
-        raise SafetyError('Q4 .41 Hive authorization requires cur_miner == custom')
+        raise SafetyError(f'Q4 .{label} Hive authorization requires cur_miner == custom')
     if host_lifecycle.read_lease() is not None:
-        raise SafetyError('Q4 .41 Hive authorization refuses a conflicting HostLLM lease')
+        raise SafetyError(f'Q4 .{label} Hive authorization refuses a conflicting HostLLM lease')
     return {'authorization': 'hive', 'launch_id': token}
 
 
@@ -365,13 +387,16 @@ def guard_during_run(state):
         current = read_state()
         if not current or not same_process(current['identity'], state['identity']) or current.get('stop_requested'):
             return False
-        if state.get('profile') == ORCA_Q4KS_PROFILE and state.get('runtime_version') == '0.1.41':
+        if (state.get('profile') == ORCA_Q4KS_PROFILE and
+                state.get('runtime_version') in Q4KS_CANDIDATE_RUNTIMES):
+            label = state['runtime_version'].rsplit('.', 1)[1]
             if state.get('hive_launch_id_sha256'):
                 if host_lifecycle.read_lease() is not None:
-                    raise SafetyError('Hive Q4 .41 session conflicts with a HostLLM pause lease')
+                    raise SafetyError(f'Hive Q4 .{label} session conflicts with a HostLLM pause lease')
                 require_hive_launch_identity(state)
             else:
-                require_q4ks_candidate_lease(state.get('port'), state.get('hosting_lease_id'))
+                require_q4ks_candidate_lease(state.get('port'), state.get('hosting_lease_id'),
+                                             runtime_version=state['runtime_version'])
         runtime_gate(state)
         return True
 
@@ -515,9 +540,10 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     port = int(os.environ.get('STRATA_PORT', cfg.get('port', 8080)))
     hosting_lease_id = None
     hive_launch_id = None
-    if profile == ORCA_Q4KS_PROFILE and version == '0.1.41':
+    if profile == ORCA_Q4KS_PROFILE and version in Q4KS_CANDIDATE_RUNTIMES:
         authorization = require_q4ks_candidate_authorization(
-            port, requested_lease_id, host_launch_reserved=inherited_fd is not None)
+            port, requested_lease_id, host_launch_reserved=inherited_fd is not None,
+            runtime_version=version)
         if authorization['authorization'] == 'hostllm':
             hosting_lease_id = authorization['lease_id']
         else:
@@ -526,7 +552,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     state_root = strata_state()
     state_root.mkdir(parents=True, exist_ok=True)
     # A private effective config permits optional API credentials without editing the pinned source config.
-    cfg['host'] = _effective_host(profile, version, cfg.get('host', '0.0.0.0'))
+    context = int(cfg['args'][cfg['args'].index('--max-context') + 1]) if profile == ORCA_Q4KS_PROFILE else None
+    cfg['host'] = _effective_host(profile, version, cfg.get('host', '0.0.0.0'), context=context)
     cfg['port'] = port
     if profile == ORCA_PROFILE:
         cfg['model_name'] = ORCA_MODEL_ID
@@ -556,6 +583,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         print('Pinned 0.1.39 batching: all-resident zero-doorbell optimization disabled to avoid the verified layer-0 timeout.', flush=True)
     elif version == runtimes.VERSION:
         print('Pinned 0.1.41: upstream per-window all-resident fix enabled; precision-changing/unsupported opt-ins disabled.', flush=True)
+    elif version == runtimes.ORCA_Q4KS_VERSION:
+        print('Pinned 0.1.43 Q4 candidate: existing verifier safeguards retained; STRATA_ROUTE_TAIL_SKIP is not overridden (upstream default may alter output).', flush=True)
     lib_dirs = cfg.get('lib_dirs', [])
     if lib_dirs:
         env['LD_LIBRARY_PATH'] = ':'.join(lib_dirs) + ':' + env.get('LD_LIBRARY_PATH', '')
@@ -568,10 +597,13 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         vision_state = 'CPU vision configured' if isinstance(vision_cfg, dict) and vision_cfg.get('gpu') is False else 'text-only'
         slot_state = 'one slot' if parallel == 1 else f'{parallel} serving slots / {batch_groups} batch groups (experimental)'
         print(f'Orca Q4_K_S | profile config: {context} context | {vision_state} | {slot_state} | original Flash-Next MTP')
+        if version == '0.1.43':
+            print('Strata .43 keeps upstream route-tail-skip defaults; this output-affecting behavior is not disabled by the launcher.')
         if parallel == 2 and version == '0.1.41':
             print('Experimental 2-slot profile: one bounded 4.5K-prompt probe left only 457 MiB reported VRAM free; no throughput gain is established.')
         print('Readiness verifies assets/configuration; stored live reports describe bounded probes, not general quality/load.')
-        evidence = (q4ks_v0141.candidate_evidence_summary(data_root()) if version == '0.1.41'
+        candidate_profile = {'0.1.41': q4ks_v0141, '0.1.43': q4ks_v0143}.get(version)
+        evidence = (candidate_profile.candidate_evidence_summary(data_root()) if candidate_profile
                     else q4ks_evidence_summary(data_root(), config_path))
         for evidence_line in evidence:
             print(evidence_line)
@@ -676,7 +708,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__)
+    ap = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     modes = ap.add_mutually_exclusive_group()
     modes.add_argument('--quickstart', '--start', action='store_true')
     modes.add_argument('--stop', action='store_true')
@@ -690,7 +722,11 @@ def main():
     modes.add_argument('--configure-q4ks141-native-context', action='store_true')
     modes.add_argument('--enable-q4ks141-vision', action='store_true')
     modes.add_argument('--rollback-q4ks141-vision', action='store_true')
-    modes.add_argument('--select-runtime', choices=runtimes.VERSIONS)
+    modes.add_argument('--validate-q4ks143-32k', action='store_true')
+    modes.add_argument('--configure-q4ks143-native-context', action='store_true')
+    modes.add_argument('--enable-q4ks143-vision', action='store_true')
+    modes.add_argument('--rollback-q4ks143-vision', action='store_true')
+    modes.add_argument('--select-runtime', choices=runtimes.GENERIC_VERSIONS)
     ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE, ORCA_Q4KS_PROFILE], default=None)
     ap.add_argument('--runtime', choices=['auto', *runtimes.VERSIONS], default=os.environ.get('STRATA_RUNTIME', 'auto'))
     ap.add_argument('--parallel', type=int, choices=[1, 2], default=os.environ.get('STRATA_PARALLEL', '1'))
@@ -743,6 +779,23 @@ def main():
             if profile != ORCA_Q4KS_PROFILE:
                 raise SafetyError('.41 CPU-vision rollback is only available for --profile orca-q4_k_s')
             q4ks_v0141.rollback_cpu_vision(data_root())
+        elif a.validate_q4ks143_32k:
+            if profile != ORCA_Q4KS_PROFILE:
+                raise SafetyError('The live .43 32K gate is only available for --profile orca-q4_k_s')
+            import orca_q4ks_v0143_validation
+            orca_q4ks_v0143_validation.run(data_root())
+        elif a.configure_q4ks143_native_context:
+            if profile != ORCA_Q4KS_PROFILE:
+                raise SafetyError('.43 native-context migration is only available for --profile orca-q4_k_s')
+            q4ks_v0143.configure_native_context(data_root())
+        elif a.enable_q4ks143_vision:
+            if profile != ORCA_Q4KS_PROFILE:
+                raise SafetyError('.43 CPU vision is only available for --profile orca-q4_k_s')
+            q4ks_v0143.configure_cpu_vision(data_root())
+        elif a.rollback_q4ks143_vision:
+            if profile != ORCA_Q4KS_PROFILE:
+                raise SafetyError('.43 CPU-vision rollback is only available for --profile orca-q4_k_s')
+            q4ks_v0143.rollback_cpu_vision(data_root())
         elif a.check_ready:
             source, config, cfg, version = ready_runtime(profile, a.runtime, a.parallel, a.batch_groups)
             print(f'Runtime ready: {version}, requested slots={a.parallel}, batch groups={a.batch_groups}')
@@ -753,7 +806,7 @@ def main():
                 context = cfg['args'][cfg['args'].index('--max-context') + 1]
                 vision_cfg = cfg.get('vision')
                 vision_state = 'CPU vision configured' if isinstance(vision_cfg, dict) and vision_cfg.get('gpu') is False else 'text-only'
-                if version == '0.1.41':
+                if version in Q4KS_CANDIDATE_RUNTIMES:
                     cache_args = cfg.get('args', [])
                     cache_index = cache_args.index('--conversation-cache-mib')
                     cache_budget = cache_args[cache_index + 1]
@@ -764,10 +817,13 @@ def main():
                         slot_state = 'single-slot'
                     print(f'READY CONFIG: pinned Q4_K_S; future profile context={context}; {vision_state}; '
                           f'{slot_state}; conversation cache={cache_budget} MiB / {cache_slots} cache slots.')
+                    if version == '0.1.43':
+                        print('Strata .43 route-tail-skip follows the upstream default; the launcher does not force it off.')
                 else:
                     print(f'READY CONFIG: pinned Q4_K_S; future profile context={context}; {vision_state}; single-slot.')
                 print('Readiness verifies pinned files/configuration only; it is not a general quality or sustained-load test.')
-                evidence = (q4ks_v0141.candidate_evidence_summary(data_root()) if version == '0.1.41'
+                candidate_profile = {'0.1.41': q4ks_v0141, '0.1.43': q4ks_v0143}.get(version)
+                evidence = (candidate_profile.candidate_evidence_summary(data_root()) if candidate_profile
                             else q4ks_evidence_summary(data_root(), config))
                 for evidence_line in evidence:
                     print(evidence_line)
@@ -831,6 +887,42 @@ def main():
                         else:
                             print('Active Q4 .41 private run-config is unavailable/unverified.')
                     for evidence_line in q4ks_v0141.candidate_evidence_summary(data_root()):
+                        print(evidence_line)
+                candidate_path_143 = q4ks_v0143.profile_root(data_root()) / 'config.json'
+                if candidate_path_143.is_file() and not candidate_path_143.is_symlink():
+                    candidate_config_143 = json.loads(candidate_path_143.read_text())
+                    candidate_args_143 = candidate_config_143.get('args', [])
+                    candidate_context_143 = candidate_args_143[candidate_args_143.index('--max-context') + 1]
+                    candidate_vision_143 = candidate_config_143.get('vision')
+                    if isinstance(candidate_vision_143, dict) and candidate_vision_143.get('gpu') is False:
+                        candidate_vision_state_143 = 'CPU vision configured'
+                    elif candidate_vision_143 is None and '--vision' not in candidate_args_143:
+                        candidate_vision_state_143 = 'text-only'
+                    else:
+                        candidate_vision_state_143 = 'unrecognized vision config'
+                    active_candidate_143 = bool(
+                        live_state and live_state.get('profile') == ORCA_Q4KS_PROFILE and
+                        live_state.get('runtime_version') == '0.1.43')
+                    print(f'Separate Q4 .43 candidate profile file: context={candidate_context_143}, '
+                          f'{candidate_vision_state_143}; never selected by auto.')
+                    if active_candidate_143:
+                        live_config_path_143 = Path(live_state.get('config', ''))
+                        if (live_config_path_143.is_file() and not live_config_path_143.is_symlink() and
+                                live_config_path_143.resolve().is_relative_to(strata_state().resolve())):
+                            active_config_143 = json.loads(live_config_path_143.read_text())
+                            active_args_143 = active_config_143.get('args', [])
+                            active_context_143 = active_args_143[active_args_143.index('--max-context') + 1]
+                            active_vision_143 = active_config_143.get('vision')
+                            active_vision_state_143 = ('CPU vision configured' if isinstance(active_vision_143, dict) and
+                                                        active_vision_143.get('gpu') is False else
+                                                        'text-only' if active_vision_143 is None and
+                                                        '--vision' not in active_args_143 else 'unrecognized vision config')
+                            print(f'Active Q4 .43 private run-config: context={active_context_143}, '
+                                  f'{active_vision_state_143}.')
+                        else:
+                            print('Active Q4 .43 private run-config is unavailable/unverified.')
+                    print('Q4 .43 output-affecting route-tail-skip behavior remains at the upstream default.')
+                    for evidence_line in q4ks_v0143.candidate_evidence_summary(data_root()):
                         print(evidence_line)
             except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError, SafetyError):
                 print('Q4 profile configuration is unavailable or unreadable; no readiness/live-validation claim.')

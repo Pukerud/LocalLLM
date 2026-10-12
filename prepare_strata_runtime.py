@@ -11,7 +11,8 @@ import sys
 import time
 
 from engine_safety import SafetyError, docker_empty, command_output
-from strata_runtime import VERSION, LEGACY_VERSION, BASE_VERSION, PINS, LLAMA_PIN, PROFILES, digest, runtime_root
+from strata_runtime import (VERSION, LEGACY_VERSION, BASE_VERSION, ORCA_Q4KS_VERSION, PINS, LLAMA_PIN,
+                            PROFILES, digest, runtime_root)
 from prepare_orca import atomic_json
 
 
@@ -22,7 +23,7 @@ def record(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--runtime', choices=[LEGACY_VERSION, VERSION], default=VERSION)
+    parser.add_argument('--runtime', choices=[LEGACY_VERSION, VERSION, ORCA_Q4KS_VERSION], default=VERSION)
     version = parser.parse_args().runtime
     pin = PINS[version]
     import strata_launcher as launcher
@@ -58,7 +59,7 @@ def main():
         for p in [root / 'runtime-selection.json', Path('/hive-config/rig.conf'), Path('/hive-config/wallet.conf'),
                   Path('/hive-config/watchdog.conf'), Path('/run/hive/cur_miner')]:
             protected[str(p)] = digest(p) if p.exists() else None
-        for retained in [LEGACY_VERSION, VERSION]:
+        for retained in [LEGACY_VERSION, VERSION, ORCA_Q4KS_VERSION]:
             if retained == version:
                 continue
             other = runtime_root(root, retained)
@@ -97,7 +98,7 @@ def main():
         env['PATH'] = str(overlay / 'bin') + ':' + str(old_venv / 'bin') + ':/usr/local/cuda-12.9/bin:' + env['PATH']
         # Optional schema validation lives only in the candidate overlay. No original/system package is modified.
         packages = {'jsonschema': '4.25.1'}
-        if version == VERSION:
+        if version in (VERSION, ORCA_Q4KS_VERSION):
             packages['psutil'] = '7.2.2'  # native-process activity checks, only in the candidate overlay
         for name, package_version in packages.items():
             check = f"from importlib.metadata import version; print(version({name!r}))"

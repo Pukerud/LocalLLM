@@ -198,11 +198,11 @@ class RuntimeRouting(unittest.TestCase):
                  mock.patch.object(launcher.q4ks_v0141, 'ready_q4ks_v0141',
                                    return_value=(Path('/candidate'), Path('/candidate/config.json'),
                                                  json.loads(json.dumps(candidate_config)))):
-                with self.assertRaisesRegex(SafetyError, 'baseline or the explicit .41'):
+                with self.assertRaisesRegex(SafetyError, 'baseline or an explicit isolated .41/.43 candidate'):
                     launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.38', parallel=1, batch_groups=1)
                 with self.assertRaisesRegex(SafetyError, 'preserved Q4 .39.*one slot'):
                     launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.39', parallel=2, batch_groups=2)
-                with self.assertRaisesRegex(SafetyError, 'single-slot profile or the tested 2-slot/2-group'):
+                with self.assertRaisesRegex(SafetyError, '1/1 or 2/2 slot/group presets'):
                     launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.41', parallel=2, batch_groups=1)
                 source, path, single, version = launcher.ready_runtime(
                     assets.HOST_PROFILE, runtime='0.1.41', parallel=1, batch_groups=1)

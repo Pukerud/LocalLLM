@@ -88,32 +88,86 @@ run_selected() {
         return 1
     fi
     if [[ "$launcher" == v1strata.sh ]]; then
-        local arg previous='' i candidate_041=0 requested_parallel=1 requested_groups=1
-        local -a check_args=(--check-ready)
+        local arg previous='' i candidate_041=0 candidate_043=0 has_profile=0 has_runtime=0 has_parallel=0 has_groups=0 start_mode=0
+        local requested_parallel="${STRATA_PARALLEL-1}" requested_groups="${STRATA_BATCH_GROUPS-1}"
+        local -a check_args=(--check-ready) launch_args=("$@")
         for arg in "$@"; do
-            case "$previous" in
-                --profile|--runtime|--parallel|--batch-groups) check_args+=("$previous" "$arg") ;;
+            if [[ -n "$previous" ]]; then
+                [[ "$arg" != -* ]] || { echo "Missing value after $previous; refusing before service pause." >&2; return 1; }
+                check_args+=("$previous" "$arg")
+                previous=''
+                continue
+            fi
+            case "$arg" in
+                --quickstart|--start)
+                    [[ "$start_mode" -eq 0 ]] || { echo 'Duplicate Strata start mode; refusing before service pause.' >&2; return 1; }
+                    start_mode=1
+                    ;;
+                --profile|--runtime|--parallel|--batch-groups) previous="$arg" ;;
+                --profile=*|--runtime=*|--parallel=*|--batch-groups=*)
+                    check_args+=("${arg%%=*}" "${arg#*=}")
+                    ;;
+                *) echo "Unsupported Strata launch argument '$arg'; refusing before service pause." >&2; return 1 ;;
             esac
-            previous="$arg"
         done
+        [[ -z "$previous" ]] || { echo "Missing value after $previous; refusing before service pause." >&2; return 1; }
+        for ((i=0; i<${#check_args[@]}; i++)); do
+            case "${check_args[i]}" in
+                --profile)
+                    [[ "$has_profile" -eq 0 ]] || { echo 'Duplicate --profile; refusing before service pause.' >&2; return 1; }
+                    has_profile=1
+                    ;;
+                --runtime)
+                    [[ "$has_runtime" -eq 0 ]] || { echo 'Duplicate --runtime; refusing before service pause.' >&2; return 1; }
+                    has_runtime=1
+                    ;;
+                --parallel)
+                    [[ "$has_parallel" -eq 0 ]] || { echo 'Duplicate --parallel; refusing before service pause.' >&2; return 1; }
+                    has_parallel=1
+                    ;;
+                --batch-groups)
+                    [[ "$has_groups" -eq 0 ]] || { echo 'Duplicate --batch-groups; refusing before service pause.' >&2; return 1; }
+                    has_groups=1
+                    ;;
+            esac
+        done
+        if [[ "$has_runtime" -eq 0 && -n "${STRATA_RUNTIME+x}" ]]; then
+            check_args+=(--runtime "$STRATA_RUNTIME")
+            launch_args+=(--runtime "$STRATA_RUNTIME")
+        fi
+        if [[ "$has_parallel" -eq 0 && -n "${STRATA_PARALLEL+x}" ]]; then
+            check_args+=(--parallel "$STRATA_PARALLEL")
+            launch_args+=(--parallel "$STRATA_PARALLEL")
+        fi
+        if [[ "$has_groups" -eq 0 && -n "${STRATA_BATCH_GROUPS+x}" ]]; then
+            check_args+=(--batch-groups "$STRATA_BATCH_GROUPS")
+            launch_args+=(--batch-groups "$STRATA_BATCH_GROUPS")
+        fi
         for ((i=0; i<${#check_args[@]}; i++)); do
             case "${check_args[i]}" in
                 --runtime)
                     [[ "${check_args[i+1]:-}" == 0.1.41 ]] && candidate_041=1
+                    [[ "${check_args[i+1]:-}" == 0.1.43 ]] && candidate_043=1
                     ;;
                 --parallel) requested_parallel="${check_args[i+1]:-1}" ;;
                 --batch-groups) requested_groups="${check_args[i+1]:-1}" ;;
             esac
         done
-        if [[ "$candidate_041" -eq 1 ]]; then
+        if [[ "$candidate_041" -eq 1 || "$candidate_043" -eq 1 ]]; then
+            local candidate_runtime='0.1.41' candidate_label='.41' validation_only=0
             local requested_host="${STRATA_HOST:-127.0.0.1}" readiness expected_readiness
+            [[ "$candidate_043" -eq 1 ]] && candidate_runtime='0.1.43' && candidate_label='.43'
             case "$requested_host" in
                 127.0.0.1|0.0.0.0) ;;
-                *) echo 'Q4 .41 only permits loopback or explicit 0.0.0.0 binding; refusing before service pause.' >&2; return 1 ;;
+                *) echo "Q4 ${candidate_label} only permits loopback or explicit 0.0.0.0 binding; refusing before service pause." >&2; return 1 ;;
             esac
-            if [[ "${Q4KS_V0141_VALIDATION_ONLY:-0}" == 1 ]]; then
+            if [[ "$candidate_runtime" == 0.1.41 && "${Q4KS_V0141_VALIDATION_ONLY:-0}" == 1 ]] || \
+               [[ "$candidate_runtime" == 0.1.43 && "${Q4KS_V0143_VALIDATION_ONLY:-0}" == 1 ]]; then
+                validation_only=1
+            fi
+            if [[ "$validation_only" -eq 1 ]]; then
                 [[ "$requested_host" == 127.0.0.1 && "$requested_parallel" == 1 && "$requested_groups" == 1 ]] || {
-                    echo 'The initial .41 validation server is loopback-only and single-slot; refusing before service pause.' >&2
+                    echo "The initial ${candidate_label} validation server is loopback-only and single-slot; refusing before service pause." >&2
                     return 1
                 }
                 expected_readiness='READY CONFIG: pinned Q4_K_S; future profile context=32768; text-only; single-slot; conversation cache=8192 MiB / 4 cache slots.'
@@ -122,13 +176,13 @@ run_selected() {
             elif [[ "$requested_parallel" == 1 && "$requested_groups" == 1 ]]; then
                 expected_readiness='READY CONFIG: pinned Q4_K_S; future profile context=262144; CPU vision configured; single-slot; conversation cache=8192 MiB / 4 cache slots.'
             else
-                echo 'Q4 .41 supports only the single-slot profile or the tested 2-slot/2-group profile.' >&2
+                echo "Q4 ${candidate_label} supports only the single-slot profile or the 2-slot/2-group profile." >&2
                 return 1
             fi
             readiness="$("$SCRIPT_DIR/$launcher" "${check_args[@]}")" || return 1
             printf '%s\n' "$readiness"
             [[ "$readiness" == *"$expected_readiness"* ]] || {
-                echo 'Q4 .41 readiness is incomplete for the selected stage; migration gates remain in force.' >&2
+                echo "Q4 ${candidate_label} readiness is incomplete for the selected stage; migration gates remain in force." >&2
                 return 1
             }
         else
@@ -161,7 +215,11 @@ run_selected() {
         release_owned_lease "$lease_id" || true
         return 1
     fi
-    "$SCRIPT_DIR/$launcher" "$@" || rc=$?
+    if [[ "$launcher" == v1strata.sh ]]; then
+        "$SCRIPT_DIR/$launcher" "${launch_args[@]}" || rc=$?
+    else
+        "$SCRIPT_DIR/$launcher" "$@" || rc=$?
+    fi
     flock -u "$launch_fd" || true
     exec {launch_fd}<&-
     unset HOSTLLM_LAUNCH_LOCK_FD HOSTLLM_LAUNCH_LEASE_ID
@@ -272,6 +330,72 @@ run_q4ks141_parity() {
     return "$rc"
 }
 
+run_q4ks143_prepare() {
+    local active pause_status rc=0 lease_id port
+    if [[ "$EUID" -eq 0 ]]; then
+        echo 'Run HostLLM as the unprivileged operator; only its lifecycle helper uses sudo.'
+        return 1
+    fi
+    active="$(detect_engine)" || return 1
+    if [[ "$active" != none ]]; then
+        echo "Q4 .43 candidate preparation refused while an LLM session is active ($active); nothing was stopped."
+        return 1
+    fi
+    if ! PYTHONPATH="$SCRIPT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 -c \
+        'import strata_launcher; strata_launcher.runtimes.prepared_runtime(strata_launcher.data_root(), "0.1.43")' \
+        >/dev/null 2>&1; then
+        echo 'Prepare the pinned .43 helper first with: sudo -n ./v1strata.sh --prepare-runtime --runtime 0.1.43' >&2
+        return 1
+    fi
+    pause_status="$(hosting status 2>/dev/null)" || return 1
+    if [[ "$pause_status" != 'not paused by HostLLM' ]]; then
+        echo 'Q4 .43 preparation refused because an existing HostLLM pause lease must be recovered separately.'
+        return 1
+    fi
+    port="${STRATA_PORT:-8080}"
+    lease_id="$(python3 -c 'import secrets; print(secrets.token_hex(32))')" || return 1
+    hosting begin --require-new-lease --lease-id "$lease_id" --port "$port" || return 1
+    HOSTLLM_ACTIVE_LEASE_ID="$lease_id"
+    Q4_SETUP_LEASE_ID="$lease_id"
+    "$SCRIPT_DIR/v1strata.sh" --prepare-orca-q4ks-143 || rc=$?
+    if release_owned_lease "$lease_id"; then
+        Q4_SETUP_LEASE_ID=''
+    else
+        rc=1
+    fi
+    return "$rc"
+}
+
+run_q4ks143_parity() {
+    local active pause_status rc=0 lease_id port
+    if [[ "$EUID" -eq 0 ]]; then
+        echo 'Run HostLLM as the unprivileged operator; only its lifecycle helper uses sudo.'
+        return 1
+    fi
+    port="${STRATA_PORT:-8080}"
+    active="$(detect_engine)"
+    if [[ "$active" != none ]]; then
+        echo "Q4 .43 parity refused while an LLM session is active ($active); no session was stopped."
+        return 1
+    fi
+    pause_status="$(hosting status 2>/dev/null)" || return 1
+    if [[ "$pause_status" != 'not paused by HostLLM' ]]; then
+        echo 'Q4 .43 parity refused because an existing HostLLM pause lease must be recovered separately.'
+        return 1
+    fi
+    lease_id="$(python3 -c 'import secrets; print(secrets.token_hex(32))')" || return 1
+    hosting begin --require-new-lease --lease-id "$lease_id" --port "$port" || return 1
+    HOSTLLM_ACTIVE_LEASE_ID="$lease_id"
+    Q4_PARITY_LEASE_ID="$lease_id"
+    "$SCRIPT_DIR/v1strata.sh" --verify-orca-q4ks-143-parity --lease-id "$lease_id" --port "$port" || rc=$?
+    if release_owned_lease "$lease_id"; then
+        Q4_PARITY_LEASE_ID=''
+    else
+        rc=1
+    fi
+    return "$rc"
+}
+
 main() {
     local active choice profile hive_profile
     trap 'release_menu_lease_on_exit || true' EXIT
@@ -372,6 +496,35 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
         echo 'Starting only the loopback 32K .41 candidate under HostLLM; in another terminal run ./v1strata.sh --validate-orca-q4ks-141-32k, then Ctrl+C here.'
         Q4KS_V0141_VALIDATION_ONLY=1 STRATA_HOST=127.0.0.1 \
             run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.41
+        exit "$?"
+    fi
+    if [[ "${1:-}" == --prepare-q4ks143 ]]; then
+        [[ "$#" -eq 1 ]] || { echo '--prepare-q4ks143 takes no extra flags' >&2; exit 2; }
+        run_q4ks143_prepare
+        exit "$?"
+    fi
+    if [[ "${1:-}" == --verify-q4ks143-parity ]]; then
+        [[ "$#" -eq 1 ]] || { echo '--verify-q4ks143-parity takes no extra flags' >&2; exit 2; }
+        run_q4ks143_parity
+        exit "$?"
+    fi
+    if [[ "${1:-}" == --run-q4ks143-32k-validation ]]; then
+        [[ "$#" -eq 1 ]] || { echo '--run-q4ks143-32k-validation takes no extra flags' >&2; exit 2; }
+        echo 'Starting only the loopback 32K .43 candidate under HostLLM; in another terminal run ./v1strata.sh --validate-orca-q4ks-143-32k, then Ctrl+C here.'
+        Q4KS_V0143_VALIDATION_ONLY=1 STRATA_HOST=127.0.0.1 \
+            run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.43 --parallel 1 --batch-groups 1
+        exit "$?"
+    fi
+    if [[ "${1:-}" == --run-q4ks143-candidate ]]; then
+        [[ "$#" -eq 1 ]] || { echo '--run-q4ks143-candidate takes no extra flags' >&2; exit 2; }
+        STRATA_HOST="${STRATA_HOST:-0.0.0.0}" \
+            run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.43 --parallel 1 --batch-groups 1
+        exit "$?"
+    fi
+    if [[ "${1:-}" == --run-q4ks143-two-slot ]]; then
+        [[ "$#" -eq 1 ]] || { echo '--run-q4ks143-two-slot takes no extra flags' >&2; exit 2; }
+        STRATA_HOST="${STRATA_HOST:-0.0.0.0}" \
+            run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.43 --parallel 2 --batch-groups 2
         exit "$?"
     fi
     if [[ "${1:-}" == --verify-q4ks-parity ]]; then

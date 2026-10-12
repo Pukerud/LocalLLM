@@ -9,9 +9,13 @@ BASE_VERSION = '0.1.38'
 LEGACY_VERSION = '0.1.39'
 VERSION = '0.1.41'
 PIN = 'fb58e0dbc8399662c0e47c76578c6e878b14f6cf'
+ORCA_Q4KS_VERSION = '0.1.43'
+ORCA_Q4KS_PIN = '7695859aa13afb248bdb4d36f9b2e95707db079d'
 PINS = {BASE_VERSION: '99f3dbd0b21d1401b3769e0c0d963913607f380b',
-        LEGACY_VERSION: '6f32ec070f23ced9f50e704d854d775da52591ab', VERSION: PIN}
+        LEGACY_VERSION: '6f32ec070f23ced9f50e704d854d775da52591ab',
+        VERSION: PIN, ORCA_Q4KS_VERSION: ORCA_Q4KS_PIN}
 VERSIONS = tuple(PINS)
+GENERIC_VERSIONS = (BASE_VERSION, LEGACY_VERSION, VERSION)
 LLAMA_PIN = '3cf03257f219afbe7334045ff7c6a06ac68c627d'
 PROFILES = ('iq3_s', 'orca-iq3_xxs')
 # Preserve the measured 0.1.39 workaround; 0.1.41 has a per-window all-resident batch fix.
@@ -47,8 +51,8 @@ def selected_version(root, requested='auto'):
     if automatic:
         selection = root / 'runtime-selection.json'
         requested = json.loads(selection.read_text()).get('version') if selection.exists() else BASE_VERSION
-    if requested not in PINS:
-        raise SafetyError('Unknown Strata runtime selection; 0.1.38 and tested 0.1.39 rollbacks remain available')
+    if requested not in GENERIC_VERSIONS:
+        raise SafetyError('Unknown generic Strata runtime selection; 0.1.43 is isolated to the explicit Orca Q4 candidate')
     if automatic and requested != BASE_VERSION:
         validated = read_manifest(root, requested).get('validation', {})
         if not all(validated.get(p, {}).get('single_slot_passed') and
@@ -91,13 +95,17 @@ def prepared_runtime(root, version=VERSION):
 def runtime_env(version, parallel):
     if version == LEGACY_VERSION:
         return dict(BATCH_ENV) if parallel > 1 else {}
-    if version == VERSION:
+    if version in (VERSION, ORCA_Q4KS_VERSION):
+        # .43 keeps the already-used verifier safeguards. Do not set STRATA_ROUTE_TAIL_SKIP:
+        # .43's upstream default is output-affecting and remains enabled when upstream conditions allow it.
         return dict(SAFE_ENV, STRATA_VERIFY_ALL_RESIDENT='1')
     return {}
 
 
 def configure(root, baseline_source, baseline_path, cfg, profile, requested='auto', parallel=1, batch_groups=1):
     version = selected_version(root, requested)
+    if version == ORCA_Q4KS_VERSION:
+        raise SafetyError('Strata 0.1.43 is isolated to the explicit Orca Q4 candidate and cannot launch generic profiles')
     if parallel not in (1, 2):
         raise SafetyError('Only the bounded 1/2-slot presets are supported; larger allocations need separate GPU validation')
     if batch_groups not in (1, 2) or parallel % batch_groups or (parallel == 1 and batch_groups != 1):
@@ -135,8 +143,10 @@ def configure(root, baseline_source, baseline_path, cfg, profile, requested='aut
 
 
 def select(root, version):
-    """Change only future launches. Promotion requires both profiles' bounded real-GPU validation."""
+    """Change only future generic launches; the isolated .43 Orca candidate is never promotable here."""
     from prepare_orca import atomic_json
+    if version == ORCA_Q4KS_VERSION:
+        raise SafetyError('Strata 0.1.43 is an isolated Orca Q4 candidate and cannot be promoted as a generic runtime')
     selected_version(root, version)
     if version != BASE_VERSION:
         _, manifest = prepared_runtime(root, version)

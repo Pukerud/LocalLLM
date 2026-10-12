@@ -293,9 +293,9 @@ class Q4Profile(unittest.TestCase):
         with mock.patch.object(launcher, 'data_root', return_value=self.root), \
              mock.patch.object(launcher.q4ks_v0141, 'ready_q4ks_v0141', return_value=candidate_result) as ready_candidate:
             result = launcher.ready_runtime(assets.PROFILE, runtime='0.1.41', parallel=1, batch_groups=1)
-            with self.assertRaisesRegex(SafetyError, 'baseline or the explicit .41'):
+            with self.assertRaisesRegex(SafetyError, 'baseline or an explicit isolated .41/.43 candidate'):
                 launcher.ready_runtime(assets.PROFILE, runtime='0.1.38', parallel=1, batch_groups=1)
-            with self.assertRaisesRegex(SafetyError, 'single-slot'):
+            with self.assertRaisesRegex(SafetyError, 'one slot and one batch group'):
                 launcher.ready_runtime(assets.PROFILE, runtime='auto', parallel=2, batch_groups=1)
         self.assertEqual(result[0], candidate_result[0])
         self.assertEqual(result[3], '0.1.41')
