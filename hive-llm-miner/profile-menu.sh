@@ -207,7 +207,11 @@ check_selected_profile_ready() {
 assert_idle() {
     local listeners containers gpu_apps
 
-    [[ ! -e /run/hive/MINER_RUN ]] || fail 'Hive reports the custom miner running; profile change refused'
+    # MINER_RUN can remain set for Hive's registered custom-miner slot while the
+    # inference host is idle. Gate on actual launchers, API, Docker, GPU, and lease state.
+    if [[ -e /run/hive/MINER_RUN ]]; then
+        say 'Hive MINER_RUN marker is present; checking actual workload state before changing the next-start profile.'
+    fi
     command -v pgrep >/dev/null 2>&1 || fail 'cannot inspect LLM launcher processes; profile change refused'
     if pgrep -f 'strata_launcher[.]py|serve[.]server|llama_cpp[.]server|v1qwen38[.]sh|llama-server|/engine/strata(-vision)?|/hive/miners/custom/llm-hosting/h-run[.]sh' >/dev/null 2>&1; then
         fail 'an LLM launcher/server process is present; profile change refused'

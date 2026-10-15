@@ -49,6 +49,8 @@ grep -Fq 'READY CONFIG: pinned Q4_K_S; future profile context=262144; CPU vision
 grep -Fq 'READY CONFIG: pinned Q4_K_S; future profile context=262144; CPU vision configured; 2 serving slots; batch groups=2; conversation cache=8192 MiB / 4 cache slots.' "$MENU"
 grep -Fq 'STRATA_RUNTIME=0.1.41' "$MENU"
 grep -Fq 'assert_idle' "$MENU"
+grep -Fq 'Hive MINER_RUN marker is present; checking actual workload state' "$MENU"
+! grep -Fq 'Hive reports the custom miner running; profile change refused' "$MENU"
 grep -Fq 'for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8' "$MENU"
 grep -Fq 'for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8' "$INSTALL"
 grep -Fq 'STRATA_RUNTIME=0.1.44.1' "$INSTALL"

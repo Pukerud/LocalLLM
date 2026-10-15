@@ -62,10 +62,13 @@ The menu atomically changes one `current` symlink; Hive's stable `h-run.sh`,
 configuration and metadata paths then resolve to the selected profile. On an
 older install with regular root-level Hive files, its first idle selection
 identifies the current profile from the exact config and safely bootstraps those
-symlinks before switching. It refuses to make a change while Hive reports a
-running miner, an LLM launcher/server is present, port 8080 is occupied,
-Docker or GPU compute is active, a HostLLM pause lease exists, or a safety
-check cannot be completed.
+symlinks before switching. It refuses to make a change while an LLM
+launcher/server is present, port 8080 is occupied, Docker or GPU compute is
+active, a HostLLM pause lease exists, or a safety check cannot be completed.
+Hive's `MINER_RUN` marker is informational by itself: it may remain set while
+the registered custom-miner slot is idle. The selector checks for an actual
+`h-run.sh`/LLM process and active API/GPU/Docker work before switching the
+next-start profile.
 Before selecting an Orca profile, it runs the non-inference `--check-ready`
 gate. The .41 profiles require their exact migrated settings; the two-slot
 profile additionally requires the 2-slot/2-group preset. The .44.1 profile
