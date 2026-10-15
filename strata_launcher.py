@@ -493,7 +493,7 @@ def health(port):
 
 
 def verify_serving(cfg, version, port):
-    """Do not silently advertise two slots if upstream fell back to one after allocation failure."""
+    """Verify slots, allowing the pinned engine's lazy-unloaded status to omit its version."""
     if version == '0.1.38':
         return 1
     headers = {'Authorization': 'Bearer ' + cfg['api_key']} if cfg.get('api_key') else {}
@@ -501,7 +501,14 @@ def verify_serving(cfg, version, port):
     with open_local_api(request, timeout=5) as response:
         status = json.load(response)
     count = (status.get('concurrency') or {}).get('serving')
-    if status.get('engine') != version or type(count) is not int or count != cfg.get('parallel', 1):
+    engine = status.get('engine')
+    # With auto-load disabled, Strata reports engine=None until its first inference.
+    # The runtime binary/config are hash-pinned before launch; keep the live slot gate
+    # strict and reject a missing or mismatched version once the engine is loaded.
+    lazy_unloaded = (version == q4ks_v01441.RUNTIME_VERSION and 'engine' in status and
+                     engine is None and status.get('loaded') is False)
+    if ((engine != version and not lazy_unloaded) or type(count) is not int or
+            count != cfg.get('parallel', 1)):
         raise SafetyError('Effective runtime/slot count differs from the request; no silent single-slot fallback')
     return count
 

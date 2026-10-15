@@ -186,6 +186,30 @@ class Runtime(unittest.TestCase):
             self.assertEqual(s.verify_serving({'parallel':2,'api_key':'cpu-fixture'},r.VERSION,18080),2)
         self.assertEqual(opened.call_args.args[0].get_header('Authorization'),'Bearer cpu-fixture')
 
+    def test_lazy_unloaded_status_is_specific_to_v01441_and_keeps_slot_gate(self):
+        import strata_launcher as s
+        candidate=s.q4ks_v01441.RUNTIME_VERSION
+        valid={'engine':None,'loaded':False,'concurrency':{'serving':1,'requested':1}}
+        response=io.BytesIO(json.dumps(valid).encode())
+        with mock.patch.object(s,'open_local_api',return_value=response):
+            self.assertEqual(s.verify_serving({'parallel':1},candidate,18080),1)
+        invalid=[
+            {'engine':None,'loaded':False,'concurrency':{'serving':2}},
+            {'engine':None,'loaded':True,'concurrency':{'serving':1}},
+            {'engine':'0.1.38','loaded':False,'concurrency':{'serving':1}},
+            {'loaded':False,'concurrency':{'serving':1}},
+        ]
+        for status in invalid:
+            with self.subTest(status=status):
+                response=io.BytesIO(json.dumps(status).encode())
+                with mock.patch.object(s,'open_local_api',return_value=response):
+                    with self.assertRaisesRegex(SafetyError,'silent single-slot'):
+                        s.verify_serving({'parallel':1},candidate,18080)
+        response=io.BytesIO(json.dumps(valid).encode())
+        with mock.patch.object(s,'open_local_api',return_value=response):
+            with self.assertRaisesRegex(SafetyError,'silent single-slot'):
+                s.verify_serving({'parallel':1},r.VERSION,18080)
+
     def test_native_explicit_groups_identity_checked(self):
         import strata_launcher as s
         state={'allowed_executables':['python','native']}
