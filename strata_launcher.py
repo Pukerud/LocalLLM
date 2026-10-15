@@ -29,12 +29,30 @@ from orca_q4ks_profile import (configure_native_context as configure_q4ks_native
                                ready_q4ks, record_32k_validation as record_q4ks_32k_validation,
                                rollback_q4ks_vision)
 import orca_q4ks_v0141_profile as q4ks_v0141
+import orca_q4ks_v01441_profile as q4ks_v01441
 import strata_runtime as runtimes
 
 SOURCE_COMMIT = '99f3dbd0b21d1401b3769e0c0d963913607f380b'
 MODEL_REVISION = 'ed59f92082b1e93c0e96d60a8b11aab089b52f09'
 MODEL = 'Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S'
 HIVE_CUR_MINER = Path('/run/hive/cur_miner')
+
+_Q4_V01441_LAUNCH_ENV = frozenset({
+    'HOME', 'USER', 'LOGNAME', 'PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'TMPDIR',
+    'PYTHONDONTWRITEBYTECODE',
+    'QWEN38_OWNER_USER', 'HOSTLLM_STATE_ROOT', 'HOSTLLM_LAUNCH_LOCK_FD',
+    'HOSTLLM_LAUNCH_LEASE_ID', 'HIVE_STRATA_LAUNCH_ID',
+    'STRATA_DATA_ROOT', 'STRATA_STATE_ROOT', 'STRATA_RUNTIME', 'STRATA_PARALLEL',
+    'STRATA_BATCH_GROUPS', 'STRATA_PORT', 'STRATA_HOST', 'STRATA_API_KEY',
+})
+
+
+def _q4_v01441_launch_environment(environ=None):
+    """Keep service/lifecycle inputs but exclude inherited engine/Python tuning overrides."""
+    environ = os.environ if environ is None else environ
+    clean = {key: value for key, value in environ.items() if key in _Q4_V01441_LAUNCH_ENV}
+    clean['PYTHONDONTWRITEBYTECODE'] = '1'
+    return clean
 
 
 def data_root():
@@ -107,17 +125,22 @@ def ready(profile='iq3_s'):
 
 def _effective_host(profile, version, configured_host):
     requested = os.environ.get('STRATA_HOST')
-    if profile == ORCA_Q4KS_PROFILE and version == '0.1.41':
+    if profile == ORCA_Q4KS_PROFILE and version in ('0.1.41', q4ks_v01441.RUNTIME_VERSION):
         if requested not in (None, '127.0.0.1', '0.0.0.0'):
-            raise SafetyError('Q4 .41 STRATA_HOST may only be 127.0.0.1 or 0.0.0.0')
+            raise SafetyError(f'Q4 {version} STRATA_HOST may only be 127.0.0.1 or 0.0.0.0')
         return requested or '127.0.0.1'
     return requested or configured_host
 
 
 def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
     if profile == ORCA_Q4KS_PROFILE:
-        if runtime not in ('auto', ORCA_Q4KS_RUNTIME, '0.1.41'):
-            raise SafetyError(f'Q4_K_S supports its preserved .39 baseline or the explicit .41 candidate only')
+        if runtime not in ('auto', ORCA_Q4KS_RUNTIME, '0.1.41', q4ks_v01441.RUNTIME_VERSION):
+            raise SafetyError('Q4_K_S supports its .39 baseline or the explicit .41 or .44.1 candidate only')
+        if runtime == q4ks_v01441.RUNTIME_VERSION:
+            if (parallel, batch_groups) != (1, 1):
+                raise SafetyError('Q4 .44.1 is restricted to the validated single-slot/single-group profile')
+            source, path, cfg = q4ks_v01441.ready_q4ks_v01441(data_root())
+            return source, path, cfg, q4ks_v01441.RUNTIME_VERSION
         if runtime == '0.1.41':
             if (parallel, batch_groups) not in ((1, 1), (2, 2)):
                 raise SafetyError('Q4 .41 supports only the single-slot profile or the tested 2-slot/2-group profile')
@@ -127,7 +150,7 @@ def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
                 cfg['args'] += ['--batch-groups', str(batch_groups)]
             return source, path, cfg, '0.1.41'
         if parallel != 1 or batch_groups != 1:
-            raise SafetyError('The preserved Q4 .39 profile is restricted to one slot and one batch group')
+            raise SafetyError('The preserved Q4 .39 profile is single-slot (one slot) and requires one batch group')
         source, path, cfg = ready_q4ks(data_root())
         return source, path, cfg, ORCA_Q4KS_RUNTIME
     source, path, cfg = ready() if profile == 'iq3_s' else ready(profile)
@@ -365,7 +388,8 @@ def guard_during_run(state):
         current = read_state()
         if not current or not same_process(current['identity'], state['identity']) or current.get('stop_requested'):
             return False
-        if state.get('profile') == ORCA_Q4KS_PROFILE and state.get('runtime_version') == '0.1.41':
+        if (state.get('profile') == ORCA_Q4KS_PROFILE and
+                state.get('runtime_version') in ('0.1.41', q4ks_v01441.RUNTIME_VERSION)):
             if state.get('hive_launch_id_sha256'):
                 if host_lifecycle.read_lease() is not None:
                     raise SafetyError('Hive Q4 .41 session conflicts with a HostLLM pause lease')
@@ -506,6 +530,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
                 lease.get('phase') != 'held' or lease.get('lease_id') != requested_lease_id):
             raise SafetyError('HostLLM launch lease changed before model startup')
     source, config_path, cfg, version = ready_runtime(profile, runtime, parallel, batch_groups)
+    launcher_python = cfg.pop('_launcher_python', None)
     state = read_state()
     if state and family(state):
         raise SafetyError('Strata is already running; use its existing web UI')
@@ -515,7 +540,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     port = int(os.environ.get('STRATA_PORT', cfg.get('port', 8080)))
     hosting_lease_id = None
     hive_launch_id = None
-    if profile == ORCA_Q4KS_PROFILE and version == '0.1.41':
+    if profile == ORCA_Q4KS_PROFILE and version in ('0.1.41', q4ks_v01441.RUNTIME_VERSION):
         authorization = require_q4ks_candidate_authorization(
             port, requested_lease_id, host_launch_reserved=inherited_fd is not None)
         if authorization['authorization'] == 'hostllm':
@@ -550,8 +575,14 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     os.fchmod(fd, 0o600)
     with os.fdopen(fd, 'w') as f:
         json.dump(cfg, f, indent=2)
-    env = dict(os.environ)
-    env.update(runtimes.runtime_env(version, parallel))
+    if version == q4ks_v01441.RUNTIME_VERSION:
+        env = _q4_v01441_launch_environment()
+        env.update({'STRATA_RUNTIME': version, 'STRATA_PARALLEL': str(parallel),
+                    'STRATA_BATCH_GROUPS': str(batch_groups), 'STRATA_HOST': cfg['host'],
+                    'STRATA_PORT': str(port)})
+    else:
+        env = dict(os.environ)
+        env.update(runtimes.runtime_env(version, parallel))
     if version == runtimes.LEGACY_VERSION and parallel > 1:
         print('Pinned 0.1.39 batching: all-resident zero-doorbell optimization disabled to avoid the verified layer-0 timeout.', flush=True)
     elif version == runtimes.VERSION:
@@ -571,18 +602,24 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         if parallel == 2 and version == '0.1.41':
             print('Experimental 2-slot profile: one bounded 4.5K-prompt probe left only 457 MiB reported VRAM free; no throughput gain is established.')
         print('Readiness verifies assets/configuration; stored live reports describe bounded probes, not general quality/load.')
-        evidence = (q4ks_v0141.candidate_evidence_summary(data_root()) if version == '0.1.41'
-                    else q4ks_evidence_summary(data_root(), config_path))
+        if version == q4ks_v01441.RUNTIME_VERSION:
+            evidence = q4ks_v01441.candidate_evidence_summary(data_root())
+        elif version == '0.1.41':
+            evidence = q4ks_v0141.candidate_evidence_summary(data_root())
+        else:
+            evidence = q4ks_evidence_summary(data_root(), config_path)
         for evidence_line in evidence:
             print(evidence_line)
     else:
         print('EXPERIMENTAL Strata IQ3_S | BF16 GPU vision | native 262144 | INT8 KV | MTP | high reasoning')
-    print(f'Strata {version}; four-GPU layer split auto; requested slots={parallel}, batch groups={batch_groups}. Log: {log}', flush=True)
+    if version == q4ks_v01441.RUNTIME_VERSION:
+        print('Q4 .44.1 tuning note: the exploratory pipeline-windows 2 override is omitted; its corrected decode interval crosses zero.', flush=True)
+    print(f'Strata {version}; four-GPU layer split {cfg.get("layer_split", "auto")}; requested slots={parallel}, batch groups={batch_groups}. Log: {log}', flush=True)
     if parallel > 1:
         print('Experimental batching: concurrent slots decode without MTP drafts; solo requests retain MTP. Verify effective serving count.', flush=True)
     if cfg['host'] == '0.0.0.0' and not cfg.get('api_key'):
         print('WARNING: unauthenticated LAN API. Use STRATA_API_KEY before exposing beyond a trusted LAN.')
-    python = source / '.venv/bin/python'
+    python = Path(launcher_python) if launcher_python else source / '.venv/bin/python'
     with log.open('a') as out:
         child = subprocess.Popen([str(python), '-m', 'serve.server', '--engine', 'strata', '--config', str(run_config),
                                   '--host', cfg['host'], '--port', str(port)], cwd=source, env=env,
@@ -601,8 +638,11 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
             signal_identity(identity, signal.SIGTERM)
             child.wait(timeout=10)
             raise
+    source_commit = (q4ks_v01441.SOURCE_COMMIT
+                     if profile == ORCA_Q4KS_PROFILE and version == q4ks_v01441.RUNTIME_VERSION
+                     else runtimes.PINS[version])
     state = {'identity': identity, 'port': port, 'log': str(log),
-             'source_commit': runtimes.PINS[version],
+             'source_commit': source_commit,
              'runtime_version': version, 'parallel': parallel, 'batch_groups': batch_groups, 'profile': profile,
              'config': str(run_config), 'allowed_executables': [str(python.resolve()), cfg['exe']] +
              ([cfg['vision']['exe']] if cfg.get('vision') else [])}
@@ -692,7 +732,7 @@ def main():
     modes.add_argument('--rollback-q4ks141-vision', action='store_true')
     modes.add_argument('--select-runtime', choices=runtimes.VERSIONS)
     ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE, ORCA_Q4KS_PROFILE], default=None)
-    ap.add_argument('--runtime', choices=['auto', *runtimes.VERSIONS], default=os.environ.get('STRATA_RUNTIME', 'auto'))
+    ap.add_argument('--runtime', choices=['auto', *runtimes.VERSIONS, q4ks_v01441.RUNTIME_VERSION], default=os.environ.get('STRATA_RUNTIME', 'auto'))
     ap.add_argument('--parallel', type=int, choices=[1, 2], default=os.environ.get('STRATA_PARALLEL', '1'))
     ap.add_argument('--batch-groups', type=int, choices=[1, 2], default=os.environ.get('STRATA_BATCH_GROUPS', '1'))
     a = ap.parse_args()
@@ -753,7 +793,9 @@ def main():
                 context = cfg['args'][cfg['args'].index('--max-context') + 1]
                 vision_cfg = cfg.get('vision')
                 vision_state = 'CPU vision configured' if isinstance(vision_cfg, dict) and vision_cfg.get('gpu') is False else 'text-only'
-                if version == '0.1.41':
+                if version == q4ks_v01441.RUNTIME_VERSION:
+                    print(q4ks_v01441.readiness_line())
+                elif version == '0.1.41':
                     cache_args = cfg.get('args', [])
                     cache_index = cache_args.index('--conversation-cache-mib')
                     cache_budget = cache_args[cache_index + 1]
@@ -767,8 +809,12 @@ def main():
                 else:
                     print(f'READY CONFIG: pinned Q4_K_S; future profile context={context}; {vision_state}; single-slot.')
                 print('Readiness verifies pinned files/configuration only; it is not a general quality or sustained-load test.')
-                evidence = (q4ks_v0141.candidate_evidence_summary(data_root()) if version == '0.1.41'
-                            else q4ks_evidence_summary(data_root(), config))
+                if version == q4ks_v01441.RUNTIME_VERSION:
+                    evidence = q4ks_v01441.candidate_evidence_summary(data_root())
+                elif version == '0.1.41':
+                    evidence = q4ks_v0141.candidate_evidence_summary(data_root())
+                else:
+                    evidence = q4ks_evidence_summary(data_root(), config)
                 for evidence_line in evidence:
                     print(evidence_line)
             else:

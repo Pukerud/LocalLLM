@@ -55,7 +55,7 @@ assert_idle() {
 }
 assert_idle
 
-for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot swift15u-q8; do
+for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8; do
     for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
         [[ -f "$SOURCE_DIR/profiles/$profile/$file" && ! -L "$SOURCE_DIR/profiles/$profile/$file" ]] || \
             fail "profile file missing or symlinked: profiles/$profile/$file"
@@ -86,6 +86,20 @@ for slot_pair in '1 1' '2 2'; do
         fail "Orca Q4_K_S .41 ${parallel}-slot readiness check failed; Hive configuration was not changed"
     fi
 done
+candidate_readiness="$(runuser -u user -- env -i \
+    HOME=/home/user USER=user LOGNAME=user \
+    PATH='/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin' \
+    PYTHONDONTWRITEBYTECODE=1 \
+    STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata \
+    STRATA_STATE_ROOT=/home/user/.local/state/locallm-strata \
+    STRATA_RUNTIME=0.1.44.1 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 STRATA_PORT=8080 \
+    "$LLM_ROOT/v1strata.sh" --check-ready --profile orca-q4_k_s \
+    --runtime 0.1.44.1 --parallel 1 --batch-groups 1)" || \
+    fail 'Orca Q4_K_S .44.1 readiness/evidence check failed; Hive configuration was not changed'
+candidate_expected_readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.44.1; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'
+candidate_actual_readiness="$(grep '^READY CONFIG:' <<< "$candidate_readiness" || true)"
+[[ "$candidate_actual_readiness" == "$candidate_expected_readiness" ]] || \
+    fail 'Orca Q4_K_S .44.1 effective config is not pinned; Hive configuration was not changed'
 assert_idle
 
 if ! dpkg-query -W -f='${Status}' hive-miners-custom 2>/dev/null | grep -q 'install ok installed'; then
@@ -101,15 +115,16 @@ assert_idle
 [[ ! -L "$CUSTOM_ROOT" && ! -L "$CUSTOM_DIR" ]] || fail 'custom miner path is symlinked; refusing package update'
 [[ ! -L "$CUSTOM_DIR/profiles" && ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s" && \
    ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v0141" && \
-   ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v0141-2slot" && ! -L "$CUSTOM_DIR/profiles/swift15u-q8" ]] || \
+   ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v0141-2slot" && \
+   ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v01441" && ! -L "$CUSTOM_DIR/profiles/swift15u-q8" ]] || \
     fail 'custom miner profile path is symlinked; refusing package update'
-for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot swift15u-q8; do
+for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8; do
     for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
         [[ ! -L "$CUSTOM_DIR/profiles/$profile/$file" ]] || fail "installed profile file is symlinked: $profile/$file"
     done
 done
 install -d -m 755 "$CUSTOM_DIR" "$CUSTOM_DIR/profiles" /var/log/miner/custom/llm-hosting
-for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot swift15u-q8; do
+for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8; do
     install -d -m 755 "$CUSTOM_DIR/profiles/$profile"
     for file in h-manifest.conf llm-hosting.conf; do
         install -m 644 "$SOURCE_DIR/profiles/$profile/$file" "$CUSTOM_DIR/profiles/$profile/$file"
@@ -160,6 +175,6 @@ printf '  CUSTOM_MINER=%s\n' "$CUSTOM_NAME"
 printf '  Profile: orca-q4_k_s (default)\n'
 printf '  Switch menu: %s/profile-menu.sh\n' "$CUSTOM_DIR"
 printf '  Previous profile: swift15u-q8\n'
-printf '  Optional profiles: orca-q4_k_s-v0141 (one slot) and orca-q4_k_s-v0141-2slot (experimental two slots/two groups)\n'
+printf '  Optional profiles: .41 one-slot, .41 experimental two-slot, and machine-specific .44.1 one-slot tuning candidate\n'
 printf '  No miner start/stop command was run; osn.service was not modified.\n'
 printf '\nThe profile menu refuses changes while Hive, the API, Docker, or GPU compute is active.\n'

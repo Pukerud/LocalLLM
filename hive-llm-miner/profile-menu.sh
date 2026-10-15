@@ -44,7 +44,7 @@ usage() {
     cat <<'EOF'
 Usage:
   profile-menu.sh                 Show the interactive selector
-  profile-menu.sh --profile NAME  Select orca-q4_k_s, orca-q4_k_s-v0141, orca-q4_k_s-v0141-2slot, or swift15u-q8
+  profile-menu.sh --profile NAME  Select an installed Orca .39/.41/.44.1 profile or swift15u-q8
   profile-menu.sh --list          Show installed profiles and current selection
   profile-menu.sh --help          Show this help
 
@@ -58,6 +58,7 @@ profile_label() {
         orca-q4_k_s) printf '%s' 'Orca Uncensored Q4_K_S — Strata 0.1.39, native 262K, CPU vision, one serving slot' ;;
         orca-q4_k_s-v0141) printf '%s' 'Orca Uncensored Q4_K_S — Strata 0.1.41, native 262K, CPU vision, 8 GiB cache, one serving slot' ;;
         orca-q4_k_s-v0141-2slot) printf '%s' 'Experimental Orca Q4_K_S — Strata 0.1.41, native 262K, CPU vision, 8 GiB cache, two serving slots/two groups; very low VRAM headroom' ;;
+        orca-q4_k_s-v01441) printf '%s' 'Opt-in machine-specific Orca Q4_K_S — Strata 0.1.44.1, native 262K, CPU vision, 8 GiB cache, auto prefill, trimmed split 14,24,36; windows-2 override omitted' ;;
         swift15u-q8) printf '%s' 'Previous Qwen3.8 Swift 1.5 Uncensored Q8_K_XL profile' ;;
         *) return 1 ;;
     esac
@@ -68,7 +69,7 @@ read_current_profile() {
     if [[ -L "$CURRENT_LINK" ]]; then
         target="$(readlink -- "$CURRENT_LINK")" || return 1
         case "$target" in
-            profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/swift15u-q8) printf '%s' "${target#profiles/}" ;;
+            profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8) printf '%s' "${target#profiles/}" ;;
             *) return 1 ;;
         esac
         return
@@ -76,7 +77,7 @@ read_current_profile() {
     [[ ! -e "$CURRENT_LINK" ]] || return 1
     current_conf="$CUSTOM_DIR/llm-hosting.conf"
     [[ -f "$current_conf" && ! -L "$current_conf" ]] || return 1
-    for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot swift15u-q8; do
+    for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8; do
         if cmp -s <(tr -d '\r' < "$current_conf") <(tr -d '\r' < "$PROFILE_ROOT/$profile/llm-hosting.conf"); then
             printf '%s' "$profile"
             return 0
@@ -126,6 +127,7 @@ show_profiles() {
     printf '  orca-q4_k_s: %s\n' "$(profile_label orca-q4_k_s)"
     printf '  orca-q4_k_s-v0141: %s\n' "$(profile_label orca-q4_k_s-v0141)"
     printf '  orca-q4_k_s-v0141-2slot: %s\n' "$(profile_label orca-q4_k_s-v0141-2slot)"
+    printf '  orca-q4_k_s-v01441: %s\n' "$(profile_label orca-q4_k_s-v01441)"
     printf '  swift15u-q8: %s\n' "$(profile_label swift15u-q8)"
 }
 
@@ -160,6 +162,25 @@ check_selected_profile_ready() {
                 fail 'Orca Q4_K_S .41 readiness check failed; profile unchanged'
             [[ "$readiness" == *'READY CONFIG: pinned Q4_K_S; future profile context=262144; CPU vision configured; single-slot; conversation cache=8192 MiB / 4 cache slots.'* ]] || \
                 fail 'Orca Q4_K_S .41 native-context/CPU-vision/cache gates are incomplete; profile unchanged'
+            ;;
+        orca-q4_k_s-v01441)
+            [[ -x "$LLM_ROOT/v1strata.sh" ]] || fail "Strata launcher not found: $LLM_ROOT/v1strata.sh"
+            command -v runuser >/dev/null 2>&1 || fail 'runuser is unavailable; Q4 .44.1 readiness cannot be checked'
+            local readiness expected_readiness actual_readiness
+            readiness="$(runuser -u user -- env -i \
+                HOME=/home/user USER=user LOGNAME=user \
+                PATH='/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin' \
+                PYTHONDONTWRITEBYTECODE=1 \
+                STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata \
+                STRATA_STATE_ROOT=/home/user/.local/state/locallm-strata \
+                STRATA_RUNTIME=0.1.44.1 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 STRATA_PORT=8080 \
+                "$LLM_ROOT/v1strata.sh" --check-ready --profile orca-q4_k_s \
+                --runtime 0.1.44.1 --parallel 1 --batch-groups 1)" || \
+                fail 'Orca Q4_K_S .44.1 readiness/evidence check failed; profile unchanged'
+            expected_readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.44.1; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'
+            actual_readiness="$(grep '^READY CONFIG:' <<< "$readiness" || true)"
+            [[ "$actual_readiness" == "$expected_readiness" ]] || \
+                fail 'Orca Q4_K_S .44.1 exact configuration/evidence is incomplete; profile unchanged'
             ;;
         orca-q4_k_s-v0141-2slot)
             [[ -x "$LLM_ROOT/v1strata.sh" ]] || fail "Strata launcher not found: $LLM_ROOT/v1strata.sh"
@@ -220,6 +241,7 @@ assert_secure_layout
 check_profile_files orca-q4_k_s || fail 'Orca profile files are incomplete or symlinked'
 check_profile_files orca-q4_k_s-v0141 || fail 'Orca .41 profile files are incomplete or symlinked'
 check_profile_files orca-q4_k_s-v0141-2slot || fail 'Orca .41 two-slot profile files are incomplete or symlinked'
+check_profile_files orca-q4_k_s-v01441 || fail 'Orca .44.1 candidate profile files are incomplete or symlinked'
 check_profile_files swift15u-q8 || fail 'previous Qwen profile files are incomplete or symlinked'
 validate_profile_layout
 
@@ -236,6 +258,7 @@ case "${1:-}" in
         printf '  [2] %s\n' "$(profile_label swift15u-q8)"
         printf '  [3] %s\n' "$(profile_label orca-q4_k_s-v0141)"
         printf '  [4] %s\n' "$(profile_label orca-q4_k_s-v0141-2slot)"
+        printf '  [5] %s\n' "$(profile_label orca-q4_k_s-v01441)"
         printf '  [q] Quit\n'
         read -r -p 'Select profile for the next Hive miner start: ' choice || exit 0
         case "${choice//[[:space:]]/}" in
@@ -243,6 +266,7 @@ case "${1:-}" in
             2|swift15u-q8) target='swift15u-q8' ;;
             3|orca-q4_k_s-v0141) target='orca-q4_k_s-v0141' ;;
             4|orca-q4_k_s-v0141-2slot) target='orca-q4_k_s-v0141-2slot' ;;
+            5|orca-q4_k_s-v01441) target='orca-q4_k_s-v01441' ;;
             q|Q|'') exit 0 ;;
             *) fail 'invalid selection; no files changed' ;;
         esac

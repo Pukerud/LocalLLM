@@ -14,8 +14,12 @@ profiles:
    two serving slots/two batch groups. A short test left only 457 MiB VRAM free
    and showed no clear aggregate throughput gain; do not infer long-context or
    sustained-load capacity.
+5. **Orca Q4_K_S .44.1** — machine-specific opt-in using auto prefill and the
+   trimmed `14,24,36` stage split, one serving slot, native 262K, CPU vision,
+   and the 8 GiB/four-slot conversation cache. Its effective serving config omits
+   the uncertain pipeline-windows-2 override (corrected decode interval crosses zero).
 
-All four profiles use the same Hive custom-miner name and Flight Sheet. Hive continues
+All five profiles use the same Hive custom-miner name and Flight Sheet. Hive continues
 to own its normal miner lifecycle; `osn.service` is not changed by installation
 or profile selection.
 
@@ -29,10 +33,10 @@ sudo /hive/miners/custom/llm-hosting/profile-menu.sh
 ```
 
 The HostLLM main menu exposes **[12] Orca .39**, **[13] previous Swift/Qwen**,
-**[14] Orca .41 one-slot**, and **[15] Orca .41 two-slot**; these entries call
-this guarded selector and do not manage Hive's service lifecycle. HostLLM [5]
-launches .41 one-slot directly, while [6] launches the tested 2-slot/2-group
-preset under its normal pause lease.
+**[14] Orca .41 one-slot**, **[15] Orca .41 two-slot**, and **[16] Orca .44.1**;
+these entries call this guarded selector and do not manage Hive's service
+lifecycle. HostLLM [5]/[6] launch the .41 presets directly and [7] launches .44.1
+under its normal pause lease.
 
 Choices are:
 
@@ -41,6 +45,7 @@ Choices are:
 [2] Previous Swift 1.5 Uncensored Q8_K_XL profile
 [3] Orca Q4_K_S — Strata 0.1.41, native 262K, CPU vision, 8 GiB cache, one serving slot
 [4] Orca Q4_K_S — Strata 0.1.41, native 262K, CPU vision, 8 GiB cache, two serving slots/two groups (experimental)
+[5] Orca Q4_K_S — Strata 0.1.44.1, native 262K, CPU vision, 8 GiB cache, one serving slot, auto prefill, trimmed 14,24,36 split (pipeline-windows 2 omitted)
 ```
 
 Noninteractive form:
@@ -50,6 +55,7 @@ sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile orca-q4_k_s
 sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile swift15u-q8
 sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile orca-q4_k_s-v0141
 sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile orca-q4_k_s-v0141-2slot
+sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile orca-q4_k_s-v01441
 ```
 
 The menu atomically changes one `current` symlink; Hive's stable `h-run.sh`,
@@ -60,13 +66,17 @@ symlinks before switching. It refuses to make a change while Hive reports a
 running miner, an LLM launcher/server is present, port 8080 is occupied,
 Docker or GPU compute is active, a HostLLM pause lease exists, or a safety
 check cannot be completed.
-Before selecting either Orca profile, it runs the non-inference `--check-ready`
-gate. The .41 one-slot profile requires its migrated native-context, CPU-vision,
-and cache settings; the two-slot profile additionally requires the exact 2-slot /
-2-group preset. The candidate's separate 32K
-validation evidence remains required by the runtime before migration. Hive .41
-explicitly uses `STRATA_HOST=0.0.0.0` for trusted-LAN access and does not pass
-`STRATA_API_KEY`; its API is therefore unauthenticated. Firewall it and do not
+Before selecting an Orca profile, it runs the non-inference `--check-ready`
+gate. The .41 profiles require their exact migrated settings; the two-slot
+profile additionally requires the 2-slot/2-group preset. The .44.1 profile
+verifies pinned calibration source/build/config/report evidence, preserved
+native-context/CPU-vision/cache settings, auto prefill, stage trimming, and
+single-slot configuration before changing the pointer. The pinned integrated report was recorded with the exploratory
+pipeline-windows-2 calibration config; that override is omitted from the selected serving copy, so the report does not
+qualify windows=1 performance. Its machine-bound calibration workspace must exist on this host; otherwise selection
+fails closed. The 32K/runtime validation gates remain required. Hive Orca profiles explicitly
+use `STRATA_HOST=0.0.0.0` for trusted-LAN access and do not pass
+`STRATA_API_KEY`; their API is therefore unauthenticated. Firewall it and do not
 expose it to an untrusted network. Candidate validation defaults to loopback.
 The menu **never** runs `miner start`, `miner stop`, `osn.service` controls, or an
 inference request. Selection takes effect
@@ -75,9 +85,11 @@ the miner has stopped and the renter workload has cleared.
 
 ## Install
 
-The host must already have both launchers installed and the Orca Q4_K_S
-profile prepared with its native-context/CPU-vision readiness evidence. This
-package does not download models or prepare/change Strata runtimes.
+The host must already have both launchers installed and Orca profiles prepared
+with their readiness evidence. .44.1 is pinned to the existing `.69` calibration
+workspace described in [ORCA_Q4KS_V01441.md](../ORCA_Q4KS_V01441.md); the installer
+does not create or copy that machine-specific candidate. This package does not
+download models or prepare/change Strata runtimes.
 
 From the repository root, as root, while the host is idle:
 
@@ -85,8 +97,8 @@ From the repository root, as root, while the host is idle:
 ./install-hive-llm-miner.sh
 ```
 
-The installer checks both launchers, Q4 .39 and both .41 `--check-ready` presets,
-and the idle state; it installs all four profile directories and the menu, points
+The installer checks both launchers, Q4 .39, both .41 presets, the .44.1
+`--check-ready` preset, and the idle state; it installs all five profile directories and the menu, points
 the default to Orca Q4_K_S .39, and configures Hive to use `MINER=custom` / `CUSTOM_MINER=llm-hosting`. It backs up
 `rig.conf` and `wallet.conf` once with the suffix `.llm-hosting.bak`. It does
 not start or stop Hive or OctaSpace services. Start the miner later using

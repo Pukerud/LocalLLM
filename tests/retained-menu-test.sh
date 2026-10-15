@@ -187,9 +187,13 @@ grep -q '\[3\] Strata IQ3_S' "$root/HostLLM.sh"
 grep -q '\[4\] Orca Q4_K_S — Strata 0.1.39 recorded default | native 262K | CPU vision | one serving slot' "$root/HostLLM.sh"
 grep -q '\[5\] Orca Q4_K_S — Strata 0.1.41 | native 262K | CPU vision | 8 GiB conversation cache | one serving slot' "$root/HostLLM.sh"
 grep -q '\[6\] Orca Q4_K_S — Strata 0.1.41 | two serving slots / two batch groups' "$root/HostLLM.sh"
+grep -q '\[7\] Orca Q4_K_S — Strata 0.1.44.1' "$root/HostLLM.sh"
 grep -q '\[14\] Set next Hive miner profile to Orca Q4_K_S .41' "$root/HostLLM.sh"
 grep -q '\[15\] Set next Hive miner profile to Orca Q4_K_S .41' "$root/HostLLM.sh"
+grep -q '\[16\] Set next Hive miner profile to Orca Q4_K_S .44.1' "$root/HostLLM.sh"
 grep -q 'STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected .*--runtime 0.1.41' "$root/HostLLM.sh"
+grep -q 'STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected .*--runtime 0.1.44.1' "$root/HostLLM.sh"
+grep -q 'windows-2 override omitted' "$root/HostLLM.sh"
 grep -q -- '--prepare-q4ks141' "$root/HostLLM.sh"
 grep -q -- '--run-q4ks141-32k-validation' "$root/HostLLM.sh"
 grep -q 'Q4KS_V0141_VALIDATION_ONLY=1 STRATA_HOST=127.0.0.1' "$root/HostLLM.sh"
@@ -213,7 +217,7 @@ trace="$scratch/maintrace"
     printf '%s\n' "${STRATA_HOST:-unset}" >> "$trace.hosts"
   }
   unset STRATA_HOST
-  main < <(printf '1\n 2 \n3\n4\n5\n6\n11\n') > /dev/null
+  main < <(printf '1\n 2 \n3\n4\n5\n6\n7\n11\n') > /dev/null
 )
 grep -qx 'v1qwen38.sh --quickstart --profile swift15u-q8' "$trace"
 grep -qx 'v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q4kv-xhigh' "$trace"
@@ -221,9 +225,10 @@ grep -qx 'v1strata.sh --quickstart --profile iq3_s' "$trace"
 grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.39' "$trace"
 grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.41 --parallel 1 --batch-groups 1' "$trace"
 grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.41 --parallel 2 --batch-groups 2' "$trace"
+grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$trace"
 grep -qx '0.0.0.0' "$trace.hosts"
 grep -qx 'unset' "$trace.hosts"
-[[ "$(wc -l < "$trace")" -eq 6 ]]
+[[ "$(wc -l < "$trace")" -eq 7 ]]
 # Root-side lifecycle identity can prove a Qwen session managed even if user-side /proc reports unmanaged.
 (
   detect_engine() { echo unmanaged; }
@@ -232,7 +237,7 @@ grep -qx 'unset' "$trace.hosts"
   main < <(printf '4\n11\n') > /dev/null
 )
 [[ "$(tail -n1 "$trace")" == 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.39' ]]
-[[ "$(wc -l < "$trace")" -eq 7 ]]
+[[ "$(wc -l < "$trace")" -eq 8 ]]
 # Choosing Orca while original Strata runs must not call the launch/pause/stop path.
 (
   SCRIPT_DIR="$scratch/live-menu"
@@ -246,7 +251,7 @@ grep -qx 'unset' "$trace.hosts"
   run_selected() { echo 'unexpected-start' >> "$trace"; }
   main < <(printf '5\n11\n') > /dev/null
 )
-[[ "$(wc -l < "$trace")" -eq 7 ]]
+[[ "$(wc -l < "$trace")" -eq 8 ]]
 # An unprepared Q4 request must use its readiness gate, before any service/engine mutation.
 ready_trace="$scratch/readiness.trace"
 export ready_trace
@@ -278,6 +283,49 @@ grep -qx -- '--check-ready --profile orca-q4_k_s --runtime 0.1.41' "$ready_trace
 )
 grep -qx -- '--check-ready --profile orca-q4_k_s --runtime 0.1.41' "$ready_trace"
 [[ "$(wc -l < "$ready_trace")" -eq 3 ]]
+# .44.1 checks readiness before a lease and strips inherited tuning/Python overrides.
+candidate_ready="$scratch/candidate-readiness.trace"
+candidate_env="$scratch/candidate-environment.trace"
+(
+  SCRIPT_DIR="$scratch/candidate-menu"
+  mkdir -p "$SCRIPT_DIR"
+  printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s"\nprintf "%%s|%%s|%%s|%%s\\n" "${PYTHONPATH-unset}" "${STRATA_STAGE_PIN-unset}" "${STRATA_PREFILL_CPU_SHARE-unset}" "${STRATA_API_KEY-unset}" >> "%s"\nexit 1\n' "$candidate_ready" "$candidate_env" > "$SCRIPT_DIR/v1strata.sh"
+  chmod +x "$SCRIPT_DIR/v1strata.sh"
+  PYTHONPATH=/hostile STRATA_STAGE_PIN=1 STRATA_PREFILL_CPU_SHARE=0 STRATA_API_KEY=secret
+  export PYTHONPATH STRATA_STAGE_PIN STRATA_PREFILL_CPU_SHARE STRATA_API_KEY
+  if run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.44.1 --parallel 1 --batch-groups 1; then exit 1; fi
+)
+grep -qx -- '--check-ready --profile orca-q4_k_s --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$candidate_ready"
+grep -qx 'unset|unset|unset|secret' "$candidate_env"
+[[ "$(wc -l < "$ready_trace")" -eq 3 ]]
+# The candidate consumer rejects readiness with a prefix, suffix, or duplicate READY CONFIG line.
+strict_ready_root="$scratch/strict-readiness"
+mkdir -p "$strict_ready_root"
+cat > "$strict_ready_root/v1strata.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.44.1; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'
+if [[ "${1:-}" == --check-ready ]]; then
+    case "$STRATA_API_KEY" in
+        prefix) printf 'prefix %s\n' "$readiness" ;;
+        suffix) printf '%s contradictory\n' "$readiness" ;;
+        duplicate) printf '%s\n%s\n' "$readiness" "$readiness" ;;
+    esac
+    exit 0
+fi
+printf 'unexpected candidate launch\n'
+EOF
+chmod +x "$strict_ready_root/v1strata.sh"
+for bad_readiness in prefix suffix duplicate; do
+  bad_trace="$scratch/$bad_readiness-lease.trace"
+  (
+    SCRIPT_DIR="$strict_ready_root" STRATA_API_KEY="$bad_readiness" HOST_TRACE="$bad_trace"
+    export SCRIPT_DIR STRATA_API_KEY HOST_TRACE
+    hosting() { echo "$*" >> "$HOST_TRACE"; }
+    if run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.44.1 --parallel 1 --batch-groups 1; then exit 1; fi
+  )
+  [[ ! -e "$bad_trace" ]]
+done
 # Invalid .41 binds fail before the launcher readiness check or any service pause.
 (
   SCRIPT_DIR="$scratch/unprepared-menu"
@@ -303,6 +351,49 @@ lease_id="$(awk '$1 == "begin" {print $4}' "$launch_root/host")"
 grep -qx "begin --require-new-lease --lease-id $lease_id --port 18199" "$launch_root/host"
 grep -qx "verify-lease --lease-id $lease_id" "$launch_root/host"
 grep -qx "release --lease-id $lease_id" "$launch_root/host"
+# The .44.1 route carries a clean environment and the inherited exclusive launch reservation.
+candidate_launch_root="$scratch/candidate-launch-reservation"
+mkdir -p "$candidate_launch_root/state"
+: > "$candidate_launch_root/state/lifecycle.lock"
+cat > "$candidate_launch_root/v1strata.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.44.1; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'
+if [[ "${1:-}" == --check-ready ]]; then printf '%s\n' "$readiness"; exit 0; fi
+[[ "$HOSTLLM_LAUNCH_LEASE_ID" =~ ^[a-f0-9]{64}$ ]]
+[[ "${PYTHONPATH-unset}" == unset && "${STRATA_STAGE_PIN-unset}" == unset ]]
+python3 - <<'PY'
+import fcntl, os
+fd = int(os.environ['HOSTLLM_LAUNCH_LOCK_FD'])
+path = os.path.join(os.environ['HOSTLLM_STATE_ROOT'], 'lifecycle.lock')
+other = os.open(path, os.O_RDONLY)
+try:
+    try:
+        fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        pass
+    else:
+        raise SystemExit('candidate launch reservation was not inherited')
+finally:
+    os.close(other)
+PY
+printf 'candidate-lock-reserved\n'
+printf 'candidate-start-ok|%s|%s|%s\n' "${PYTHONPATH-unset}" "${STRATA_PREFILL_CPU_SHARE-unset}" "${STRATA_API_KEY-unset}"
+EOF
+chmod +x "$candidate_launch_root/v1strata.sh"
+(
+  SCRIPT_DIR="$candidate_launch_root" HOSTLLM_STATE_ROOT="$candidate_launch_root/state"
+  STRATA_API_KEY=secret PYTHONPATH=/hostile STRATA_STAGE_PIN=1 STRATA_PREFILL_CPU_SHARE=auto STRATA_HOST=127.0.0.1
+  export SCRIPT_DIR HOSTLLM_STATE_ROOT STRATA_API_KEY PYTHONPATH STRATA_STAGE_PIN STRATA_PREFILL_CPU_SHARE STRATA_HOST
+  hosting() { printf '%s\n' "$*" >> "$candidate_launch_root/host"; }
+  candidate_output="$(run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.44.1 --parallel 1 --batch-groups 1)"
+  printf '%s\n' "$candidate_output" | grep -Fq 'candidate-lock-reserved'
+  printf '%s\n' "$candidate_output" | grep -Fq 'candidate-start-ok|unset|unset|secret'
+)
+candidate_lease="$(awk '$1 == "begin" {print $4}' "$candidate_launch_root/host")"
+[[ "$candidate_lease" =~ ^[a-f0-9]{64}$ ]]
+grep -qx "verify-lease --lease-id $candidate_lease" "$candidate_launch_root/host"
+grep -qx "release --lease-id $candidate_lease" "$candidate_launch_root/host"
 # Runtime/slot/group readiness is also validated before pausing, not only the model profile.
 (
   SCRIPT_DIR="$scratch/unprepared-menu"
@@ -321,4 +412,4 @@ grep -qx -- '--check-ready --profile iq3_s --runtime 0.1.39 --parallel 2 --batch
 )
 grep -qx -- '--check-ready --profile orca-iq3_xxs' "$ready_trace"
 [[ "$(wc -l < "$ready_trace")" -eq 5 ]]
-echo 'HostLLM [4] .39 default, [5]/[6] .41 one/two-slot routes, preflight-before-hosting and running-Strata preservation: PASS'
+echo 'HostLLM [4] .39 default, [5]/[6] .41 routes, [7] .44.1 opt-in, preflight-before-hosting and running-Strata preservation: PASS'
