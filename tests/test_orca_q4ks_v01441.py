@@ -28,8 +28,10 @@ class CandidateIdentity(unittest.TestCase):
         self.assertNotEqual(assets.profile_root(root), prior_assets.profile_root(root))
         self.assertNotEqual(assets.source_root(root), prior_assets.source_root(root))
         self.assertEqual(assets.CONFIG_SHA256, '9cd479e3e889efb43b45745193e746d75f33065f06bb9d6db8862c9e870e186d')
+        self.assertEqual(len(assets.SOURCE_MANIFEST_SHA256), 64)
+        self.assertRegex(assets.SOURCE_MANIFEST_SHA256, r'^[0-9a-f]{64}$')
         self.assertEqual(assets.SOURCE_MANIFEST_SHA256,
-                         'a8de552ff8096c190ece738b61ea594104e3bbd062c852e20d03a8a586260ea')
+                         'a8de552ff8096c190ece7388b61ea594104e3bbd062c852e20d03a8a586260ea')
 
     def test_candidate_config_requires_all_tuned_and_protected_settings(self):
         root = Path('/tmp/strata-data')
