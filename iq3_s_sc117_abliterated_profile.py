@@ -26,6 +26,7 @@ PROFILE = assets.PROFILE
 MODEL_ID = assets.MODEL_ID
 RUNTIME_VERSION = '0.1.39'
 RUNTIME_COMMIT = strata_runtime.PINS[RUNTIME_VERSION]
+TRIAL_RUNTIME_VERSION = '0.1.44.1'
 TRIAL_DISTUTILS_PTH_RELATIVE = Path('distutils-precedence.pth')
 TRIAL_DISTUTILS_PTH_SHA256 = '7ea7ffef3fe2a117ee12c68ed6553617f0d7fd2f0590257c25c484959a3b7373'
 TRIAL_DISTUTILS_PTH_CONTENTS = (b"import os; var = 'SETUPTOOLS_USE_DISTUTILS'; enabled = "
@@ -1275,14 +1276,71 @@ def require_api_key_for_binding(host, api_key):
         raise SafetyError('SC117 non-loopback binding requires an API key; use loopback or configure STRATA_API_KEY')
 
 
-def _verify_trial_artifacts(root, settings, state_root):
-    """Verify pinned inputs while ensuring the trial interpreter ignores shared bytecode caches."""
+def _verify_trial_environment(state_root):
     cache_prefix = Path(state_root) / 'pycache'
     if os.environ.get('PYTHONPYCACHEPREFIX') != str(cache_prefix):
         raise SafetyError('SC117 trial requires its isolated Python bytecode-cache prefix')
     if os.environ.get('SETUPTOOLS_USE_DISTUTILS') != 'stdlib':
         raise SafetyError('SC117 trial requires the pinned distutils .pth to remain inert')
+
+
+def _verify_trial_artifacts(root, settings, state_root):
+    """Verify pinned .39 inputs while ensuring the trial interpreter ignores shared bytecode caches."""
+    _verify_trial_environment(state_root)
     fingerprint(root, settings, verify_content=True, allow_inactive_bytecode=True)
+
+
+def _verify_v01441_trial_artifacts(root, state_root):
+    """Verify SC117 data plus the independently pinned .44.1 candidate for this trial only."""
+    _verify_trial_environment(state_root)
+    prepare_sc117.verify_readiness(Path(root), full_hash=True)
+    from orca_q4ks_v01441_profile import ready_q4ks_v01441
+    ready_q4ks_v01441(Path(root))
+
+
+def build_v01441_trial_config(root, candidate_config):
+    """Rewire the exact Q4 .44.1 serving preset to SC117 assets without changing its tuning."""
+    import orca_q4ks_v01441_assets as q4_assets
+    root = Path(root)
+    cfg = copy.deepcopy(candidate_config)
+    args = cfg.get('args')
+    if not isinstance(args, list) or any(not isinstance(item, str) for item in args):
+        raise SafetyError('SC117 .44.1 candidate config has malformed arguments')
+    if ('--pipeline-windows' in args or
+            any(item.startswith('--pipeline-windows=') for item in args)):
+        raise SafetyError('SC117 .44.1 baseline must omit the unconfirmed pipeline-windows override')
+    for flag, expected in (('--prefill', 'auto'), ('--spec', '4'), ('--max-context', '262144'),
+                           ('--kv', 'int8'), ('--kv-resident', '32768'),
+                           ('--conversation-cache-mib', '8192'),
+                           ('--conversation-cache-slots', '4')):
+        _flag_value(args, flag, expected=expected)
+    if args.count('--trim-stage-weights') != 1 or cfg.get('layer_split') != '14,24,36':
+        raise SafetyError('SC117 .44.1 baseline must retain split 14,24,36 and --trim-stage-weights')
+    if cfg.get('gpu') != [0, 1, 2, 3] or cfg.get('gpu_order') != 'as_given':
+        raise SafetyError('SC117 .44.1 baseline must retain the Q4 GPU order')
+    if cfg.get('parallel') is not None or cfg.get('env') != {
+            'STRATA_PARALLEL': '1', 'STRATA_BATCH_GROUPS': '1'}:
+        raise SafetyError('SC117 .44.1 baseline must remain single-slot/single-group')
+    vision = cfg.get('vision')
+    if (not isinstance(vision, dict) or vision.get('exe') != str(q4_assets.vision_path(root)) or
+            vision.get('gpu') is not False or vision.get('max_tokens') != 1024):
+        raise SafetyError('SC117 .44.1 baseline requires the pinned CPU vision helper')
+    rewires = {
+        '--native': assets.shard1_path(root),
+        '--ple-gguf': assets.shard2_path(root),
+        '--pack': assets.pack_root(root),
+        '--mtp': assets.mtp_runtime_root(root),
+    }
+    for flag, destination in rewires.items():
+        if args.count(flag) != 1:
+            raise SafetyError(f'SC117 .44.1 candidate must contain exactly one {flag}')
+        args[args.index(flag) + 1] = str(destination)
+    cfg['tokenizer'] = str(assets.pack_root(root) / 'tokenizer')
+    cfg['model_name'] = MODEL_ID
+    cfg['aliases'] = ['qwen38-iq3s-sc117-abliterated', PROFILE]
+    vision['model'] = str(assets.shard1_path(root))
+    vision['mmproj'] = str(assets.projector_path(root))
+    return cfg
 
 
 def authorize_start(root, settings, *, host, port, state_root):
@@ -1295,7 +1353,10 @@ def authorize_start(root, settings, *, host, port, state_root):
             raise SafetyError('Unqualified SC117 trials require loopback 127.0.0.1:18080 and isolated sc117-iq3s-trial state')
         # Trials are explicitly not qualification evidence. The isolated cache prefix makes these
         # existing __pycache__ entries inactive; the normal/qualification path still rejects them.
-        _verify_trial_artifacts(root, settings, state_root)
+        if os.environ.get('STRATA_RUNTIME') == TRIAL_RUNTIME_VERSION:
+            _verify_v01441_trial_artifacts(root, state_root)
+        else:
+            _verify_trial_artifacts(root, settings, state_root)
         return 'trial'
     normal_settings = settings_for_start(allow_trial_env=False)
     validate_settings(settings)

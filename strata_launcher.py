@@ -169,11 +169,17 @@ def _effective_host(profile, version, configured_host):
 
 def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
     if profile == sc117_profile.PROFILE:
-        if runtime != sc117_profile.RUNTIME_VERSION:
-            raise SafetyError('SC117 abliterated IQ3_S is pinned to explicit Strata 0.1.39')
         if (parallel, batch_groups) != (1, 1):
             raise SafetyError('SC117 abliterated IQ3_S is restricted to one serving slot and one batch group')
         root = data_root()
+        if runtime == sc117_profile.TRIAL_RUNTIME_VERSION:
+            if os.environ.get(sc117_profile.TRIAL_ENV) != '1':
+                raise SafetyError('SC117 Strata 0.1.44.1 is trial-only until its own qualification passes')
+            prepare_sc117.verify_readiness(root, full_hash=False)
+            source, path, cfg = q4ks_v01441.ready_q4ks_v01441(root)
+            return source, path, sc117_profile.build_v01441_trial_config(root, cfg), runtime
+        if runtime != sc117_profile.RUNTIME_VERSION:
+            raise SafetyError('SC117 supports its pinned .39 runtime or explicit loopback-only .44.1 trial')
         # Validate the shared .38 baseline runtime/config without requiring generic IQ3_S files.
         source, path, cfg = ready(profile)
         source, path, cfg, version = runtimes.configure(
@@ -891,14 +897,20 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     elif profile == sc117_profile.PROFILE:
         if sc117_authorization == 'trial':
             print('UNQUALIFIED SC117 IQ3_S TRIAL: isolated loopback test only; no readiness or quality claim.')
-            print(sc117_profile.default_readiness_line())
+            if version == sc117_profile.TRIAL_RUNTIME_VERSION:
+                print('PROVISIONAL CONFIG: SC117 IQ3_S; Strata=0.1.44.1; context=262144; INT8 KV '
+                      '(32768 resident); MTP=4 from the stock/non-abliterated head; CPU vision; one serving slot/group; '
+                      'prefill auto; split 14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; '
+                      'pipeline-windows omitted.')
+            else:
+                print(sc117_profile.default_readiness_line())
         else:
             print(sc117_profile.readiness_line(settings))
         print(sc117_assets.MTP_SOURCE_NOTE)
     else:
         print('EXPERIMENTAL Strata IQ3_S | BF16 GPU vision | native 262144 | INT8 KV | MTP | high reasoning')
     if version == q4ks_v01441.RUNTIME_VERSION:
-        print('Q4 .44.1 tuning note: the exploratory pipeline-windows 2 override is omitted; its corrected decode interval crosses zero.', flush=True)
+        print('Strata .44.1 note: pipeline-windows is omitted from this serving baseline.', flush=True)
     print(f'Strata {version}; four-GPU layer split {cfg.get("layer_split", "auto")}; requested slots={parallel}, batch groups={batch_groups}. Log: {log}', flush=True)
     if parallel > 1:
         print('Experimental batching: concurrent slots decode without MTP drafts; solo requests retain MTP. Verify effective serving count.', flush=True)
@@ -940,8 +952,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
                 remove_ephemeral_auth_config({'runtime_config_dir': runtime_config_dir,
                                               'runtime_config_dir_identity': runtime_config_dir_identity})
             raise
-    source_commit = (q4ks_v01441.SOURCE_COMMIT
-                     if profile == ORCA_Q4KS_PROFILE and version == q4ks_v01441.RUNTIME_VERSION
+    source_commit = (q4ks_v01441.SOURCE_COMMIT if version == q4ks_v01441.RUNTIME_VERSION
                      else runtimes.PINS[version])
     state = {'identity': identity, 'port': port, 'log': str(log),
              'source_commit': source_commit,

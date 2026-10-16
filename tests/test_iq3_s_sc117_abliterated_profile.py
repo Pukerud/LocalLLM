@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
@@ -108,6 +109,50 @@ class SC117ProfileTests(unittest.TestCase):
         bad['args'].extend(['--pack', str(self.old_pack)])
         with self.assertRaises(SafetyError):
             profile.build_effective_config(self.root, bad)
+
+    def test_v01441_trial_config_reuses_q4_settings_and_rewires_sc117_assets(self):
+        q4_assets = types.ModuleType('orca_q4ks_v01441_assets')
+        q4_assets.engine_path = lambda root: Path(root) / 'candidate/build/engine/strata'
+        q4_assets.source_root = lambda root: Path(root) / 'candidate/source'
+        q4_assets.python_path = lambda root: Path(root) / 'candidate/python'
+        q4_assets.vision_path = lambda root: Path(root) / 'candidate/build/vision/bin/strata-vision'
+        q4_model = self.root / 'data/models/orca-q4_k_s/model.gguf'
+        candidate = {
+            'exe': str(q4_assets.engine_path(self.root)),
+            'cwd': str(q4_assets.source_root(self.root)),
+            'args': ['--pack', str(self.root / 'data/packs/orca-q4_k_s'),
+                     '--native', str(q4_model), '--ple-gguf', str(q4_model), '--ple-io', 'mmap',
+                     '--expert-profile', str(self.root / 'source-99f3dbd0b21d/data/expert-profile.bin'),
+                     '--expert-cache', 'auto', '--prefill', 'auto', '--spec', '4',
+                     '--mtp', str(self.root / 'data/mtp/rt'), '--max-context', '262144',
+                     '--kv', 'int8', '--kv-resident', '32768', '--vision',
+                     '--conversation-cache-mib', '8192', '--conversation-cache-slots', '4',
+                     '--trim-stage-weights'],
+            'tokenizer': str(self.root / 'data/packs/orca-q4_k_s/tokenizer'),
+            'gpu': [0, 1, 2, 3], 'gpu_order': 'as_given', 'layer_split': '14,24,36',
+            'parallel': None, 'host': '127.0.0.1', 'port': 18844, 'lazy_load': True,
+            'env': {'STRATA_PARALLEL': '1', 'STRATA_BATCH_GROUPS': '1'},
+            '_launcher_python': str(q4_assets.python_path(self.root)),
+            'vision': {'exe': str(q4_assets.vision_path(self.root)), 'model': str(q4_model),
+                       'mmproj': str(self.root / 'q4-projector.gguf'), 'gpu': False, 'max_tokens': 1024},
+        }
+        with patch.dict(sys.modules, {'orca_q4ks_v01441_assets': q4_assets}):
+            effective = profile.build_v01441_trial_config(self.root, candidate)
+        args = effective['args']
+        self.assertEqual(args[args.index('--native') + 1], str(assets.shard1_path(self.root)))
+        self.assertEqual(args[args.index('--ple-gguf') + 1], str(assets.shard2_path(self.root)))
+        self.assertEqual(args[args.index('--pack') + 1], str(assets.pack_root(self.root)))
+        self.assertEqual(args[args.index('--mtp') + 1], str(assets.mtp_runtime_root(self.root)))
+        self.assertIn('--trim-stage-weights', args)
+        self.assertNotIn('--pipeline-windows', args)
+        self.assertEqual(effective['layer_split'], '14,24,36')
+        self.assertEqual(effective['vision']['gpu'], False)
+        self.assertEqual(effective['vision']['mmproj'], str(assets.projector_path(self.root)))
+        self.assertEqual(effective['model_name'], assets.MODEL_ID)
+        candidate['args'].extend(['--pipeline-windows', '2'])
+        with patch.dict(sys.modules, {'orca_q4ks_v01441_assets': q4_assets}):
+            with self.assertRaisesRegex(SafetyError, 'pipeline-windows'):
+                profile.build_v01441_trial_config(self.root, candidate)
 
     def test_default_settings_are_strict_and_trial_overrides_are_explicit(self):
         self.assertEqual(profile.PROFILE, 'iq3_s-sc117-abliterated')

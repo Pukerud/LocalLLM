@@ -47,12 +47,16 @@ class LauncherModule:
                                         record_32k_validation=lambda *_: None,
                                         rollback_q4ks_vision=lambda *_: None),
             'orca_q4ks_v0141_profile': module('orca_q4ks_v0141_profile'),
-            'orca_q4ks_v01441_profile': module('orca_q4ks_v01441_profile'),
+            'orca_q4ks_v01441_profile': module('orca_q4ks_v01441_profile',
+                                               RUNTIME_VERSION='0.1.44.1',
+                                               SOURCE_COMMIT='v01441-pin',
+                                               ready_q4ks_v01441=lambda *_: None),
             'iq3_s_sc117_abliterated_assets': module('iq3_s_sc117_abliterated_assets'),
             'iq3_s_sc117_abliterated_profile': module(
                 'iq3_s_sc117_abliterated_profile', PROFILE='iq3_s-sc117-abliterated',
-                RUNTIME_VERSION='0.1.39', settings_for_start=lambda **_: {},
-                build_effective_config=lambda *_: {}),
+                RUNTIME_VERSION='0.1.39', TRIAL_RUNTIME_VERSION='0.1.44.1',
+                TRIAL_ENV='STRATA_SC117_IQ3S_TRIAL', settings_for_start=lambda **_: {},
+                build_effective_config=lambda *_: {}, build_v01441_trial_config=lambda *_: {}),
             'prepare_iq3_s_sc117_abliterated': module(
                 'prepare_iq3_s_sc117_abliterated', verify_readiness=lambda *_a, **_k: None),
             'strata_runtime': module('strata_runtime', LEGACY_VERSION='0.1.39', VERSION='0.1.41',
@@ -120,10 +124,28 @@ class SC117LauncherSecretTests(unittest.TestCase):
             configure.assert_called_once_with(Path('/data'), source, config_path, baseline,
                                                'iq3_s', '0.1.39', 1, 1)
             self.assertEqual(result, (source, config_path, effective, '0.1.39'))
-        with self.assertRaisesRegex(SAFETY_ERROR, 'pinned to explicit Strata 0.1.39'):
+        with self.assertRaisesRegex(SAFETY_ERROR, 'pinned .39 runtime or explicit loopback-only .44.1 trial'):
             LAUNCHER.ready_runtime(profile.PROFILE, 'auto', 1, 1)
         with self.assertRaisesRegex(SAFETY_ERROR, 'one serving slot and one batch group'):
             LAUNCHER.ready_runtime(profile.PROFILE, '0.1.39', 2, 1)
+
+    def test_sc117_0441_route_is_explicit_trial_and_uses_q4_candidate_preset(self):
+        profile = LAUNCHER.sc117_profile
+        candidate = (Path('/q4-0441'), Path('/q4-0441/config.json'), {'args': ['--trim-stage-weights']})
+        effective = {'model_name': 'sc117'}
+        with mock.patch.dict(os.environ, {'STRATA_SC117_IQ3S_TRIAL': '1'}, clear=True), \
+                mock.patch.object(LAUNCHER, 'data_root', return_value=Path('/data')), \
+                mock.patch.object(LAUNCHER.prepare_sc117, 'verify_readiness') as assets_ready, \
+                mock.patch.object(LAUNCHER.q4ks_v01441, 'ready_q4ks_v01441', return_value=candidate) as q4_ready, \
+                mock.patch.object(profile, 'build_v01441_trial_config', return_value=effective) as build:
+            result = LAUNCHER.ready_runtime(profile.PROFILE, '0.1.44.1', 1, 1)
+            assets_ready.assert_called_once_with(Path('/data'), full_hash=False)
+            q4_ready.assert_called_once_with(Path('/data'))
+            build.assert_called_once_with(Path('/data'), candidate[2])
+            self.assertEqual(result, (candidate[0], candidate[1], effective, '0.1.44.1'))
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(SAFETY_ERROR, 'trial-only until its own qualification'):
+                LAUNCHER.ready_runtime(profile.PROFILE, '0.1.44.1', 1, 1)
 
     def test_sc117_baseline_readiness_does_not_require_generic_model_or_pack_files(self):
         with tempfile.TemporaryDirectory() as directory:
