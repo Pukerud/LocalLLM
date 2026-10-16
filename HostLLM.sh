@@ -469,7 +469,7 @@ main() {
         echo '  [12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
         echo '  [13] Set next Hive miner - Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
         echo '  [14] Set next Hive miner - Orca Q4_K_S .44.1 (auto prefill, trimmed split; windows-2 override omitted)'
-        echo '  [15] Set next Hive miner - profile to SC117 abliterated IQ3_S (MTP)'
+        echo '  [15] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot'
         echo '  Hive profile changes are idle-only; they never start/stop a miner or osn.service.'
         read -r -p '  Select: ' choice || return 0
         choice="${choice//[[:space:]]/}"

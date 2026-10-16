@@ -197,7 +197,7 @@ grep -q '\[4\] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 26
 grep -q '\[12\] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL' "$root/HostLLM.sh"
 grep -q '\[13\] Set next Hive miner - Hauhau Q8_K_P' "$root/HostLLM.sh"
 grep -q '\[14\] Set next Hive miner - Orca Q4_K_S .44.1' "$root/HostLLM.sh"
-grep -q '\[15\] Set next Hive miner - profile to SC117 abliterated IQ3_S (MTP)' "$root/HostLLM.sh"
+grep -q '\[15\] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot' "$root/HostLLM.sh"
 ! grep -qE '^ *echo .*\[(5|6|7)\] Orca Q4_K_S — Strata 0\.1\.(41|44\.1)' "$root/HostLLM.sh"
 ! grep -q '\[3\] SC117.*0.1.39' "$root/HostLLM.sh"
 ! grep -q '\[17\].*SC117' "$root/HostLLM.sh"

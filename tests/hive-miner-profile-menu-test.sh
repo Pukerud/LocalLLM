@@ -26,7 +26,7 @@ grep -Fq '[9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit' "$HOST_MENU
 grep -Fq '[12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL' "$HOST_MENU"
 grep -Fq '[13] Set next Hive miner - Hauhau Q8_K_P' "$HOST_MENU"
 grep -Fq '[14] Set next Hive miner - Orca Q4_K_S .44.1' "$HOST_MENU"
-grep -Fq '[15] Set next Hive miner - profile to SC117 abliterated IQ3_S (MTP)' "$HOST_MENU"
+grep -Fq '[15] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot' "$HOST_MENU"
 ! grep -Eq "^[[:space:]]*echo .*\\[(5|6|7|8|16|17)\\]" "$HOST_MENU"
 grep -Fq '3|4)' "$HOST_MENU"
 grep -Fq 'STRATA_SC117_IQ3S_TRIAL=1 STRATA_RUNTIME=0.1.44.1' "$HOST_MENU"
