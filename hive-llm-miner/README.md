@@ -1,6 +1,6 @@
 # HiveOS LocalLLM custom miner
 
-This package installs the `llm-hosting` custom miner with four selectable launch
+This package installs the `llm-hosting` custom miner with six selectable launch
 profiles:
 
 1. **Orca Uncensored Q4_K_S** — Strata 0.1.39, native 262,144 context, CPU
@@ -18,8 +18,12 @@ profiles:
    trimmed `14,24,36` stage split, one serving slot, native 262K, CPU vision,
    and the 8 GiB/four-slot conversation cache. Its effective serving config omits
    the uncertain pipeline-windows-2 override (corrected decode interval crosses zero).
+6. **SC117 abliterated IQ3_S** — readiness-gated Strata 0.1.39, native 262,144 context,
+   INT8 KV (32,768 resident), MTP=4 using the published stock/non-abliterated head,
+   BF16 GPU vision, one slot/group, auto prefill/split, and 8 GiB/four cache slots.
+   It remains unqualified until a trusted identity-bound report exists.
 
-All five profiles use the same Hive custom-miner name and Flight Sheet. Hive continues
+All six profiles use the same Hive custom-miner name and Flight Sheet. Hive continues
 to own its normal miner lifecycle; `osn.service` is not changed by installation
 or profile selection.
 
@@ -32,11 +36,9 @@ LLM/renter workloads are idle:
 sudo /hive/miners/custom/llm-hosting/profile-menu.sh
 ```
 
-The HostLLM main menu exposes **[12] Orca .39**, **[13] previous Swift/Qwen**,
-**[14] Orca .41 one-slot**, **[15] Orca .41 two-slot**, and **[16] Orca .44.1**;
-these entries call this guarded selector and do not manage Hive's service
-lifecycle. HostLLM [5]/[6] launch the .41 presets directly and [7] launches .44.1
-under its normal pause lease.
+HostLLM [17] selects the SC117 profile through this guarded selector; it does not
+manage Hive's service lifecycle. Existing [12]–[16] profile routes, .41 launch
+presets [5]/[6], and the .44.1 launch [7] remain unchanged.
 
 Choices are:
 
@@ -46,6 +48,7 @@ Choices are:
 [3] Orca Q4_K_S — Strata 0.1.41, native 262K, CPU vision, 8 GiB cache, one serving slot
 [4] Orca Q4_K_S — Strata 0.1.41, native 262K, CPU vision, 8 GiB cache, two serving slots/two groups (experimental)
 [5] Orca Q4_K_S — Strata 0.1.44.1, native 262K, CPU vision, 8 GiB cache, one serving slot, auto prefill, trimmed 14,24,36 split (pipeline-windows 2 omitted)
+[6] SC117 abliterated IQ3_S — Strata 0.1.39, native 262K, BF16 GPU vision, MTP=4, one slot/group, 8 GiB/four-slot cache (exact qualification required)
 ```
 
 Noninteractive form:
@@ -56,6 +59,7 @@ sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile swift15u-q8
 sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile orca-q4_k_s-v0141
 sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile orca-q4_k_s-v0141-2slot
 sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile orca-q4_k_s-v01441
+sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile iq3_s-sc117-abliterated
 ```
 
 The menu atomically changes one `current` symlink; Hive's stable `h-run.sh`,
@@ -77,7 +81,24 @@ native-context/CPU-vision/cache settings, auto prefill, stage trimming, and
 single-slot configuration before changing the pointer. The pinned integrated report was recorded with the exploratory
 pipeline-windows-2 calibration config; that override is omitted from the selected serving copy, so the report does not
 qualify windows=1 performance. Its machine-bound calibration workspace must exist on this host; otherwise selection
-fails closed. The 32K/runtime validation gates remain required. Hive Orca profiles explicitly
+fails closed. SC117 selection also checks its exact .39 config and requires a
+root-owned report at `/var/lib/localllm-strata/qualifications/sc117-iq3s.json`.
+No trusted evidence runner is installed or pinned, so a report cannot currently
+unlock normal starts. The exact SC117 readiness line is:
+
+```text
+READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.
+```
+
+SC117 defaults to `127.0.0.1`; only explicit `STRATA_HOST=0.0.0.0` enables LAN
+binding, and that requires a protected `STRATA_API_KEY` in the Hive miner
+configuration. The wrapper unsets the exported key name and forwards its value
+through stdin; the launcher keeps it out of argv, environment, and persistent
+run-config, using a private tmpfs config removed on stop. HTTP remains unencrypted;
+use only a trusted LAN or tunnel. See [STRATA_SC117_IQ3S.md](../STRATA_SC117_IQ3S.md)
+for pins, qualification requirements, and the current fail-closed status.
+
+The 32K/runtime validation gates remain required. Hive Orca profiles explicitly
 use `STRATA_HOST=0.0.0.0` for trusted-LAN access and do not pass
 `STRATA_API_KEY`; their API is therefore unauthenticated. Firewall it and do not
 expose it to an untrusted network. Candidate validation defaults to loopback.
@@ -101,16 +122,20 @@ From the repository root, as root, while the host is idle:
 ```
 
 The installer checks both launchers, Q4 .39, both .41 presets, the .44.1
-`--check-ready` preset, and the idle state; it installs all five profile directories and the menu, points
-the default to Orca Q4_K_S .39, and configures Hive to use `MINER=custom` / `CUSTOM_MINER=llm-hosting`. It backs up
+`--check-ready` preset, and the idle state; it installs all six profile
+directories and the menu. SC117 can be installed before qualification, but its
+selector and normal start remain blocked until the exact trusted report exists.
+A fresh install selects Orca Q4_K_S .39; updates preserve a recognized existing
+`current` profile pointer. SC117 is never selected implicitly. Hive is configured
+with `MINER=custom` / `CUSTOM_MINER=llm-hosting`. It backs up
 `rig.conf` and `wallet.conf` once with the suffix `.llm-hosting.bak`. It does
 not start or stop Hive or OctaSpace services. Start the miner later using
 Hive's normal operator workflow, when appropriate.
 
 ## Remove
 
-The uninstall script refuses to remove the package while Hive, an LLM
-launcher/server, the API, Docker, a HostLLM lease, or GPU compute is active. It
+The uninstall script refuses to remove the package, including the SC117 profile,
+while Hive, an LLM launcher/server, the API, Docker, a HostLLM lease, or GPU compute is active. It
 never stops the miner automatically. Run it only
 when the host is idle:
 

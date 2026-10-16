@@ -2,6 +2,7 @@
 # Select which existing LocalLLM launcher HiveOS will use on its next start.
 # This changes one profile symlink only; it never starts/stops miners or services.
 set -Eeuo pipefail
+unset STRATA_API_KEY
 
 unset BASH_ENV ENV CDPATH PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH || true
 export PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
@@ -44,7 +45,7 @@ usage() {
     cat <<'EOF'
 Usage:
   profile-menu.sh                 Show the interactive selector
-  profile-menu.sh --profile NAME  Select an installed Orca .39/.41/.44.1 profile or swift15u-q8
+  profile-menu.sh --profile NAME  Select an installed Orca, Swift, or readiness-gated SC117 profile
   profile-menu.sh --list          Show installed profiles and current selection
   profile-menu.sh --help          Show this help
 
@@ -60,6 +61,7 @@ profile_label() {
         orca-q4_k_s-v0141-2slot) printf '%s' 'Experimental Orca Q4_K_S — Strata 0.1.41, native 262K, CPU vision, 8 GiB cache, two serving slots/two groups; very low VRAM headroom' ;;
         orca-q4_k_s-v01441) printf '%s' 'Opt-in machine-specific Orca Q4_K_S — Strata 0.1.44.1, native 262K, CPU vision, 8 GiB cache, auto prefill, trimmed split 14,24,36; windows-2 override omitted' ;;
         swift15u-q8) printf '%s' 'Previous Qwen3.8 Swift 1.5 Uncensored Q8_K_XL profile' ;;
+        iq3_s-sc117-abliterated) printf '%s' 'Opt-in SC117 abliterated IQ3_S — Strata 0.1.39, native 262K, BF16 GPU vision, MTP=4, one serving slot/group, 8 GiB/four-slot cache; exact qualification required' ;;
         *) return 1 ;;
     esac
 }
@@ -69,7 +71,7 @@ read_current_profile() {
     if [[ -L "$CURRENT_LINK" ]]; then
         target="$(readlink -- "$CURRENT_LINK")" || return 1
         case "$target" in
-            profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8) printf '%s' "${target#profiles/}" ;;
+            profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/iq3_s-sc117-abliterated) printf '%s' "${target#profiles/}" ;;
             *) return 1 ;;
         esac
         return
@@ -77,7 +79,7 @@ read_current_profile() {
     [[ ! -e "$CURRENT_LINK" ]] || return 1
     current_conf="$CUSTOM_DIR/llm-hosting.conf"
     [[ -f "$current_conf" && ! -L "$current_conf" ]] || return 1
-    for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8; do
+    for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 iq3_s-sc117-abliterated; do
         if cmp -s <(tr -d '\r' < "$current_conf") <(tr -d '\r' < "$PROFILE_ROOT/$profile/llm-hosting.conf"); then
             printf '%s' "$profile"
             return 0
@@ -129,10 +131,30 @@ show_profiles() {
     printf '  orca-q4_k_s-v0141-2slot: %s\n' "$(profile_label orca-q4_k_s-v0141-2slot)"
     printf '  orca-q4_k_s-v01441: %s\n' "$(profile_label orca-q4_k_s-v01441)"
     printf '  swift15u-q8: %s\n' "$(profile_label swift15u-q8)"
+    printf '  iq3_s-sc117-abliterated: %s\n' "$(profile_label iq3_s-sc117-abliterated)"
 }
 
 check_selected_profile_ready() {
     case "$1" in
+        iq3_s-sc117-abliterated)
+            [[ -x "$LLM_ROOT/v1strata.sh" ]] || fail "Strata launcher not found: $LLM_ROOT/v1strata.sh"
+            command -v runuser >/dev/null 2>&1 || fail 'runuser is unavailable; SC117 qualification cannot be checked'
+            local readiness expected_readiness actual_readiness
+            readiness="$(runuser -u user -- env -i \
+                HOME=/home/user USER=user LOGNAME=user \
+                PATH='/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin' \
+                PYTHONDONTWRITEBYTECODE=1 \
+                STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata \
+                STRATA_STATE_ROOT=/home/user/.local/state/locallm-strata \
+                STRATA_RUNTIME=0.1.39 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 STRATA_PORT=8080 STRATA_HOST=127.0.0.1 \
+                "$LLM_ROOT/v1strata.sh" --check-ready --profile iq3_s-sc117-abliterated \
+                --runtime 0.1.39 --parallel 1 --batch-groups 1)" || \
+                fail 'SC117 abliterated IQ3_S readiness/qualification failed; profile unchanged'
+            expected_readiness='READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.'
+            actual_readiness="$(grep '^READY CONFIG:' <<< "$readiness" || true)"
+            [[ "$actual_readiness" == "$expected_readiness" ]] || \
+                fail 'SC117 exact configuration/qualification is incomplete; profile unchanged'
+            ;;
         orca-q4_k_s)
             [[ -x "$LLM_ROOT/v1strata.sh" ]] || fail "Strata launcher not found: $LLM_ROOT/v1strata.sh"
             command -v runuser >/dev/null 2>&1 || fail 'runuser is unavailable; Q4 readiness cannot be checked'
@@ -247,6 +269,7 @@ check_profile_files orca-q4_k_s-v0141 || fail 'Orca .41 profile files are incomp
 check_profile_files orca-q4_k_s-v0141-2slot || fail 'Orca .41 two-slot profile files are incomplete or symlinked'
 check_profile_files orca-q4_k_s-v01441 || fail 'Orca .44.1 candidate profile files are incomplete or symlinked'
 check_profile_files swift15u-q8 || fail 'previous Qwen profile files are incomplete or symlinked'
+check_profile_files iq3_s-sc117-abliterated || fail 'SC117 profile files are incomplete or symlinked'
 validate_profile_layout
 
 case "${1:-}" in
@@ -263,6 +286,7 @@ case "${1:-}" in
         printf '  [3] %s\n' "$(profile_label orca-q4_k_s-v0141)"
         printf '  [4] %s\n' "$(profile_label orca-q4_k_s-v0141-2slot)"
         printf '  [5] %s\n' "$(profile_label orca-q4_k_s-v01441)"
+        printf '  [6] %s (readiness-gated)\n' "$(profile_label iq3_s-sc117-abliterated)"
         printf '  [q] Quit\n'
         read -r -p 'Select profile for the next Hive miner start: ' choice || exit 0
         case "${choice//[[:space:]]/}" in
@@ -271,6 +295,7 @@ case "${1:-}" in
             3|orca-q4_k_s-v0141) target='orca-q4_k_s-v0141' ;;
             4|orca-q4_k_s-v0141-2slot) target='orca-q4_k_s-v0141-2slot' ;;
             5|orca-q4_k_s-v01441) target='orca-q4_k_s-v01441' ;;
+            6|iq3_s-sc117-abliterated) target='iq3_s-sc117-abliterated' ;;
             q|Q|'') exit 0 ;;
             *) fail 'invalid selection; no files changed' ;;
         esac

@@ -3,6 +3,7 @@
 # Install HiveOS custom-miner profiles with Orca Q4 .39 as default, opt-in .41
 # one/two-slot variants, and the previous Swift/Qwen Q8 profile. Never starts/stops Hive or osn.service.
 set -Eeuo pipefail
+unset STRATA_API_KEY
 
 if [[ "${EUID}" -ne 0 ]]; then
     printf 'Run as root: sudo %s\n' "$0" >&2
@@ -26,6 +27,8 @@ fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 [[ -f "$RIG_CONF" ]] || fail "Hive rig config not found: $RIG_CONF"
 [[ -f "$WALLET_CONF" ]] || fail "Hive wallet config not found: $WALLET_CONF"
 [[ -d "$SOURCE_DIR" ]] || fail "custom miner source directory not found: $SOURCE_DIR"
+[[ -f "${SCRIPT_DIR}/exec_with_stdin_api_key.py" && ! -L "${SCRIPT_DIR}/exec_with_stdin_api_key.py" ]] || fail 'API-key stdin shim is missing or symlinked'
+[[ ! -L "${LLM_ROOT}/exec_with_stdin_api_key.py" ]] || fail 'installed API-key stdin shim path is symlinked'
 
 # Never replace miner files during a rental, active server, or unidentified
 # GPU/Docker workload. Recheck after readiness immediately before installation.
@@ -55,7 +58,9 @@ assert_idle() {
 }
 assert_idle
 
-for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8; do
+for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 iq3_s-sc117-abliterated; do
+    [[ -d "$SOURCE_DIR/profiles/$profile" && ! -L "$SOURCE_DIR/profiles/$profile" ]] || \
+        fail "profile directory missing or symlinked: profiles/$profile"
     for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
         [[ -f "$SOURCE_DIR/profiles/$profile/$file" && ! -L "$SOURCE_DIR/profiles/$profile/$file" ]] || \
             fail "profile file missing or symlinked: profiles/$profile/$file"
@@ -102,6 +107,40 @@ candidate_actual_readiness="$(grep '^READY CONFIG:' <<< "$candidate_readiness" |
     fail 'Orca Q4_K_S .44.1 effective config is not pinned; Hive configuration was not changed'
 assert_idle
 
+# Preserve a recognized existing profile selection. A fresh install keeps the .39 Q4 default.
+initial_profile='orca-q4_k_s'
+if [[ -L "$CUSTOM_DIR/current" ]]; then
+    current_target="$(readlink -- "$CUSTOM_DIR/current")" || fail 'cannot read existing Hive profile pointer'
+    case "$current_target" in
+        profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/iq3_s-sc117-abliterated)
+            initial_profile="${current_target#profiles/}"
+            ;;
+        *) fail "existing Hive profile pointer is not recognized: $current_target" ;;
+    esac
+    [[ -d "$CUSTOM_DIR/profiles/$initial_profile" && ! -L "$CUSTOM_DIR/profiles/$initial_profile" ]] || \
+        fail "existing Hive profile pointer target is missing or unsafe: $initial_profile"
+    for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
+        [[ -f "$CUSTOM_DIR/profiles/$initial_profile/$file" && ! -L "$CUSTOM_DIR/profiles/$initial_profile/$file" ]] || \
+            fail "existing Hive profile pointer target is incomplete or unsafe: $initial_profile/$file"
+    done
+elif [[ -e "$CUSTOM_DIR/current" ]]; then
+    fail 'existing Hive current-profile path is not a symlink; refusing to replace it'
+elif [[ -e "$CUSTOM_DIR/llm-hosting.conf" ]]; then
+    [[ -f "$CUSTOM_DIR/llm-hosting.conf" && ! -L "$CUSTOM_DIR/llm-hosting.conf" ]] || \
+        fail 'legacy Hive profile config is not a regular file; refusing to infer a default'
+    recognized_legacy_profile=''
+    for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 iq3_s-sc117-abliterated; do
+        if cmp -s <(tr -d '\r' < "$CUSTOM_DIR/llm-hosting.conf") \
+                  <(tr -d '\r' < "$SOURCE_DIR/profiles/$profile/llm-hosting.conf"); then
+            recognized_legacy_profile="$profile"
+            break
+        fi
+    done
+    [[ -n "$recognized_legacy_profile" ]] || \
+        fail 'legacy Hive profile config is unrecognized; refusing to switch it to the .39 default'
+    initial_profile="$recognized_legacy_profile"
+fi
+
 if ! dpkg-query -W -f='${Status}' hive-miners-custom 2>/dev/null | grep -q 'install ok installed'; then
     printf 'Installing HiveOS custom-miner control package...\n'
     apt-get install -y hive-miners-custom
@@ -116,15 +155,16 @@ assert_idle
 [[ ! -L "$CUSTOM_DIR/profiles" && ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s" && \
    ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v0141" && \
    ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v0141-2slot" && \
-   ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v01441" && ! -L "$CUSTOM_DIR/profiles/swift15u-q8" ]] || \
+   ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v01441" && ! -L "$CUSTOM_DIR/profiles/swift15u-q8" && \
+   ! -L "$CUSTOM_DIR/profiles/iq3_s-sc117-abliterated" ]] || \
     fail 'custom miner profile path is symlinked; refusing package update'
-for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8; do
+for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 iq3_s-sc117-abliterated; do
     for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
         [[ ! -L "$CUSTOM_DIR/profiles/$profile/$file" ]] || fail "installed profile file is symlinked: $profile/$file"
     done
 done
 install -d -m 755 "$CUSTOM_DIR" "$CUSTOM_DIR/profiles" /var/log/miner/custom/llm-hosting
-for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8; do
+for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 iq3_s-sc117-abliterated; do
     install -d -m 755 "$CUSTOM_DIR/profiles/$profile"
     for file in h-manifest.conf llm-hosting.conf; do
         install -m 644 "$SOURCE_DIR/profiles/$profile/$file" "$CUSTOM_DIR/profiles/$profile/$file"
@@ -134,17 +174,19 @@ for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s
     done
 done
 install -m 755 "$SOURCE_DIR/profile-menu.sh" "$CUSTOM_DIR/profile-menu.sh"
+if ! cmp -s "${SCRIPT_DIR}/exec_with_stdin_api_key.py" "${LLM_ROOT}/exec_with_stdin_api_key.py"; then
+    install -m 444 "${SCRIPT_DIR}/exec_with_stdin_api_key.py" "${LLM_ROOT}/exec_with_stdin_api_key.py"
+fi
 
 # Hive always opens stable root paths. Each one resolves through `current`,
 # which the menu swaps atomically after its idle checks.
 for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
     ln -sfnT "current/$file" "$CUSTOM_DIR/$file"
 done
-tmp_current="$CUSTOM_DIR/.current.install.$$"
-trap 'rm -f -- "${tmp_current:-}"' EXIT
-ln -s -- 'profiles/orca-q4_k_s' "$tmp_current"
-mv -Tf -- "$tmp_current" "$CUSTOM_DIR/current"
-trap - EXIT
+if [[ ! -L "$CUSTOM_DIR/current" ]]; then
+    ln -s -- "profiles/$initial_profile" "$CUSTOM_DIR/current" || \
+        fail 'Hive current-profile pointer appeared during installation; refusing to overwrite it'
+fi
 
 for file in "$RIG_CONF" "$WALLET_CONF"; do
     backup="${file}${BACKUP_SUFFIX}"
@@ -172,9 +214,9 @@ sync
 printf '\nHiveOS LLM miner installed.\n'
 printf '  MINER=custom\n'
 printf '  CUSTOM_MINER=%s\n' "$CUSTOM_NAME"
-printf '  Profile: orca-q4_k_s (default)\n'
+printf '  Profile: %s%s\n' "$initial_profile" "$([[ "$initial_profile" == orca-q4_k_s ]] && printf ' (initial default)' || printf ' (preserved selection)')"
 printf '  Switch menu: %s/profile-menu.sh\n' "$CUSTOM_DIR"
 printf '  Previous profile: swift15u-q8\n'
-printf '  Optional profiles: .41 one-slot, .41 experimental two-slot, and machine-specific .44.1 one-slot tuning candidate\n'
+printf '  Optional profiles: .41 one-slot, .41 experimental two-slot, machine-specific .44.1, and readiness-gated SC117 abliterated IQ3_S\n'
 printf '  No miner start/stop command was run; osn.service was not modified.\n'
 printf '\nThe profile menu refuses changes while Hive, the API, Docker, or GPU compute is active.\n'

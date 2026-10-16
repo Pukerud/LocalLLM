@@ -3,8 +3,16 @@
 # Hosting pauses the Hive miner and OctaSpace, then restores their previous state.
 # Rental containers/unidentified GPU workloads are never stopped.
 set -uo pipefail
+# Never let inherited bash xtrace print credentials during the interactive handoff.
+set +x
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 HOSTLLM_ACTIVE_LEASE_ID=''
+unset HOSTLLM_STRATA_API_KEY
+if [[ -n "${STRATA_API_KEY:-}" ]]; then
+    echo 'Refusing exported STRATA_API_KEY: restart HostLLM without it and enter credentials at the interactive prompt.' >&2
+    exit 2
+fi
+readonly SC117_IQ3S_READY_CONFIG='READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.'
 
 safety() { python3 "$SCRIPT_DIR/engine_safety.py" "$@"; }
 hosting() { python3 "$SCRIPT_DIR/hosting_lifecycle.py" "$@"; }
@@ -78,9 +86,10 @@ stop_owned_engines() {
 
 run_selected() {
     local launcher="$1"
+    local HOSTLLM_STRATA_API_KEY=''
     shift
     if [[ "$launcher" == v1strata.sh && "$EUID" -eq 0 ]]; then
-        echo 'Run Strata as the unprivileged operator; its Q4 profiles refuse root-owned servers.'
+        echo 'Run Strata as the unprivileged operator; its profiles refuse root-owned servers.'
         return 1
     fi
     if [[ ! -x "$SCRIPT_DIR/$launcher" ]]; then
@@ -88,24 +97,71 @@ run_selected() {
         return 1
     fi
     if [[ "$launcher" == v1strata.sh ]]; then
-        local arg previous='' i candidate_041=0 candidate_0441=0 requested_parallel=1 requested_groups=1
+        local arg previous='' i candidate_041=0 candidate_0441=0 candidate_sc117_iq3s=0
+        local requested_profile='' requested_runtime='' requested_parallel=1 requested_groups=1
+        local requested_host readiness expected_readiness actual_readiness
+        local requested_profile_count=0 requested_runtime_count=0 requested_parallel_count=0 requested_groups_count=0
         local -a check_args=(--check-ready) candidate_env=()
         for arg in "$@"; do
             case "$previous" in
                 --profile|--runtime|--parallel|--batch-groups) check_args+=("$previous" "$arg") ;;
             esac
+            case "$arg" in
+                --profile=*|--runtime=*|--parallel=*|--batch-groups=*) check_args+=("$arg") ;;
+            esac
             previous="$arg"
         done
         for ((i=0; i<${#check_args[@]}; i++)); do
             case "${check_args[i]}" in
+                --profile)
+                    requested_profile="${check_args[i+1]:-}"
+                    requested_profile_count=$((requested_profile_count + 1))
+                    [[ "${check_args[i+1]:-}" == iq3_s-sc117-abliterated ]] && candidate_sc117_iq3s=1
+                    ;;
+                --profile=*)
+                    requested_profile="${check_args[i]#*=}"
+                    requested_profile_count=$((requested_profile_count + 1))
+                    [[ "$requested_profile" == iq3_s-sc117-abliterated ]] && candidate_sc117_iq3s=1
+                    ;;
                 --runtime)
+                    requested_runtime="${check_args[i+1]:-}"
+                    requested_runtime_count=$((requested_runtime_count + 1))
                     [[ "${check_args[i+1]:-}" == 0.1.41 ]] && candidate_041=1
                     [[ "${check_args[i+1]:-}" == 0.1.44.1 ]] && candidate_0441=1
                     ;;
-                --parallel) requested_parallel="${check_args[i+1]:-1}" ;;
-                --batch-groups) requested_groups="${check_args[i+1]:-1}" ;;
+                --runtime=*)
+                    requested_runtime="${check_args[i]#*=}"
+                    requested_runtime_count=$((requested_runtime_count + 1))
+                    [[ "$requested_runtime" == 0.1.41 ]] && candidate_041=1
+                    [[ "$requested_runtime" == 0.1.44.1 ]] && candidate_0441=1
+                    ;;
+                --parallel)
+                    requested_parallel="${check_args[i+1]:-1}"
+                    requested_parallel_count=$((requested_parallel_count + 1))
+                    ;;
+                --parallel=*)
+                    requested_parallel="${check_args[i]#*=}"
+                    requested_parallel_count=$((requested_parallel_count + 1))
+                    ;;
+                --batch-groups)
+                    requested_groups="${check_args[i+1]:-1}"
+                    requested_groups_count=$((requested_groups_count + 1))
+                    ;;
+                --batch-groups=*)
+                    requested_groups="${check_args[i]#*=}"
+                    requested_groups_count=$((requested_groups_count + 1))
+                    ;;
             esac
         done
+        if [[ "$candidate_sc117_iq3s" -eq 1 ]]; then
+            if [[ "$requested_profile_count" -ne 1 || "$requested_profile" != iq3_s-sc117-abliterated || \
+                  "$requested_runtime_count" -ne 1 || "$requested_parallel_count" -ne 1 || "$requested_groups_count" -ne 1 || \
+                  "$candidate_041" -ne 0 || "$candidate_0441" -ne 0 || \
+                  "$requested_runtime" != 0.1.39 || "$requested_parallel" != 1 || "$requested_groups" != 1 ]]; then
+                echo 'SC117 abliterated IQ3_S requires explicit Strata 0.1.39, one slot, and one group; refusing before service pause.' >&2
+                return 1
+            fi
+        fi
         if [[ "$candidate_041" -eq 1 ]]; then
             local requested_host="${STRATA_HOST:-127.0.0.1}" readiness expected_readiness
             case "$requested_host" in
@@ -133,7 +189,7 @@ run_selected() {
                 return 1
             }
         elif [[ "$candidate_0441" -eq 1 ]]; then
-            local requested_host="${STRATA_HOST:-127.0.0.1}" readiness expected_readiness actual_readiness
+            requested_host="${STRATA_HOST:-127.0.0.1}"
             case "$requested_host" in
                 127.0.0.1|0.0.0.0) ;;
                 *) echo 'Q4 .44.1 only permits loopback or explicit 0.0.0.0 binding; refusing before service pause.' >&2; return 1 ;;
@@ -151,7 +207,6 @@ run_selected() {
                 'STRATA_RUNTIME=0.1.44.1' 'STRATA_PARALLEL=1' 'STRATA_BATCH_GROUPS=1'
                 "STRATA_PORT=${STRATA_PORT:-8080}" "STRATA_HOST=$requested_host"
             )
-            [[ -z "${STRATA_API_KEY:-}" ]] || candidate_env+=("STRATA_API_KEY=$STRATA_API_KEY")
             [[ -z "${HOSTLLM_STATE_ROOT:-}" ]] || candidate_env+=("HOSTLLM_STATE_ROOT=$HOSTLLM_STATE_ROOT")
             readiness="$(/usr/bin/env -i "${candidate_env[@]}" "$SCRIPT_DIR/$launcher" "${check_args[@]}")" || return 1
             printf '%s\n' "$readiness"
@@ -161,9 +216,53 @@ run_selected() {
                 echo 'Q4 .44.1 readiness is incomplete; no HostLLM service pause was started.' >&2
                 return 1
             }
+        elif [[ "$candidate_sc117_iq3s" -eq 1 ]]; then
+            requested_host="${STRATA_HOST:-127.0.0.1}"
+            case "$requested_host" in
+                127.0.0.1|0.0.0.0) ;;
+                *) echo 'SC117 IQ3_S only permits loopback or explicit 0.0.0.0 binding; refusing before service pause.' >&2; return 1 ;;
+            esac
+            candidate_env=(
+                "HOME=${HOME:-/home/user}" "USER=${USER:-user}" "LOGNAME=${LOGNAME:-${USER:-user}}"
+                'PATH=/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin' 'PYTHONDONTWRITEBYTECODE=1'
+                "QWEN38_OWNER_USER=${QWEN38_OWNER_USER:-${USER:-user}}"
+                "STRATA_DATA_ROOT=${STRATA_DATA_ROOT:-${HOME:-/home/user}/.local/share/localllm-strata}"
+                "STRATA_STATE_ROOT=${STRATA_STATE_ROOT:-${HOME:-/home/user}/.local/state/locallm-strata}"
+                'STRATA_RUNTIME=0.1.39' 'STRATA_PARALLEL=1' 'STRATA_BATCH_GROUPS=1'
+                "STRATA_PORT=${STRATA_PORT:-8080}" "STRATA_HOST=$requested_host"
+            )
+            [[ -z "${HOSTLLM_STATE_ROOT:-}" ]] || candidate_env+=("HOSTLLM_STATE_ROOT=$HOSTLLM_STATE_ROOT")
+            readiness="$(/usr/bin/env -i "${candidate_env[@]}" "$SCRIPT_DIR/$launcher" "${check_args[@]}")" || return 1
+            printf '%s\n' "$readiness"
+            expected_readiness="$SC117_IQ3S_READY_CONFIG"
+            actual_readiness="$(grep '^READY CONFIG:' <<< "$readiness" || true)"
+            [[ "$actual_readiness" == "$expected_readiness" ]] || {
+                echo 'SC117 IQ3_S readiness does not match the qualified profile; no HostLLM service pause was started.' >&2
+                return 1
+            }
         else
             "$SCRIPT_DIR/$launcher" "${check_args[@]}" || return 1
         fi
+    fi
+    if [[ "$launcher" == v1strata.sh && -z "$HOSTLLM_STRATA_API_KEY" && -t 0 && -r /dev/tty ]]; then
+        if [[ "${candidate_sc117_iq3s:-0}" -eq 1 && "${requested_host:-127.0.0.1}" == 0.0.0.0 ]]; then
+            read -r -s -p 'SC117 LAN binding requires an API key: ' HOSTLLM_STRATA_API_KEY < /dev/tty
+        else
+            read -r -s -p 'Optional Strata API key (Enter for no authentication): ' HOSTLLM_STRATA_API_KEY < /dev/tty
+        fi
+        printf '\n' > /dev/tty
+        export -n HOSTLLM_STRATA_API_KEY
+    fi
+    if [[ "${candidate_sc117_iq3s:-0}" -eq 1 && "${requested_host:-127.0.0.1}" == 0.0.0.0 &&
+          -z "$HOSTLLM_STRATA_API_KEY" ]]; then
+        echo 'SC117 non-loopback binding requires an API key; no HostLLM pause lease was started.' >&2
+        return 1
+    fi
+    if [[ "$launcher" == v1strata.sh && -n "$HOSTLLM_STRATA_API_KEY" &&
+          ( ! -f "$SCRIPT_DIR/exec_with_stdin_api_key.py" || -L "$SCRIPT_DIR/exec_with_stdin_api_key.py" ) ]]; then
+        HOSTLLM_STRATA_API_KEY=''
+        echo 'Strata API-key stdin helper is missing or unsafe; no service pause was started.' >&2
+        return 1
     fi
     local port="${QWEN38_PORT:-8080}"
     [[ "$launcher" == v1strata.sh ]] && port="${STRATA_PORT:-8080}"
@@ -191,13 +290,23 @@ run_selected() {
         release_owned_lease "$lease_id" || true
         return 1
     fi
-    if [[ "${candidate_0441:-0}" -eq 1 ]]; then
+    if [[ "$launcher" == v1strata.sh && -n "$HOSTLLM_STRATA_API_KEY" ]]; then
+        if [[ "${candidate_0441:-0}" -eq 1 || "${candidate_sc117_iq3s:-0}" -eq 1 ]]; then
+            printf '%s' "$HOSTLLM_STRATA_API_KEY" | /usr/bin/env -i "${candidate_env[@]}" \
+                "HOSTLLM_LAUNCH_LOCK_FD=$launch_fd" "HOSTLLM_LAUNCH_LEASE_ID=$lease_id" \
+                /usr/bin/python3 "$SCRIPT_DIR/exec_with_stdin_api_key.py" "$SCRIPT_DIR/$launcher" "$@" || rc=$?
+        else
+            printf '%s' "$HOSTLLM_STRATA_API_KEY" | /usr/bin/python3 \
+                "$SCRIPT_DIR/exec_with_stdin_api_key.py" "$SCRIPT_DIR/$launcher" "$@" || rc=$?
+        fi
+    elif [[ "${candidate_0441:-0}" -eq 1 || "${candidate_sc117_iq3s:-0}" -eq 1 ]]; then
         /usr/bin/env -i "${candidate_env[@]}" \
             "HOSTLLM_LAUNCH_LOCK_FD=$launch_fd" "HOSTLLM_LAUNCH_LEASE_ID=$lease_id" \
             "$SCRIPT_DIR/$launcher" "$@" || rc=$?
     else
         "$SCRIPT_DIR/$launcher" "$@" || rc=$?
     fi
+    HOSTLLM_STRATA_API_KEY=''
     flock -u "$launch_fd" || true
     exec {launch_fd}<&-
     unset HOSTLLM_LAUNCH_LOCK_FD HOSTLLM_LAUNCH_LEASE_ID
@@ -323,7 +432,7 @@ main() {
         echo ''
         echo '  [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
         echo '  [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
-        echo '  [3] Strata IQ3_S — BF16 GPU vision | MTP | high | INT8 KV | native 262K | four-GPU split'
+        echo '  [3] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.39 | native 262K | BF16 GPU vision | MTP-4 | one serving slot'
         echo '  [4] Orca Q4_K_S — Strata 0.1.39 recorded default | native 262K | CPU vision | one serving slot'
         echo '  [5] Orca Q4_K_S — Strata 0.1.41 | native 262K | CPU vision | 8 GiB conversation cache | one serving slot'
         echo '  [6] Orca Q4_K_S — Strata 0.1.41 | two serving slots / two batch groups | experimental, very low VRAM headroom'
@@ -331,14 +440,15 @@ main() {
         echo ''
         printf '  Strata slots: %s (STRATA_PARALLEL; default 1), batch groups: %s. Runtime override: %s.\n' "${STRATA_PARALLEL:-1}" "${STRATA_BATCH_GROUPS:-1}" "${STRATA_RUNTIME:-selected default}"
         echo '  Starting hosting pauses the miner and OctaSpace automatically (never an active rental).'
-        echo '  Strata LAN UI/API: http://192.168.1.69:8080/ — wait for readiness.'
-        echo '  API is unauthenticated by default; provide STRATA_API_KEY and firewall access beyond a trusted LAN.'
+        echo '  Strata UI/API: http://127.0.0.1:8080/ for SC117 by default; explicit LAN binding requires a key.'
+        echo '  Strata API keys are entered at a secure prompt and forwarded through stdin; SC117 defaults to loopback and requires a key for LAN binding.'
         echo '  [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit'
         echo '  [12] Set next Hive miner profile to Orca Q4_K_S'
         echo '  [13] Restore previous Swift 1.5 Q8 Hive miner profile'
         echo '  [14] Set next Hive miner profile to Orca Q4_K_S .41 (native 262K, CPU vision, one slot)'
         echo '  [15] Set next Hive miner profile to Orca Q4_K_S .41 (native 262K, two slots / two groups)'
         echo '  [16] Set next Hive miner profile to Orca Q4_K_S .44.1 (auto prefill, trimmed split; windows-2 override omitted)'
+        echo '  [17] Set next Hive miner profile to SC117 abliterated IQ3_S (MTP)'
         echo '  Hive profile changes are idle-only; they never start/stop a miner or osn.service.'
         read -r -p '  Select: ' choice || return 0
         choice="${choice//[[:space:]]/}"
@@ -356,8 +466,8 @@ main() {
                 fi
                 ;;
             3|4|5|6|7|s|S|o|O)
-                profile=iq3_s
-                [[ "$choice" != 4 && "$choice" != o && "$choice" != O && "$choice" != 5 && "$choice" != 6 && "$choice" != 7 ]] || profile=orca-q4_k_s
+                profile=orca-q4_k_s
+                [[ "$choice" == 3 || "$choice" == s || "$choice" == S ]] && profile=iq3_s-sc117-abliterated
                 if [[ "$active" == strata ]]; then
                     "$SCRIPT_DIR/v1strata.sh" --status
                     echo 'The running Strata model was left alone. Use [9] only when you are ready to switch.'
@@ -371,6 +481,8 @@ main() {
                     Q4KS_V0141_VALIDATION_ONLY=0 STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.41 --parallel 2 --batch-groups 2
                 elif [[ "$choice" == 7 ]]; then
                     STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.44.1 --parallel 1 --batch-groups 1
+                elif [[ "$choice" == 3 || "$choice" == s || "$choice" == S ]]; then
+                    run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.39 --parallel 1 --batch-groups 1
                 elif [[ "$profile" == orca-q4_k_s ]]; then
                     run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.39
                 else
@@ -380,12 +492,13 @@ main() {
             9) stop_owned_engines ;;
             10) check_update ;;
             11|x|X) return 0 ;;
-            12|13|14|15|16)
+            12|13|14|15|16|17)
                 hive_profile=orca-q4_k_s
                 [[ "$choice" == 13 ]] && hive_profile=swift15u-q8
                 [[ "$choice" == 14 ]] && hive_profile=orca-q4_k_s-v0141
                 [[ "$choice" == 15 ]] && hive_profile=orca-q4_k_s-v0141-2slot
                 [[ "$choice" == 16 ]] && hive_profile=orca-q4_k_s-v01441
+                [[ "$choice" == 17 ]] && hive_profile=iq3_s-sc117-abliterated
                 if [[ ! -x /hive/miners/custom/llm-hosting/profile-menu.sh ]]; then
                     echo 'Hive profile menu is not installed. Install the Hive custom miner package first.'
                 elif ! command -v sudo >/dev/null 2>&1; then

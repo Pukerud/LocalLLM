@@ -3,6 +3,7 @@
 # Remove the HiveOS custom-miner integration only while all LLM/miner workloads
 # are idle. Never stop Hive or OctaSpace services on the operator's behalf.
 set -Eeuo pipefail
+unset STRATA_API_KEY
 
 if [[ "${EUID}" -ne 0 ]]; then
     printf 'Run as root: sudo %s\n' "$0" >&2
@@ -38,6 +39,7 @@ if grep -qvE '^[[:space:]]*(None)?[[:space:]]*$' <<< "$gpu_apps"; then
     fail 'GPU compute processes are present; refusing uninstall'
 fi
 
+# The custom directory contains all installed profiles, including the SC117 opt-in.
 rm -rf -- "$CUSTOM_DIR"
 
 rig_backup="${RIG_CONF}${BACKUP_SUFFIX}"

@@ -8,7 +8,8 @@ INSTALL="$ROOT/install-hive-llm-miner.sh"
 UNINSTALL="$ROOT/uninstall-hive-llm-miner.sh"
 
 for script in "$MENU" "$HOST_MENU" "$INSTALL" "$UNINSTALL" \
-    "$ROOT/hive-llm-miner/profiles/orca-q4_k_s-v01441/h-run.sh"; do
+    "$ROOT/hive-llm-miner/profiles/orca-q4_k_s-v01441/h-run.sh" \
+    "$ROOT/hive-llm-miner/profiles/iq3_s-sc117-abliterated/h-run.sh"; do
     tr -d '\r' < "$script" | bash -n
 done
 grep -Fq '[12] Set next Hive miner profile to Orca Q4_K_S' "$HOST_MENU"
@@ -38,7 +39,7 @@ grep -Fq 'STRATA_RUNTIME=0.1.39' "$MENU"
 grep -Fq 'orca-q4_k_s-v0141) printf' "$MENU"
 grep -Fq 'orca-q4_k_s-v0141-2slot) printf' "$MENU"
 grep -Fq 'orca-q4_k_s-v01441) printf' "$MENU"
-grep -Fq 'profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8' "$MENU"
+grep -Fq 'profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/iq3_s-sc117-abliterated' "$MENU"
 grep -Fq "5|orca-q4_k_s-v01441) target='orca-q4_k_s-v01441'" "$MENU"
 grep -Fq 'windows-2 override omitted' "$MENU"
 grep -Fq 'READY CONFIG: pinned Q4_K_S Strata 0.1.44.1; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).' "$MENU"
@@ -51,8 +52,8 @@ grep -Fq 'STRATA_RUNTIME=0.1.41' "$MENU"
 grep -Fq 'assert_idle' "$MENU"
 grep -Fq 'Hive MINER_RUN marker is present; checking actual workload state' "$MENU"
 ! grep -Fq 'Hive reports the custom miner running; profile change refused' "$MENU"
-grep -Fq 'for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8' "$MENU"
-grep -Fq 'for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8' "$INSTALL"
+grep -Fq 'for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 iq3_s-sc117-abliterated' "$MENU"
+grep -Fq 'for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 iq3_s-sc117-abliterated' "$INSTALL"
 grep -Fq 'STRATA_RUNTIME=0.1.44.1' "$INSTALL"
 grep -Fq 'pipeline-windows 2 omitted (decode gain unconfirmed)' "$INSTALL"
 grep -Fq 'PYTHONDONTWRITEBYTECODE=1' "$INSTALL"
@@ -66,7 +67,8 @@ expected_ready='READY CONFIG: pinned Q4_K_S Strata 0.1.44.1; future profile cont
 [[ "$(grep '^READY CONFIG:' <<< "$expected_ready extra")" != "$expected_ready" ]]
 [[ "$(printf '%s\n%s\n' "$expected_ready" "$expected_ready" | grep '^READY CONFIG:')" != "$expected_ready" ]]
 grep -Fq -- '--runtime 0.1.41 --parallel "$parallel" --batch-groups "$groups"' "$INSTALL"
-grep -Fq "ln -s -- 'profiles/orca-q4_k_s'" "$INSTALL"
+grep -Fq "initial_profile='orca-q4_k_s'" "$INSTALL"
+grep -Fq 'ln -s -- "profiles/$initial_profile"' "$INSTALL"
 for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
     [[ -f "$ROOT/hive-llm-miner/profiles/orca-q4_k_s-v0141/$file" ]]
     [[ -f "$ROOT/hive-llm-miner/profiles/orca-q4_k_s-v0141-2slot/$file" ]]
@@ -86,7 +88,8 @@ grep -Fq 'PREFILL=auto' "$ROOT/hive-llm-miner/profiles/orca-q4_k_s-v01441/llm-ho
 grep -Fq 'LAYER_SPLIT=14,24,36' "$ROOT/hive-llm-miner/profiles/orca-q4_k_s-v01441/llm-hosting.conf"
 grep -Fq 'windows-2 override omitted' "$ROOT/hive-llm-miner/profiles/orca-q4_k_s-v01441/h-stats.sh"
 ! grep -Fq 'PIPELINE_WINDOWS=' "$ROOT/hive-llm-miner/profiles/orca-q4_k_s-v01441/llm-hosting.conf"
-grep -Fq "ln -s -- 'profiles/orca-q4_k_s'" "$INSTALL"
+# The installer only creates the fresh-install pointer; it does not replace an existing selection.
+grep -Fq 'if [[ ! -L "$CUSTOM_DIR/current" ]]; then' "$INSTALL"
 
 # These scripts may update profile/config files, but must never issue Hive
 # lifecycle commands; the miner is started/stopped only by the operator.

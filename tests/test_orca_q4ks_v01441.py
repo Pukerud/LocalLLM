@@ -158,7 +158,7 @@ class RuntimeRouting(unittest.TestCase):
         }
         clean = launcher._q4_v01441_launch_environment(source)
         expected = {key: source[key] for key in (
-            'PATH', 'HOME', 'STRATA_API_KEY', 'HOSTLLM_LAUNCH_LEASE_ID',
+            'PATH', 'HOME', 'HOSTLLM_LAUNCH_LEASE_ID',
             'HOSTLLM_LAUNCH_LOCK_FD', 'HIVE_STRATA_LAUNCH_ID')}
         expected['PYTHONDONTWRITEBYTECODE'] = '1'
         self.assertEqual(clean, expected)
