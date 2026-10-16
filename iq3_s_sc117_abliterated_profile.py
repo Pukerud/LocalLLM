@@ -41,6 +41,12 @@ TRIAL_OVERRIDE_ENV = {
     'STRATA_SC117_IQ3S_TRIAL_CACHE_MIB': 'conversation_cache_mib',
     'STRATA_SC117_IQ3S_TRIAL_CACHE_SLOTS': 'conversation_cache_slots',
 }
+TRIAL_EXPERIMENT_ENV = {
+    'STRATA_SC117_IQ3S_TRIAL_PCIE_FRAC',
+    'STRATA_SC117_IQ3S_TRIAL_POOL_WORKERS',
+    'STRATA_SC117_IQ3S_TRIAL_TRIM_STAGE_WEIGHTS',
+    'STRATA_SC117_IQ3S_TRIAL_GPU_ORDER',
+}
 TRIAL_ENV_PREFIX = 'STRATA_SC117_IQ3S_TRIAL_'
 DEFAULT_SETTINGS = {
     'context': 262144,
@@ -696,7 +702,7 @@ def settings_for_start(*, allow_trial_env=False):
     settings = dict(DEFAULT_SETTINGS)
     marker = os.environ.get(TRIAL_ENV)
     supplied_trial_names = {name for name in os.environ if name.startswith(TRIAL_ENV_PREFIX)}
-    unknown = supplied_trial_names - set(TRIAL_OVERRIDE_ENV)
+    unknown = supplied_trial_names - set(TRIAL_OVERRIDE_ENV) - TRIAL_EXPERIMENT_ENV
     if unknown:
         raise SafetyError(f'Unallowlisted SC117 IQ3_S trial override: {sorted(unknown)[0]}')
     if marker is not None and marker != '1':
@@ -1340,7 +1346,43 @@ def build_v01441_trial_config(root, candidate_config):
     cfg['aliases'] = ['qwen38-iq3s-sc117-abliterated', PROFILE]
     vision['model'] = str(assets.shard1_path(root))
     vision['mmproj'] = str(assets.projector_path(root))
+    _apply_v01441_trial_tunables(cfg)
     return cfg
+
+
+def _apply_v01441_trial_tunables(cfg):
+    supplied = TRIAL_EXPERIMENT_ENV.intersection(os.environ)
+    if supplied and os.environ.get(TRIAL_ENV) != '1':
+        raise SafetyError('SC117 .44.1 tuning overrides require an explicit isolated trial')
+    args = cfg['args']
+    pcie = os.environ.get('STRATA_SC117_IQ3S_TRIAL_PCIE_FRAC')
+    if pcie is not None:
+        if (not re.fullmatch(r'(?:0(?:[.][0-9]+)?|1(?:[.]0+)?)', pcie) or
+                not math.isfinite(float(pcie)) or not 0 <= float(pcie) <= 1 or
+                '--pcie-frac' in args or any(item.startswith('--pcie-frac=') for item in args)):
+            raise SafetyError('SC117 trial --pcie-frac must be a unique value in [0, 1]')
+        args.extend(['--pcie-frac', pcie])
+    workers = os.environ.get('STRATA_SC117_IQ3S_TRIAL_POOL_WORKERS')
+    if workers is not None:
+        if (not re.fullmatch(r'[0-9]+', workers) or int(workers) > 128 or
+                '--pool-workers' in args or any(item.startswith('--pool-workers=') for item in args)):
+            raise SafetyError('SC117 trial --pool-workers must be a unique integer from 0 through 128')
+        args.extend(['--pool-workers', workers])
+    trim = os.environ.get('STRATA_SC117_IQ3S_TRIAL_TRIM_STAGE_WEIGHTS')
+    if trim is not None:
+        if trim not in ('0', '1'):
+            raise SafetyError('SC117 trial trim-stage-weights override must be 0 or 1')
+        if trim == '0':
+            args.remove('--trim-stage-weights')
+    gpu_order = os.environ.get('STRATA_SC117_IQ3S_TRIAL_GPU_ORDER')
+    if gpu_order is not None:
+        if not re.fullmatch(r'[0-3](?:,[0-3]){3}', gpu_order):
+            raise SafetyError('SC117 trial GPU order must be a permutation of 0,1,2,3')
+        order = [int(item) for item in gpu_order.split(',')]
+        if sorted(order) != [0, 1, 2, 3]:
+            raise SafetyError('SC117 trial GPU order must be a permutation of 0,1,2,3')
+        cfg['gpu'] = order
+        cfg['gpu_order'] = 'as_given'
 
 
 def authorize_start(root, settings, *, host, port, state_root):

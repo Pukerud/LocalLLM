@@ -149,6 +149,20 @@ class SC117ProfileTests(unittest.TestCase):
         self.assertEqual(effective['vision']['gpu'], False)
         self.assertEqual(effective['vision']['mmproj'], str(assets.projector_path(self.root)))
         self.assertEqual(effective['model_name'], assets.MODEL_ID)
+        tuned_candidate = copy.deepcopy(candidate)
+        trial_env = {
+            'STRATA_SC117_IQ3S_TRIAL': '1',
+            'STRATA_SC117_IQ3S_TRIAL_PCIE_FRAC': '0.2',
+            'STRATA_SC117_IQ3S_TRIAL_POOL_WORKERS': '6',
+            'STRATA_SC117_IQ3S_TRIAL_GPU_ORDER': '0,2,3,1',
+        }
+        with patch.dict(os.environ, trial_env, clear=True), \
+                patch.dict(sys.modules, {'orca_q4ks_v01441_assets': q4_assets}):
+            tuned = profile.build_v01441_trial_config(self.root, tuned_candidate)
+        tuned_args = tuned['args']
+        self.assertEqual(tuned_args[tuned_args.index('--pcie-frac') + 1], '0.2')
+        self.assertEqual(tuned_args[tuned_args.index('--pool-workers') + 1], '6')
+        self.assertEqual(tuned['gpu'], [0, 2, 3, 1])
         candidate['args'].extend(['--pipeline-windows', '2'])
         with patch.dict(sys.modules, {'orca_q4ks_v01441_assets': q4_assets}):
             with self.assertRaisesRegex(SafetyError, 'pipeline-windows'):
