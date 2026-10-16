@@ -97,29 +97,8 @@ for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s
 done
 [[ -f "$SOURCE_DIR/profile-menu.sh" && ! -L "$SOURCE_DIR/profile-menu.sh" ]] || fail 'profile menu is missing or symlinked'
 command -v runuser >/dev/null 2>&1 || fail 'runuser is unavailable; Q4 readiness cannot be checked'
-if ! runuser -u user -- env -i \
-    HOME=/home/user USER=user LOGNAME=user \
-    PATH='/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin' \
-    STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata \
-    STRATA_STATE_ROOT=/home/user/.local/state/locallm-strata \
-    STRATA_RUNTIME=0.1.39 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 STRATA_PORT=8080 \
-    "$LLM_ROOT/v1strata.sh" --check-ready --profile orca-q4_k_s \
-    --runtime 0.1.39 --parallel 1 --batch-groups 1; then
-    fail 'Orca Q4_K_S .39 readiness check failed; Hive configuration was not changed'
-fi
-for slot_pair in '1 1' '2 2'; do
-    read -r parallel groups <<< "$slot_pair"
-    if ! runuser -u user -- env -i \
-        HOME=/home/user USER=user LOGNAME=user \
-        PATH='/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin' \
-        STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata \
-        STRATA_STATE_ROOT=/home/user/.local/state/locallm-strata \
-        STRATA_RUNTIME=0.1.41 STRATA_PARALLEL="$parallel" STRATA_BATCH_GROUPS="$groups" STRATA_PORT=8080 \
-        "$LLM_ROOT/v1strata.sh" --check-ready --profile orca-q4_k_s \
-        --runtime 0.1.41 --parallel "$parallel" --batch-groups "$groups"; then
-        fail "Orca Q4_K_S .41 ${parallel}-slot readiness check failed; Hive configuration was not changed"
-    fi
-done
+# The standard .44.1 target is the mandatory install gate. Explicit .39/.41 rollback routes
+# are readiness-gated when selected, avoiding slow irrelevant checks during default migration.
 candidate_readiness="$(runuser -u user -- env -i \
     HOME=/home/user USER=user LOGNAME=user \
     PATH='/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin' \
