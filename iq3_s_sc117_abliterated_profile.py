@@ -466,9 +466,10 @@ def _runtime_python_import_surface(root, runtime_root, runtime_source, manifest,
         visit(source_root, import_root=source_root, source_tree=(source_root == source))
 
     expected_pth = overlay_site / 'strata_shared_readonly.pth' if overlay_site is not None else None
-    trial_distutils_pth = (overlay_site / TRIAL_DISTUTILS_PTH_RELATIVE
-                           if allow_inactive_bytecode and overlay_site is not None else None)
-    allowed_pth = {path for path in (expected_pth, trial_distutils_pth) if path is not None}
+    trial_distutils_pths = ({site / TRIAL_DISTUTILS_PTH_RELATIVE for site in site_roots}
+                             if allow_inactive_bytecode else set())
+    allowed_pth = {expected_pth} if expected_pth is not None else set()
+    allowed_pth.update(trial_distutils_pths)
     if any(path not in allowed_pth for path, _ in pth_files):
         unexpected = next(path for path, _ in pth_files if path not in allowed_pth)
         raise SafetyError(f'SC117 Python .pth file is unexpected or in an unapproved location: {unexpected}')
@@ -483,7 +484,7 @@ def _runtime_python_import_surface(root, runtime_root, runtime_source, manifest,
         except UnicodeError as exc:
             raise SafetyError(f'SC117 Python .pth file is unreadable: {pth_path}: {exc}') from exc
         pth_hashes[pth_path] = (digest, stable_metadata)
-        if pth_path == trial_distutils_pth:
+        if pth_path in trial_distutils_pths:
             if (digest != TRIAL_DISTUTILS_PTH_SHA256 or contents != TRIAL_DISTUTILS_PTH_CONTENTS or
                     os.environ.get('SETUPTOOLS_USE_DISTUTILS') != 'stdlib'):
                 raise SafetyError('SC117 trial distutils .pth differs from its pinned no-op behavior')
