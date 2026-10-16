@@ -26,6 +26,11 @@ PROFILE = assets.PROFILE
 MODEL_ID = assets.MODEL_ID
 RUNTIME_VERSION = '0.1.39'
 RUNTIME_COMMIT = strata_runtime.PINS[RUNTIME_VERSION]
+TRIAL_DISTUTILS_PTH_RELATIVE = Path('distutils-precedence.pth')
+TRIAL_DISTUTILS_PTH_SHA256 = '7ea7ffef3fe2a117ee12c68ed6553617f0d7fd2f0590257c25c484959a3b7373'
+TRIAL_DISTUTILS_PTH_CONTENTS = (b"import os; var = 'SETUPTOOLS_USE_DISTUTILS'; enabled = "
+                               b"os.environ.get(var, 'stdlib') == 'local'; enabled and "
+                               b"__import__('_distutils_hack').add_shim(); \n")
 BASELINE_CONFIG_RELATIVE = Path('source-99f3dbd0b21d') / 'strata-iq3_s.json'
 TRIAL_STATE_ROOT_NAME = 'sc117-iq3s-trial'
 TRIAL_ENV = 'STRATA_SC117_IQ3S_TRIAL'
@@ -461,8 +466,11 @@ def _runtime_python_import_surface(root, runtime_root, runtime_source, manifest,
         visit(source_root, import_root=source_root, source_tree=(source_root == source))
 
     expected_pth = overlay_site / 'strata_shared_readonly.pth' if overlay_site is not None else None
-    if any(path != expected_pth for path, _ in pth_files):
-        unexpected = next(path for path, _ in pth_files if path != expected_pth)
+    trial_distutils_pth = (overlay_site / TRIAL_DISTUTILS_PTH_RELATIVE
+                           if allow_inactive_bytecode and overlay_site is not None else None)
+    allowed_pth = {path for path in (expected_pth, trial_distutils_pth) if path is not None}
+    if any(path not in allowed_pth for path, _ in pth_files):
+        unexpected = next(path for path, _ in pth_files if path not in allowed_pth)
         raise SafetyError(f'SC117 Python .pth file is unexpected or in an unapproved location: {unexpected}')
     if expected_pth is not None and all(path != expected_pth for path, _ in pth_files):
         raise SafetyError(f'SC117 required overlay Python .pth file is missing: {expected_pth}')
@@ -475,6 +483,11 @@ def _runtime_python_import_surface(root, runtime_root, runtime_source, manifest,
         except UnicodeError as exc:
             raise SafetyError(f'SC117 Python .pth file is unreadable: {pth_path}: {exc}') from exc
         pth_hashes[pth_path] = (digest, stable_metadata)
+        if pth_path == trial_distutils_pth:
+            if (digest != TRIAL_DISTUTILS_PTH_SHA256 or contents != TRIAL_DISTUTILS_PTH_CONTENTS or
+                    os.environ.get('SETUPTOOLS_USE_DISTUTILS') != 'stdlib'):
+                raise SafetyError('SC117 trial distutils .pth differs from its pinned no-op behavior')
+            continue
         added_paths = []
         for line in lines:
             candidate = line.strip()
@@ -1266,6 +1279,8 @@ def _verify_trial_artifacts(root, settings, state_root):
     cache_prefix = Path(state_root) / 'pycache'
     if os.environ.get('PYTHONPYCACHEPREFIX') != str(cache_prefix):
         raise SafetyError('SC117 trial requires its isolated Python bytecode-cache prefix')
+    if os.environ.get('SETUPTOOLS_USE_DISTUTILS') != 'stdlib':
+        raise SafetyError('SC117 trial requires the pinned distutils .pth to remain inert')
     fingerprint(root, settings, verify_content=True, allow_inactive_bytecode=True)
 
 

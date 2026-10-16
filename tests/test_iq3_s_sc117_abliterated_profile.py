@@ -512,7 +512,8 @@ class SC117ProfileTests(unittest.TestCase):
         cache_prefix = state / 'pycache'
         with patch('pathlib.Path.home', return_value=home), \
                 patch.dict(os.environ, {'STRATA_SC117_IQ3S_TRIAL': '1',
-                                        'PYTHONPYCACHEPREFIX': str(cache_prefix)}, clear=True), \
+                                        'PYTHONPYCACHEPREFIX': str(cache_prefix),
+                                        'SETUPTOOLS_USE_DISTUTILS': 'stdlib'}, clear=True), \
                 patch.object(profile, '_verify_trial_artifacts') as trial_artifacts:
             self.assertEqual(profile.authorize_start(self.root, settings,
                                                      host='127.0.0.1', port=18080, state_root=state), 'trial')

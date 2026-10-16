@@ -860,6 +860,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
                 stat.S_IMODE(cache_info.st_mode) & 0o077 or any(cache_prefix.iterdir())):
             raise SafetyError('SC117 trial Python bytecode-cache prefix must be private and empty')
         env['PYTHONPYCACHEPREFIX'] = str(cache_prefix)
+        env['SETUPTOOLS_USE_DISTUTILS'] = 'stdlib'
     if version == runtimes.LEGACY_VERSION and parallel > 1:
         print('Pinned 0.1.39 batching: all-resident zero-doorbell optimization disabled to avoid the verified layer-0 timeout.', flush=True)
     elif version == runtimes.VERSION:
