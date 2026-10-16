@@ -12,7 +12,6 @@ if [[ -n "${STRATA_API_KEY:-}" ]]; then
     echo 'Refusing exported STRATA_API_KEY: restart HostLLM without it and enter credentials at the interactive prompt.' >&2
     exit 2
 fi
-readonly SC117_IQ3S_READY_CONFIG='READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.'
 
 safety() { python3 "$SCRIPT_DIR/engine_safety.py" "$@"; }
 hosting() { python3 "$SCRIPT_DIR/hosting_lifecycle.py" "$@"; }
@@ -131,7 +130,7 @@ run_selected() {
         local arg previous='' i candidate_041=0 candidate_0441=0 candidate_sc117_iq3s=0 candidate_sc117_trial=0
         local requested_profile='' requested_runtime='' requested_parallel=1 requested_groups=1
         local requested_host readiness expected_readiness actual_readiness
-        local requested_profile_count=0 requested_runtime_count=0 requested_parallel_count=0 requested_groups_count=0 requested_runtime_valid=0
+        local requested_profile_count=0 requested_runtime_count=0 requested_parallel_count=0 requested_groups_count=0
         local -a check_args=(--check-ready) candidate_env=()
         for arg in "$@"; do
             case "$previous" in
@@ -184,14 +183,12 @@ run_selected() {
                     ;;
             esac
         done
-        [[ "$requested_runtime" == 0.1.39 || "$requested_runtime" == 0.1.44.1 ]] && requested_runtime_valid=1
         if [[ "$candidate_sc117_iq3s" -eq 1 ]]; then
             if [[ "$requested_profile_count" -ne 1 || "$requested_profile" != iq3_s-sc117-abliterated || \
-                  "$requested_runtime_count" -ne 1 || "$requested_parallel_count" -ne 1 || "$requested_groups_count" -ne 1 || \
-                  "$candidate_041" -ne 0 || \
-                  "$requested_runtime_valid" -ne 1 || \
-                  "$requested_parallel" != 1 || "$requested_groups" != 1 ]]; then
-                echo 'SC117 IQ3_S requires explicit runtime .39 or isolated .44.1 trial, one slot, and one group; refusing before service pause.' >&2
+                  "$requested_runtime_count" -ne 1 || "$requested_runtime" != 0.1.44.1 || "$candidate_0441" -ne 1 || \
+                  "$requested_parallel_count" -ne 1 || "$requested_groups_count" -ne 1 || \
+                  "$candidate_041" -ne 0 || "$requested_parallel" != 1 || "$requested_groups" != 1 ]]; then
+                echo 'SC117 is unqualified and trial-only: require explicit Strata .44.1, one slot/group, and its isolated loopback trial environment; .39 hosting is retired.' >&2
                 return 1
             fi
         fi
@@ -277,48 +274,15 @@ run_selected() {
                 echo 'Q4 .44.1 readiness is incomplete; no HostLLM service pause was started.' >&2
                 return 1
             }
-        elif [[ "$candidate_sc117_iq3s" -eq 1 ]]; then
-            requested_host="${STRATA_HOST:-127.0.0.1}"
-            case "$requested_host" in
-                127.0.0.1|0.0.0.0) ;;
-                *) echo 'SC117 IQ3_S only permits loopback or explicit 0.0.0.0 binding; refusing before service pause.' >&2; return 1 ;;
-            esac
-            candidate_env=(
-                "HOME=${HOME:-/home/user}" "USER=${USER:-user}" "LOGNAME=${LOGNAME:-${USER:-user}}"
-                'PATH=/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin' 'PYTHONDONTWRITEBYTECODE=1'
-                "QWEN38_OWNER_USER=${QWEN38_OWNER_USER:-${USER:-user}}"
-                "STRATA_DATA_ROOT=${STRATA_DATA_ROOT:-${HOME:-/home/user}/.local/share/localllm-strata}"
-                "STRATA_STATE_ROOT=${STRATA_STATE_ROOT:-${HOME:-/home/user}/.local/state/locallm-strata}"
-                'STRATA_RUNTIME=0.1.39' 'STRATA_PARALLEL=1' 'STRATA_BATCH_GROUPS=1'
-                "STRATA_PORT=${STRATA_PORT:-8080}" "STRATA_HOST=$requested_host"
-            )
-            [[ -z "${HOSTLLM_STATE_ROOT:-}" ]] || candidate_env+=("HOSTLLM_STATE_ROOT=$HOSTLLM_STATE_ROOT")
-            readiness="$(/usr/bin/env -i "${candidate_env[@]}" "$SCRIPT_DIR/$launcher" "${check_args[@]}")" || return 1
-            printf '%s\n' "$readiness"
-            expected_readiness="$SC117_IQ3S_READY_CONFIG"
-            actual_readiness="$(grep '^READY CONFIG:' <<< "$readiness" || true)"
-            [[ "$actual_readiness" == "$expected_readiness" ]] || {
-                echo 'SC117 IQ3_S readiness does not match the qualified profile; no HostLLM service pause was started.' >&2
-                return 1
-            }
         else
             "$SCRIPT_DIR/$launcher" "${check_args[@]}" || return 1
         fi
     fi
     if [[ "$launcher" == v1strata.sh && -z "$HOSTLLM_STRATA_API_KEY" && -t 0 && -r /dev/tty &&
           "${candidate_sc117_trial:-0}" -ne 1 ]]; then
-        if [[ "${candidate_sc117_iq3s:-0}" -eq 1 && "${requested_host:-127.0.0.1}" == 0.0.0.0 ]]; then
-            read -r -s -p 'SC117 LAN binding requires an API key: ' HOSTLLM_STRATA_API_KEY < /dev/tty
-        else
-            read -r -s -p 'Optional Strata API key (Enter for no authentication): ' HOSTLLM_STRATA_API_KEY < /dev/tty
-        fi
+        read -r -s -p 'Optional Strata API key (Enter for no authentication): ' HOSTLLM_STRATA_API_KEY < /dev/tty
         printf '\n' > /dev/tty
         export -n HOSTLLM_STRATA_API_KEY
-    fi
-    if [[ "${candidate_sc117_iq3s:-0}" -eq 1 && "${requested_host:-127.0.0.1}" == 0.0.0.0 &&
-          -z "$HOSTLLM_STRATA_API_KEY" ]]; then
-        echo 'SC117 non-loopback binding requires an API key; no HostLLM pause lease was started.' >&2
-        return 1
     fi
     if [[ "$launcher" == v1strata.sh && -n "$HOSTLLM_STRATA_API_KEY" &&
           ( ! -f "$SCRIPT_DIR/exec_with_stdin_api_key.py" || -L "$SCRIPT_DIR/exec_with_stdin_api_key.py" ) ]]; then
@@ -534,7 +498,7 @@ main() {
                 elif [[ "$active" != none ]] && ! hosting managed-qwen; then
                     echo 'Another/unmanaged LLM is running. Stop it in its own verified lifecycle first.'
                 elif [[ "$choice" == 3 ]]; then
-                    STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.44.1 --parallel 1 --batch-groups 1
+                    STRATA_HOST="${STRATA_HOST:-127.0.0.1}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.44.1 --parallel 1 --batch-groups 1
                 else
                     STRATA_SC117_IQ3S_TRIAL=1 STRATA_RUNTIME=0.1.44.1 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 \
                         STRATA_HOST=127.0.0.1 STRATA_PORT=18080 \

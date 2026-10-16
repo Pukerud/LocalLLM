@@ -7,11 +7,12 @@ HOST_MENU="$ROOT/HostLLM.sh"
 INSTALL="$ROOT/install-hive-llm-miner.sh"
 UNINSTALL="$ROOT/uninstall-hive-llm-miner.sh"
 SC117_HIVE="$ROOT/hive-llm-miner/profiles/iq3_s-sc117-abliterated"
+ORCA_HIVE="$ROOT/hive-llm-miner/profiles/orca-q4_k_s-v01441"
 HAUHAU_HIVE="$ROOT/hive-llm-miner/profiles/hauhau-q8-fastmtp-q4kv-xhigh"
 TRIAL_LINE='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
 
 for script in "$MENU" "$HOST_MENU" "$INSTALL" "$UNINSTALL" \
-    "$ROOT/hive-llm-miner/profiles/orca-q4_k_s-v01441/h-run.sh" \
+    "$ORCA_HIVE/h-run.sh" \
     "$SC117_HIVE/h-run.sh" "$HAUHAU_HIVE/h-run.sh"; do
     tr -d '\r' < "$script" | bash -n
 done
@@ -34,11 +35,16 @@ grep -Fq 'sc117_trial_command --stop' "$HOST_MENU"
 grep -Fq 'sc117_trial_command --status' "$HOST_MENU"
 grep -Fq 'profile-menu.sh --profile "$hive_profile"' "$HOST_MENU"
 
-# Hive's interactive menu mirrors the requested four next-start routes; .39/.41 remain explicit rollback/default profiles.
+# Hive's interactive menu mirrors the requested four next-start routes; .39/.41 are explicit rollback-only profiles.
 grep -Fq '  [1] %s' "$MENU"
 grep -Fq '  [2] %s' "$MENU"
 grep -Fq '  [3] %s' "$MENU"
 grep -Fq '  [4] %s' "$MENU"
+grep -Fq 'Strata 0.1.39 rollback-only' "$MENU"
+grep -Fq 'auto prefill + trimmed 14,24,36 split | windows-2 override omitted' "$MENU"
+grep -Fq 'STRATA_HOST=0.0.0.0' "$ORCA_HIVE/h-run.sh"
+grep -Fq 'trusted-LAN bind, unauthenticated' "$ORCA_HIVE/llm-hosting.conf"
+grep -Fq 'checking standard Q4_K_S Strata 0.1.44.1 profile' "$ORCA_HIVE/h-run.sh"
 grep -Fq "2|hauhau-q8-fastmtp-q4kv-xhigh) target='hauhau-q8-fastmtp-q4kv-xhigh'" "$MENU"
 grep -Fq "3|orca-q4_k_s-v01441) target='orca-q4_k_s-v01441'" "$MENU"
 grep -Fq "4|iq3_s-sc117-abliterated) target='iq3_s-sc117-abliterated'" "$MENU"
@@ -76,6 +82,10 @@ grep -Fq 'STRATA_SC117_IQ3S_TRIAL=1' "$SC117_HIVE/h-run.sh"
 for script in "$MENU" "$INSTALL" "$UNINSTALL"; do
     grep -Fq 'hosting_lifecycle.py" lease-path' "$script"
 done
+for script in "$INSTALL" "$UNINSTALL"; do
+    grep -Fq "PROFILE_LOCK_FILE='/run/llm-hosting-profile-menu.lock'" "$script"
+    grep -Fq 'flock -n 9' "$script"
+done
 ! grep -Fq 'STRATA_HOST=0.0.0.0' "$SC117_HIVE/h-run.sh"
 ! grep -Fq -- '--qualify' "$SC117_HIVE/h-run.sh"
 ! grep -Fq 'READY CONFIG:' "$SC117_HIVE/h-run.sh"
@@ -88,6 +98,7 @@ grep -Fq 'RUNTIME=0.1.44.1' "$SC117_HIVE/llm-hosting.conf"
 # Missing Hauhau Hive profile is supplied; exact labels and dispatch exist for all four routes.
 for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
     [[ -f "$SC117_HIVE/$file" && ! -L "$SC117_HIVE/$file" ]]
+    [[ -f "$ORCA_HIVE/$file" && ! -L "$ORCA_HIVE/$file" ]]
     [[ -f "$HAUHAU_HIVE/$file" && ! -L "$HAUHAU_HIVE/$file" ]]
 done
 grep -Fq "PROFILE='hauhau-q8-fastmtp-q4kv-xhigh'" "$HAUHAU_HIVE/h-run.sh"
@@ -95,23 +106,33 @@ grep -Fq 'PARALLEL=3' "$HAUHAU_HIVE/llm-hosting.conf"
 grep -Fq 'FastMTP n4' "$HAUHAU_HIVE/llm-hosting.conf"
 grep -Fq 'PROFILE=hauhau-q8-fastmtp-q4kv-xhigh' "$HAUHAU_HIVE/llm-hosting.conf"
 
-# Installer readiness and pointer migration preserve the generic .39 default before replacing the old SC117 route.
-grep -Fq "initial_profile='orca-q4_k_s'" "$INSTALL"
-grep -Fq 'migrate_sc117_pointer=1' "$INSTALL"
+# Installer readiness and pointer migration select .44.1 as standard; .39/.41 are rollback-only.
+grep -Fq "initial_profile='orca-q4_k_s-v01441'" "$INSTALL"
+grep -Fq 'migrate_legacy_pointer=1' "$INSTALL"
+grep -Fq "PROFILE_LOCK_FILE='/run/llm-hosting-profile-menu.lock'" "$INSTALL"
+grep -Fq 'flock -n 9' "$INSTALL"
+grep -Fq 'install_profile_files orca-q4_k_s-v01441' "$INSTALL"
+grep -Fq 'cmp -s "$SOURCE_DIR/profiles/orca-q4_k_s-v01441/$file"' "$INSTALL"
+grep -Fq 'migrate_legacy_target="$current_target"' "$INSTALL"
+grep -Fq 'migrate_legacy_runtime="$current_legacy_runtime"' "$INSTALL"
+grep -Fq 'profiles/orca-q4_k_s)' "$INSTALL"
+grep -Fq 'elif [[ "$recognized_legacy_profile" == orca-q4_k_s ]]; then' "$INSTALL"
 grep -Fq 'current_sc117_runtime=' "$INSTALL"
 grep -Fq 'legacy_sc117_runtime=' "$INSTALL"
 grep -Fq 'read_profile_runtime' "$INSTALL"
 grep -Fq 'sc117_profile_for_runtime' "$INSTALL"
-grep -Fq "0.1.39) printf 'orca-q4_k_s'" "$INSTALL"
+grep -Fq 'current_legacy_runtime="$(read_profile_runtime' "$INSTALL"
+grep -Fq 'migration_runtime="$(read_profile_runtime' "$INSTALL"
+grep -Fq "0.1.39) printf 'orca-q4_k_s-v01441'" "$INSTALL"
 grep -Fq "0.1.44.1) printf 'iq3_s-sc117-abliterated'" "$INSTALL"
-grep -Fq 'Retired the obsolete SC117 .39 Hive route' "$INSTALL"
+grep -Fq 'Migrated the obsolete .39/SC117 .39 next-start pointer to the verified standard Orca Q4_K_S .44.1' "$INSTALL"
 # Exercise the exact config parser/mapping used by both symlink and legacy-profile migration paths.
 migration_tmp="$(mktemp -d)"
 trap 'rm -rf -- "$migration_tmp"' EXIT
-source <(sed -n -e '/^read_profile_runtime() {/,/^}/p' -e '/^sc117_profile_for_runtime() {/,/^}/p' "$INSTALL")
+source <(tr -d '\r' < "$INSTALL" | sed -n -e '/^read_profile_runtime() {/,/^}/p' -e '/^sc117_profile_for_runtime() {/,/^}/p')
 printf 'PROFILE=iq3_s-sc117-abliterated\r\nRUNTIME=0.1.39\r\n' > "$migration_tmp/sc117-039.conf"
 printf 'PROFILE=iq3_s-sc117-abliterated\nRUNTIME=0.1.44.1\n' > "$migration_tmp/sc117-0441.conf"
-[[ "$(sc117_profile_for_runtime "$(read_profile_runtime "$migration_tmp/sc117-039.conf")")" == orca-q4_k_s ]]
+[[ "$(sc117_profile_for_runtime "$(read_profile_runtime "$migration_tmp/sc117-039.conf")")" == orca-q4_k_s-v01441 ]]
 [[ "$(sc117_profile_for_runtime "$(read_profile_runtime "$migration_tmp/sc117-0441.conf")")" == iq3_s-sc117-abliterated ]]
 printf 'RUNTIME=0.1.39\nRUNTIME=0.1.44.1\n' > "$migration_tmp/duplicate.conf"
 printf 'PROFILE=iq3_s-sc117-abliterated\n' > "$migration_tmp/missing.conf"
@@ -128,7 +149,7 @@ if sc117_profile_for_runtime '0.1.42' >/dev/null 2>&1; then
 fi
 rm -rf -- "$migration_tmp"
 trap - EXIT
-grep -Fq "ln -s -- 'profiles/orca-q4_k_s'" "$INSTALL"
+grep -Fq "ln -s -- 'profiles/orca-q4_k_s-v01441'" "$INSTALL"
 grep -Fq 'STRATA_STATE_ROOT="$sc117_trial_state"' "$INSTALL"
 grep -Fq 'STRATA_PORT=18080 STRATA_HOST=127.0.0.1' "$INSTALL"
 grep -Fq 'PYTHONPYCACHEPREFIX="$sc117_trial_state/pycache"' "$INSTALL"
@@ -153,4 +174,4 @@ fi
 [[ "$(grep '^TRIAL CONFIG:' <<< "$TRIAL_LINE extra")" != "$TRIAL_LINE" ]]
 [[ "$(printf '%s\n%s\n' "$TRIAL_LINE" "$TRIAL_LINE" | grep '^TRIAL CONFIG:')" != "$TRIAL_LINE" ]]
 
-echo 'Hive menu/profile trial isolation, dispatch, default-preserving installer, and rollback static checks: PASS'
+echo 'Hive menu/profile trial isolation, dispatch, .44.1-standard installer, and rollback static checks: PASS'

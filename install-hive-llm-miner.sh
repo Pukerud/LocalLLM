@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Install HiveOS profiles with Orca Q4 .39 retained as the default, Swift/Hauhau Qwen routes,
-# Orca .44.1, and the isolated unqualified SC117 .44.1 trial. Never starts/stops Hive or osn.service.
+# Install HiveOS profiles with Orca Q4 .44.1 as the standard Strata route, .39/.41 rollback routes,
+# Swift/Hauhau Qwen routes, and the isolated unqualified SC117 .44.1 trial. Never starts/stops Hive or osn.service.
 set -Eeuo pipefail
 unset STRATA_API_KEY
 
@@ -21,6 +21,17 @@ BACKUP_SUFFIX=".llm-hosting.bak"
 SOURCE_DIR="${SCRIPT_DIR}/hive-llm-miner"
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+PROFILE_LOCK_FILE='/run/llm-hosting-profile-menu.lock'
+[[ -d /run && ! -L /run && "$(stat -c '%u' /run)" == 0 ]] || fail '/run is not a trusted root-owned directory'
+command -v flock >/dev/null 2>&1 || fail 'flock is unavailable; refusing an unsynchronized profile installation'
+[[ ! -L "$PROFILE_LOCK_FILE" ]] || fail 'Hive profile lock path is symlinked'
+if [[ -e "$PROFILE_LOCK_FILE" ]]; then
+    [[ -f "$PROFILE_LOCK_FILE" && "$(stat -c '%u' "$PROFILE_LOCK_FILE")" == 0 && \
+       "$(stat -c '%a' "$PROFILE_LOCK_FILE")" == 600 ]] || fail 'Hive profile lock file has unsafe ownership or mode'
+fi
+umask 077
+exec 9>"$PROFILE_LOCK_FILE"
+flock -n 9 || fail 'Hive profile selector or another installer is active'
 read_profile_runtime() {
     local config="$1"
     [[ -f "$config" && ! -L "$config" ]] || return 1
@@ -29,7 +40,7 @@ read_profile_runtime() {
 }
 sc117_profile_for_runtime() {
     case "$1" in
-        0.1.39) printf 'orca-q4_k_s' ;;
+        0.1.39) printf 'orca-q4_k_s-v01441' ;;
         0.1.44.1) printf 'iq3_s-sc117-abliterated' ;;
         *) return 1 ;;
     esac
@@ -141,30 +152,47 @@ sc117_trial_actual="$(grep '^TRIAL CONFIG:' <<< "$sc117_trial_readiness" || true
     fail 'SC117 .44.1 CPU-vision preflight is not the exact unqualified trial; Hive configuration was not changed'
 assert_idle
 
-# Preserve recognized selections, except the old SC117 .39 route: retire that route to
-# the generic .39 default before replacing the shared profile directory with the isolated .44.1 trial.
-initial_profile='orca-q4_k_s'
-migrate_sc117_pointer=0
+# Orca .44.1 is the standard Strata target. Retain .39 only for explicit rollback;
+# migrate an old .39/SC117 pointer before replacing the SC117 profile directory.
+initial_profile='orca-q4_k_s-v01441'
+migrate_legacy_pointer=0
+migrate_legacy_target=''
+migrate_legacy_runtime=''
 if [[ -L "$CUSTOM_DIR/current" ]]; then
     current_target="$(readlink -- "$CUSTOM_DIR/current")" || fail 'cannot read existing Hive profile pointer'
+    selected_profile="${current_target#profiles/}"
     case "$current_target" in
+        profiles/orca-q4_k_s)
+            current_legacy_runtime="$(read_profile_runtime "$CUSTOM_DIR/profiles/orca-q4_k_s/llm-hosting.conf")" || \
+                fail 'cannot identify the generic Orca profile runtime; refusing to migrate its Hive pointer'
+            [[ "$current_legacy_runtime" == 0.1.39 ]] || \
+                fail "generic Orca rollback profile changed runtime: $current_legacy_runtime"
+            initial_profile='orca-q4_k_s-v01441'
+            migrate_legacy_pointer=1
+            migrate_legacy_target="$current_target"
+            migrate_legacy_runtime="$current_legacy_runtime"
+            ;;
         profiles/iq3_s-sc117-abliterated)
             current_sc117_runtime="$(read_profile_runtime "$CUSTOM_DIR/profiles/iq3_s-sc117-abliterated/llm-hosting.conf")" || \
                 fail 'cannot identify the installed SC117 runtime; refusing to change its Hive selection'
             initial_profile="$(sc117_profile_for_runtime "$current_sc117_runtime")" || \
                 fail "installed SC117 Hive runtime is unrecognized: $current_sc117_runtime"
-            [[ "$initial_profile" != orca-q4_k_s ]] || migrate_sc117_pointer=1
+            if [[ "$initial_profile" != iq3_s-sc117-abliterated ]]; then
+                migrate_legacy_pointer=1
+                migrate_legacy_target="$current_target"
+                migrate_legacy_runtime="$current_sc117_runtime"
+            fi
             ;;
         profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/hauhau-q8-fastmtp-q4kv-xhigh)
             initial_profile="${current_target#profiles/}"
             ;;
         *) fail "existing Hive profile pointer is not recognized: $current_target" ;;
     esac
-    [[ -d "$CUSTOM_DIR/profiles/$initial_profile" && ! -L "$CUSTOM_DIR/profiles/$initial_profile" ]] || \
-        fail "existing Hive profile pointer target is missing or unsafe: $initial_profile"
+    [[ -d "$CUSTOM_DIR/profiles/$selected_profile" && ! -L "$CUSTOM_DIR/profiles/$selected_profile" ]] || \
+        fail "existing Hive profile pointer target is missing or unsafe: $selected_profile"
     for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
-        [[ -f "$CUSTOM_DIR/profiles/$initial_profile/$file" && ! -L "$CUSTOM_DIR/profiles/$initial_profile/$file" ]] || \
-            fail "existing Hive profile pointer target is incomplete or unsafe: $initial_profile/$file"
+        [[ -f "$CUSTOM_DIR/profiles/$selected_profile/$file" && ! -L "$CUSTOM_DIR/profiles/$selected_profile/$file" ]] || \
+            fail "existing Hive profile pointer target is incomplete or unsafe: $selected_profile/$file"
     done
 elif [[ -e "$CUSTOM_DIR/current" ]]; then
     fail 'existing Hive current-profile path is not a symlink; refusing to replace it'
@@ -185,12 +213,14 @@ elif [[ -e "$CUSTOM_DIR/llm-hosting.conf" ]]; then
         recognized_legacy_profile='iq3_s-sc117-abliterated'
     fi
     [[ -n "$recognized_legacy_profile" ]] || \
-        fail 'legacy Hive profile config is unrecognized; refusing to switch it to the .39 default'
+        fail 'legacy Hive profile config is unrecognized; refusing to infer the .44.1 standard selection'
     if [[ "$recognized_legacy_profile" == iq3_s-sc117-abliterated ]]; then
         legacy_sc117_runtime="$(read_profile_runtime "$CUSTOM_DIR/llm-hosting.conf")" || \
             fail 'cannot identify the legacy SC117 runtime; refusing to change its Hive selection'
         initial_profile="$(sc117_profile_for_runtime "$legacy_sc117_runtime")" || \
             fail "legacy SC117 Hive runtime is unrecognized: $legacy_sc117_runtime"
+    elif [[ "$recognized_legacy_profile" == orca-q4_k_s ]]; then
+        initial_profile='orca-q4_k_s-v01441'
     else
         initial_profile="$recognized_legacy_profile"
     fi
@@ -218,27 +248,58 @@ for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s
         [[ ! -L "$CUSTOM_DIR/profiles/$profile/$file" ]] || fail "installed profile file is symlinked: $profile/$file"
     done
 done
-if [[ "$migrate_sc117_pointer" -eq 1 ]]; then
-    [[ -L "$CUSTOM_DIR/current" && "$(readlink -- "$CUSTOM_DIR/current")" == profiles/iq3_s-sc117-abliterated ]] || \
-        fail 'SC117 Hive pointer changed during retirement; no profile files were replaced'
-    [[ -d "$CUSTOM_DIR/profiles/orca-q4_k_s" && ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s" ]] || \
-        fail 'generic .39 rollback profile is unavailable; SC117 pointer was not changed'
-    migration_link="$CUSTOM_DIR/.current-migrate.$$.$RANDOM"
-    ln -s -- 'profiles/orca-q4_k_s' "$migration_link"
-    mv -Tf -- "$migration_link" "$CUSTOM_DIR/current"
-    initial_profile='orca-q4_k_s'
-    sync
-    printf 'Retired the obsolete SC117 .39 Hive route to the preserved generic .39 default before replacing the trial profile.\n'
-fi
-install -d -m 755 "$CUSTOM_DIR" "$CUSTOM_DIR/profiles" /var/log/miner/custom/llm-hosting
-for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated; do
+install_profile_files() {
+    local profile="$1" file
     install -d -m 755 "$CUSTOM_DIR/profiles/$profile"
     for file in h-manifest.conf llm-hosting.conf; do
         install -m 644 "$SOURCE_DIR/profiles/$profile/$file" "$CUSTOM_DIR/profiles/$profile/$file"
+        cmp -s "$SOURCE_DIR/profiles/$profile/$file" "$CUSTOM_DIR/profiles/$profile/$file" || \
+            fail "installed profile file failed verification: $profile/$file"
     done
     for file in h-config.sh h-run.sh h-stats.sh; do
         install -m 755 "$SOURCE_DIR/profiles/$profile/$file" "$CUSTOM_DIR/profiles/$profile/$file"
+        cmp -s "$SOURCE_DIR/profiles/$profile/$file" "$CUSTOM_DIR/profiles/$profile/$file" || \
+            fail "installed profile file failed verification: $profile/$file"
     done
+}
+install -d -m 755 "$CUSTOM_DIR" "$CUSTOM_DIR/profiles" /var/log/miner/custom/llm-hosting
+# Install and verify the new target completely before an old .39 pointer can reference it.
+install_profile_files orca-q4_k_s-v01441
+if [[ "$migrate_legacy_pointer" -eq 1 ]]; then
+    current_target="$(readlink -- "$CUSTOM_DIR/current")" || fail 'Hive pointer became unreadable before standard-profile migration'
+    [[ "$current_target" == "$migrate_legacy_target" ]] || \
+        fail 'legacy Hive pointer changed during standard-profile migration; no profile files were replaced'
+    case "$migrate_legacy_target" in
+        profiles/orca-q4_k_s)
+            migration_runtime="$(read_profile_runtime "$CUSTOM_DIR/profiles/orca-q4_k_s/llm-hosting.conf")" || \
+                fail 'generic Orca rollback runtime became unreadable before pointer migration'
+            [[ "$migrate_legacy_runtime" == 0.1.39 && "$migration_runtime" == "$migrate_legacy_runtime" ]] || \
+                fail 'generic Orca rollback runtime changed before pointer migration'
+            ;;
+        profiles/iq3_s-sc117-abliterated)
+            migration_runtime="$(read_profile_runtime "$CUSTOM_DIR/profiles/iq3_s-sc117-abliterated/llm-hosting.conf")" || \
+                fail 'SC117 runtime became unreadable before pointer migration'
+            [[ "$migrate_legacy_runtime" == 0.1.39 && "$migration_runtime" == "$migrate_legacy_runtime" ]] || \
+                fail 'SC117 runtime changed before pointer migration'
+            ;;
+        *) fail 'legacy Hive pointer target is not eligible for standard-profile migration' ;;
+    esac
+    [[ -d "$CUSTOM_DIR/profiles/orca-q4_k_s-v01441" && ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v01441" ]] || \
+        fail 'standard Orca .44.1 profile is unavailable; legacy pointer was not changed'
+    for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
+        cmp -s "$SOURCE_DIR/profiles/orca-q4_k_s-v01441/$file" \
+               "$CUSTOM_DIR/profiles/orca-q4_k_s-v01441/$file" || \
+            fail "standard Orca .44.1 profile changed before pointer migration: $file"
+    done
+    migration_link="$CUSTOM_DIR/.current-migrate.$$.$RANDOM"
+    ln -s -- 'profiles/orca-q4_k_s-v01441' "$migration_link"
+    mv -Tf -- "$migration_link" "$CUSTOM_DIR/current"
+    initial_profile='orca-q4_k_s-v01441'
+    sync
+    printf 'Migrated the obsolete .39/SC117 .39 next-start pointer to the verified standard Orca Q4_K_S .44.1 profile before replacing the trial profile.\n'
+fi
+for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated; do
+    install_profile_files "$profile"
 done
 install -m 755 "$SOURCE_DIR/profile-menu.sh" "$CUSTOM_DIR/profile-menu.sh"
 if ! cmp -s "${SCRIPT_DIR}/exec_with_stdin_api_key.py" "${LLM_ROOT}/exec_with_stdin_api_key.py"; then
@@ -281,9 +342,9 @@ sync
 printf '\nHiveOS LLM miner installed.\n'
 printf '  MINER=custom\n'
 printf '  CUSTOM_MINER=%s\n' "$CUSTOM_NAME"
-printf '  Profile: %s%s\n' "$initial_profile" "$([[ "$initial_profile" == orca-q4_k_s ]] && printf ' (initial default)' || printf ' (preserved selection)')"
+printf '  Profile: %s%s\n' "$initial_profile" "$([[ "$initial_profile" == orca-q4_k_s-v01441 ]] && printf ' (standard Strata default)' || printf ' (preserved selection)')"
 printf '  Switch menu: %s/profile-menu.sh\n' "$CUSTOM_DIR"
-printf '  Retained default/rollback: Orca .39 default; .41 files remain available by explicit profile name\n'
+printf '  Standard Strata: Orca .44.1; Orca .39 and .41 remain available only as explicit rollback profiles\n'
 printf '  Menu routes: Swift, Hauhau, Orca .44.1, and SC117 .44.1 CPU-vision trial\n'
 printf '  SC117 remains unqualified, loopback-only on 127.0.0.1:18080, and uses dedicated trial state\n'
 printf '  No miner start/stop command was run; osn.service was not modified.\n'

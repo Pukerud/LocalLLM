@@ -89,27 +89,33 @@ class CandidateIdentity(unittest.TestCase):
 
 
 class RuntimeRouting(unittest.TestCase):
-    def test_auto_remains_q4_v039_and_explicit_041_uses_only_candidate_gate(self):
+    def test_auto_q4_selects_0441_and_039_requires_explicit_rollback(self):
         import strata_launcher as launcher
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             baseline = (Path('/old-source'), Path('/baseline/config.json'), {'args': ['--max-context', '32768']})
             optin = (Path('/candidate-source'), Path('/candidate/config.json'), {'args': ['--max-context', '32768']})
+            standard = (Path('/standard-source'), Path('/standard/config.json'), {'args': ['--max-context', '262144']})
             selection = root / 'runtime-selection.json'
             selection.write_text('{"version":"0.1.41"}\n')
             before = selection.read_bytes()
             with mock.patch.object(launcher, 'data_root', return_value=root), \
                  mock.patch.object(launcher, 'ready_q4ks', return_value=baseline) as base_ready, \
                  mock.patch.object(launcher.q4ks_v0141, 'ready_q4ks_v0141', return_value=optin) as q4_candidate, \
+                 mock.patch.object(launcher.q4ks_v01441, 'ready_q4ks_v01441', return_value=standard) as standard_ready, \
                  mock.patch.object(launcher.runtimes, 'configure', side_effect=AssertionError('generic manager used')):
                 result_default = launcher.ready_runtime(assets.HOST_PROFILE, runtime='auto', parallel=1, batch_groups=1)
+                result_rollback = launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.39', parallel=1, batch_groups=1)
                 result_candidate = launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.41', parallel=1, batch_groups=1)
-            self.assertEqual(result_default[0], baseline[0])
-            self.assertEqual(result_default[3], '0.1.39')
+            self.assertEqual(result_default[0], standard[0])
+            self.assertEqual(result_default[3], '0.1.44.1')
+            self.assertEqual(result_rollback[0], baseline[0])
+            self.assertEqual(result_rollback[3], '0.1.39')
             self.assertEqual(result_candidate[0], optin[0])
             self.assertEqual(result_candidate[3], '0.1.41')
             base_ready.assert_called_once_with(root)
             q4_candidate.assert_called_once_with(root)
+            standard_ready.assert_called_once_with(root)
             self.assertEqual(selection.read_bytes(), before)
 
     def test_q4_candidate_defaults_to_loopback_and_allows_only_explicit_trusted_lan_hosts(self):
@@ -198,7 +204,7 @@ class RuntimeRouting(unittest.TestCase):
                  mock.patch.object(launcher.q4ks_v0141, 'ready_q4ks_v0141',
                                    return_value=(Path('/candidate'), Path('/candidate/config.json'),
                                                  json.loads(json.dumps(candidate_config)))):
-                with self.assertRaisesRegex(SafetyError, 'baseline or the explicit .41'):
+                with self.assertRaisesRegex(SafetyError, 'standard .44.1 or explicit .39/.41 rollback'):
                     launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.38', parallel=1, batch_groups=1)
                 with self.assertRaisesRegex(SafetyError, 'preserved Q4 .39.*one slot'):
                     launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.39', parallel=2, batch_groups=2)

@@ -271,7 +271,7 @@ if (( available_mib < 12288 )); then
 fi
 abort_if_stopping
 
-say 'checking isolated Q4_K_S Strata 0.1.44.1 candidate (native context 262144, CPU vision, auto prefill, trimmed 14,24,36 split, 8 GiB conversation cache, one slot)'
+say 'checking standard Q4_K_S Strata 0.1.44.1 profile (native context 262144, CPU vision, auto prefill, trimmed 14,24,36 split, 8 GiB conversation cache, one slot)'
 readiness="$(run_strata_user "$STRATA_LAUNCHER" --check-ready --profile "$PROFILE" \
     --runtime "$RUNTIME" --parallel 1 --batch-groups 1)" || {
     say 'Q4_K_S readiness failed; no existing service was stopped'
@@ -282,7 +282,7 @@ printf '%s\n' "$readiness"
 expected_readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.44.1; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'
 actual_readiness="$(grep '^READY CONFIG:' <<< "$readiness" || true)"
 if [[ "$actual_readiness" != "$expected_readiness" ]]; then
-    say 'Q4 .44.1 candidate readiness/evidence is incomplete; the .39 default and .41 rollback remain untouched'
+    say 'Q4 .44.1 standard-profile readiness/evidence is incomplete; the .39/.41 rollback profiles remain untouched'
     request_hive_stop
     exit 1
 fi

@@ -2,7 +2,7 @@
 
 ## Decision: prepared and tested, **not promoted**
 
-The node keeps **0.1.39, one slot** selected for future IQ3_S and Orca launches. 0.1.41 is installed separately and can be requested explicitly; 0.1.38 and 0.1.39 executables, dependencies, model/config assets and the selection file were preserved.
+At the time of this 2026-10-08 report, the generic runtime selector kept **0.1.39, one slot** for IQ3_S and Orca launches. The current Orca Q4_K_S menu/default route is `.44.1`; `.39` remains rollback-only for that Q4 route. 0.1.41 is installed separately and can be requested explicitly; 0.1.38 and 0.1.39 executables, dependencies, model/config assets and the generic selection file were preserved.
 
 Both models passed bounded 0.1.41 GPU correctness checks. Nevertheless, the new four-way automatic placement regressed uncached prompt processing. Preserving the fast existing setup is more important than adopting a newer version number. No manual split, experimental placement tuning or upstream C++ patch was substituted to conceal the regression.
 

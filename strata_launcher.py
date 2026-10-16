@@ -166,10 +166,9 @@ def _effective_host(profile, version, configured_host):
             raise SafetyError(f'Q4 {version} STRATA_HOST may only be 127.0.0.1 or 0.0.0.0')
         return requested or '127.0.0.1'
     if profile == sc117_profile.PROFILE:
-        host = requested or '127.0.0.1'
-        if host not in ('127.0.0.1', '0.0.0.0'):
-            raise SafetyError('SC117 IQ3_S STRATA_HOST may only be 127.0.0.1 or 0.0.0.0')
-        return host
+        if requested not in (None, '127.0.0.1'):
+            raise SafetyError('SC117 is restricted to loopback 127.0.0.1; LAN binding is never permitted')
+        return '127.0.0.1'
     return requested or configured_host
 
 
@@ -177,25 +176,18 @@ def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
     if profile == sc117_profile.PROFILE:
         if (parallel, batch_groups) != (1, 1):
             raise SafetyError('SC117 abliterated IQ3_S is restricted to one serving slot and one batch group')
+        if runtime != sc117_profile.TRIAL_RUNTIME_VERSION:
+            raise SafetyError('SC117 is unqualified: only its explicit loopback .44.1 trial is allowed; .39 hosting is retired')
+        if os.environ.get(sc117_profile.TRIAL_ENV) != '1':
+            raise SafetyError('SC117 Strata .44.1 is available only through its explicit unqualified loopback trial')
         root = data_root()
-        if runtime == sc117_profile.TRIAL_RUNTIME_VERSION:
-            if os.environ.get(sc117_profile.TRIAL_ENV) != '1':
-                raise SafetyError('SC117 Strata 0.1.44.1 is trial-only until its own qualification passes')
-            prepare_sc117.verify_readiness(root, full_hash=False)
-            source, path, cfg = q4ks_v01441.ready_q4ks_v01441(root)
-            return source, path, sc117_profile.build_v01441_trial_config(root, cfg), runtime
-        if runtime != sc117_profile.RUNTIME_VERSION:
-            raise SafetyError('SC117 supports its pinned .39 runtime or explicit loopback-only .44.1 trial')
-        # Validate the shared .38 baseline runtime/config without requiring generic IQ3_S files.
-        source, path, cfg = ready(profile)
-        source, path, cfg, version = runtimes.configure(
-            root, source, path, cfg, 'iq3_s', sc117_profile.RUNTIME_VERSION, 1, 1)
-        settings = sc117_profile.settings_for_start(allow_trial_env=True)
-        return source, path, sc117_profile.build_effective_config(root, cfg, settings), version
+        prepare_sc117.verify_readiness(root, full_hash=False)
+        source, path, cfg = q4ks_v01441.ready_q4ks_v01441(root)
+        return source, path, sc117_profile.build_v01441_trial_config(root, cfg), runtime
     if profile == ORCA_Q4KS_PROFILE:
         if runtime not in ('auto', ORCA_Q4KS_RUNTIME, '0.1.41', q4ks_v01441.RUNTIME_VERSION):
-            raise SafetyError('Q4_K_S supports its .39 baseline or the explicit .41 or .44.1 candidate only')
-        if runtime == q4ks_v01441.RUNTIME_VERSION:
+            raise SafetyError('Q4_K_S supports standard .44.1 or explicit .39/.41 rollback profiles only')
+        if runtime in ('auto', q4ks_v01441.RUNTIME_VERSION):
             if (parallel, batch_groups) != (1, 1):
                 raise SafetyError('Q4 .44.1 is restricted to the validated single-slot/single-group profile')
             source, path, cfg = q4ks_v01441.ready_q4ks_v01441(data_root())
@@ -834,11 +826,12 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     active = host_lifecycle.active_engine()
     if active != 'none':
         raise SafetyError(f'Another LLM session is active ({active}); start refused')
-    port = int(os.environ.get('STRATA_PORT', cfg.get('port', 8080)))
+    default_port = 18080 if profile == sc117_profile.PROFILE else cfg.get('port', 8080)
+    port = int(os.environ.get('STRATA_PORT', default_port))
     effective_host = _effective_host(profile, version, cfg.get('host', '0.0.0.0'))
     sc117_authorization = None
     if profile == sc117_profile.PROFILE:
-        sc117_profile.require_api_key_for_binding(effective_host, api_key)
+        sc117_profile.require_loopback_binding(effective_host)
         settings = sc117_profile.settings_for_start(allow_trial_env=True)
         sc117_authorization = sc117_profile.authorize_start(
             data_root(), settings, host=effective_host, port=port, state_root=strata_state())
@@ -1156,14 +1149,8 @@ def main():
                 print('PREPARED: pinned Orca IQ3_XXS, own compatibility pack/tokenizer, F16 vision configured, native 262144, INT8 streaming KV.')
                 print('Readiness verifies assets/config only; bounded live results are separate in ORCA_IQ3XXS.md. No full-context quality claim.')
             elif profile == sc117_profile.PROFILE:
-                if version == sc117_profile.TRIAL_RUNTIME_VERSION:
-                    print('UNQUALIFIED TRIAL PREFLIGHT ONLY: no normal-hosting or qualification authorization is granted.')
-                    print(sc117_trial_readiness_line(profile, version, a.parallel, a.batch_groups, cfg))
-                else:
-                    settings = sc117_profile.settings_for_start(allow_trial_env=False)
-                    sc117_profile.require_qualification(data_root(), settings)
-                    print(sc117_profile.readiness_line(settings))
-                    print('Readiness is bound to the SC117 model, its native pack and Strata MTP runtime, the pinned .39 engine, and this exact serving configuration.')
+                print('UNQUALIFIED TRIAL PREFLIGHT ONLY: no normal-hosting or qualification authorization is granted.')
+                print(sc117_trial_readiness_line(profile, version, a.parallel, a.batch_groups, cfg))
                 print(sc117_assets.MTP_SOURCE_NOTE)
             elif profile == ORCA_Q4KS_PROFILE:
                 context = cfg['args'][cfg['args'].index('--max-context') + 1]

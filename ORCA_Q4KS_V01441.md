@@ -1,8 +1,8 @@
-# Orca Q4_K_S / Strata 0.1.44.1 opt-in candidate
+# Orca Q4_K_S / Strata 0.1.44.1 — standard profile
 
 ## Status and scope
 
-This is a machine-specific, opt-in candidate for the `.69` HostLLM/Hive node, not a promotion. The generic Strata runtime default remains 0.1.39, and 0.1.41 remains the separately selected Hive profile/rollback. Neither profile assets nor `runtime-selection.json` are changed by this route. HostLLM [7] starts this candidate; HostLLM [16] selects Hive profile `orca-q4_k_s-v01441` for the next normal Hive start. Both choices require an explicit operator action and a read-only readiness check before a service pause or profile-pointer change.
+This is the standard Orca Q4_K_S Strata route for the `.69` HostLLM/Hive node. Its machine-specific evidence is bounded and does not amount to broad performance, quality, or load qualification. Orca `.39` and `.41` remain explicit rollback profiles; the separate generic runtime-selection manager and its assets are not rewritten by this route. For Q4_K_S, `--runtime auto` resolves to this pinned `.44.1` profile. HostLLM [3] starts it; HostLLM [14] selects Hive profile `orca-q4_k_s-v01441` for the next normal Hive start. The installer selects this profile by default while preserving other recognized selections, and migrates an old `.39` next-start pointer to `.44.1`. Readiness is checked before any service pause or profile-pointer change.
 
 The workspace is deliberately pinned to these `.69` paths:
 
@@ -21,9 +21,9 @@ The read-only candidate gate checks:
 - the pinned calibration config, input manifest, integrated results report, and recorded GPU/RAM telemetry;
 - the already verified .39 and .41 Q4 assets/readiness, the exact Q4 model/projector, and the .41 private Python 3.10.12 interpreter used by the integrated check.
 
-The tuning workspace's `build` and source entries are expected symlinks to their exact audited calibration outputs. Readiness verifies those destinations rather than accepting arbitrary links. The candidate is intentionally not added to the generic runtime pin/selection manager.
+The tuning workspace's `build` and source entries are expected symlinks to their exact audited calibration outputs. Readiness verifies those destinations rather than accepting arbitrary links. This profile does not change `runtime-selection.json`; the Q4-specific `auto` route points directly to its pinned runtime without changing selection behavior for other profiles.
 
-The effective candidate profile preserves native context 262,144, CPU vision, the 8-GiB conversation cache/four cache slots, one serving slot, `--prefill auto`, explicit split `14,24,36`, and `--trim-stage-weights`. The checked-in calibration config/report contains `--pipeline-windows 2`, because that was the measured integration arm. **The launcher validates the original pinned config/report, then removes that exploratory override from the private serving copy.** No `--pipeline-windows` option is passed by the selected profile.
+The standard profile uses native context 262,144, CPU vision, the 8-GiB conversation cache/four cache slots, one serving slot, `--prefill auto`, explicit split `14,24,36`, and `--trim-stage-weights`. The checked-in calibration config/report contains `--pipeline-windows 2`, because that was the measured integration arm. **The launcher validates the original pinned config/report, then removes that exploratory override from the private serving copy.** No `--pipeline-windows` option is passed by the selected profile.
 
 The corrected paired decode estimate for pipeline-windows 2 was +14.6% at the median, but its corrected 95% interval crosses zero. It is not a confirmed improvement and is not enabled in this profile. The capability report was run with that calibration override; it does not establish performance for the selected default-window serving copy.
 
@@ -38,12 +38,12 @@ The hash-bound integrated report recorded passing checks for:
 
 Paired screening cleared its measured thresholds for `--prefill auto` (+12.7% median prefill) and `--trim-stage-weights` (+14.0% in the tested comparison). These are specific to the `.69` calibration, configuration, and measurements. They do not establish broad speedup, response quality, context/vision quality, long-duration stability, worst-case memory, snapshot capacity, or multi-user throughput. The capability report also predates the serving-copy removal of pipeline-windows 2, so performance of that effective config is not separately benchmark-qualified.
 
-No user traffic or production workload is migrated automatically. The candidate's existence/readiness does not itself select it or alter the .39/.41 state.
+The installer/menu do not stop or migrate a running service; the next normal Hive start uses `.44.1` by default. Readiness and the bounded evidence do not constitute broad qualification. Orca `.39`/`.41` remain available only as explicit rollback profiles.
 
 ## Launch, networking, and rollback
 
-HostLLM [7] invokes `v1strata.sh` as the normal `user`, checks readiness before acquiring the HostLLM pause lease, and is restricted to one slot/one batch group. It defaults the candidate host bind to `0.0.0.0` for the trusted LAN; set `STRATA_HOST=127.0.0.1` to use loopback. Hive's .44.1 `h-run.sh` uses the same single-slot profile and explicit trusted-LAN bind. Direct readiness/validation defaults to loopback. The Q4 launcher refuses root-owned server starts and arbitrary host addresses. The API is unauthenticated unless `STRATA_API_KEY` is supplied; firewall it and do not expose it to untrusted networks.
+HostLLM [3] invokes `v1strata.sh` as the normal `user`, checks readiness before acquiring the HostLLM pause lease, and is restricted to one slot/one batch group. It defaults to loopback; set `STRATA_HOST=0.0.0.0` explicitly for a trusted LAN, and provide an API key at the secure prompt if desired. Hive's `.44.1` `h-run.sh` uses the same single-slot profile and explicit trusted-LAN bind. Direct readiness/validation defaults to loopback. The Q4 launcher refuses root-owned server starts and arbitrary host addresses. Without a key, a LAN-bound API is unauthenticated; firewall it and do not expose it to untrusted networks.
 
-Hive option [16] only changes its guarded `current` profile symlink after readiness and idle/security checks. It never starts/stops Hive, OctaSpace, or an inference server. The selection takes effect on Hive's next normal miner start. Restore the .39 Hive profile with HostLLM [12] (or choose `orca-q4_k_s` in the profile selector); the separately pinned .41 profiles remain available through HostLLM [14]/[15].
+HostLLM [14] and Hive menu option [3] only change the guarded `current` profile symlink after readiness and idle/security checks. They never start/stop Hive, OctaSpace, or an inference server. The selection takes effect on Hive's next normal miner start. Restore the `.39` rollback profile explicitly with `sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile orca-q4_k_s`; `.41` profiles also remain available by explicit profile name.
 
 Local CPU-only code/contract tests cover runtime routing, pins, tamper-sensitive config checks, the omitted windows-2 serving override, menu entries, and shell syntax. They do not perform a new live `.69` launch; use the identity-bound readiness/lease flow before any operator-authorized runtime test.

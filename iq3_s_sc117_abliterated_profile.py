@@ -74,8 +74,8 @@ TRUSTED_QUALIFICATION_PATH = Path('/var/lib/localllm-strata/qualifications/sc117
 QUALIFICATION_REPORT_MAX_BYTES = 8 * 1024 * 1024
 TRUSTED_QUALIFICATION_RUNNER = Path('/usr/local/libexec/localllm-strata/sc117-qualifier')
 TRUSTED_QUALIFICATION_PIN_POLICY = Path('/etc/localllm-strata/sc117-artifact-pins.json')
-# No root-owned evidence runner is installed yet. Keep this unset so no caller-supplied report
-# can authorize normal SC117 starts; populate it only with the reviewed runner's exact SHA-256.
+# No root-owned evidence runner is installed. Keep this unset so no caller-supplied report is
+# treated as qualification; SC117 normal starts remain disabled regardless of any report.
 TRUSTED_QUALIFICATION_RUNNER_SHA256 = None
 REPORT_FINGERPRINT_INPUT_FIELDS = frozenset({
     'profile', 'model_id', 'model_repository', 'model_revision', 'prepared_asset_manifest_sha256',
@@ -1276,10 +1276,10 @@ def allow_trial_start(root, *, host, port, state_root):
     return True
 
 
-def require_api_key_for_binding(host, api_key):
-    """Keep the optional unauthenticated mode loopback-only for this profile."""
-    if host != '127.0.0.1' and not api_key:
-        raise SafetyError('SC117 non-loopback binding requires an API key; use loopback or configure STRATA_API_KEY')
+def require_loopback_binding(host):
+    """SC117 never supports LAN binding, regardless of authentication."""
+    if host != '127.0.0.1':
+        raise SafetyError('SC117 is restricted to loopback 127.0.0.1; LAN binding is never permitted')
 
 
 def _verify_trial_environment(state_root):
@@ -1386,23 +1386,15 @@ def _apply_v01441_trial_tunables(cfg):
 
 
 def authorize_start(root, settings, *, host, port, state_root):
-    """Apply the one explicit exception to the normal qualification gate."""
-    if os.environ.get(TRIAL_ENV) == '1':
-        trial_settings = settings_for_start(allow_trial_env=True)
-        validate_settings(settings)
-        if settings != trial_settings or not allow_trial_start(
-                root, host=host, port=port, state_root=state_root):
-            raise SafetyError('Unqualified SC117 trials require loopback 127.0.0.1:18080 and isolated sc117-iq3s-trial state')
-        # Trials are explicitly not qualification evidence. The isolated cache prefix makes these
-        # existing __pycache__ entries inactive; the normal/qualification path still rejects them.
-        if os.environ.get('STRATA_RUNTIME') == TRIAL_RUNTIME_VERSION:
-            _verify_v01441_trial_artifacts(root, state_root)
-        else:
-            _verify_trial_artifacts(root, settings, state_root)
-        return 'trial'
-    normal_settings = settings_for_start(allow_trial_env=False)
+    """Permit only the isolated unqualified trial; normal/qualified starts are retired."""
+    if os.environ.get(TRIAL_ENV) != '1':
+        raise SafetyError('SC117 remains unqualified; normal/qualified hosting is disabled, and only the isolated .44.1 trial is allowed')
+    trial_settings = settings_for_start(allow_trial_env=True)
     validate_settings(settings)
-    if settings != normal_settings:
-        raise SafetyError('Normal SC117 start must use the exact configured settings')
-    require_qualification(root, settings)
-    return 'qualified'
+    if (settings != trial_settings or os.environ.get('STRATA_RUNTIME') != TRIAL_RUNTIME_VERSION or
+            not allow_trial_start(root, host=host, port=port, state_root=state_root)):
+        raise SafetyError('Unqualified SC117 trials require Strata .44.1, loopback 127.0.0.1:18080, and isolated sc117-iq3s-trial state')
+    # Trials are explicitly not qualification evidence. The isolated cache prefix makes these
+    # existing __pycache__ entries inactive; no normal/qualified start path is enabled.
+    _verify_v01441_trial_artifacts(root, state_root)
+    return 'trial'

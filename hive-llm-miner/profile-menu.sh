@@ -56,7 +56,7 @@ EOF
 
 profile_label() {
     case "$1" in
-        orca-q4_k_s) printf '%s' 'Orca Uncensored Q4_K_S — Strata 0.1.39, native 262K, CPU vision, one serving slot' ;;
+        orca-q4_k_s) printf '%s' 'Orca Uncensored Q4_K_S — Strata 0.1.39 rollback-only, native 262K, CPU vision, one serving slot' ;;
         orca-q4_k_s-v0141) printf '%s' 'Orca Uncensored Q4_K_S — Strata 0.1.41, native 262K, CPU vision, 8 GiB cache, one serving slot' ;;
         orca-q4_k_s-v0141-2slot) printf '%s' 'Experimental Orca Q4_K_S — Strata 0.1.41, native 262K, CPU vision, 8 GiB cache, two serving slots/two groups; very low VRAM headroom' ;;
         orca-q4_k_s-v01441) printf '%s' 'Orca Q4_K_S — Strata 0.1.44.1 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted' ;;

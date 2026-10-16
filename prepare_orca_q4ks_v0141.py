@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicitly build/test the isolated Q4_K_S / Strata 0.1.41 candidate; never changes .39 defaults."""
+"""Explicitly build/test the isolated Q4_K_S / Strata 0.1.41 rollback candidate; never changes the .44.1 standard or .39 rollback assets."""
 import argparse
 import fcntl
 import json
@@ -257,7 +257,7 @@ def prepare():
             path = Path(name)
             current = candidate_profile.sha256(path) if path.exists() else None
             if current != expected:
-                raise SafetyError(f'Q4 .41 build changed protected .39/.41/default-selection file: {path}')
+                raise SafetyError(f'Q4 .41 build changed protected .39/.41/runtime-selection file: {path}')
         cfg = candidate_profile.make_config(BASE, context=32768)
         atomic = candidate_profile.atomic_json
         atomic(PROFILE_ROOT / 'config.json', cfg)

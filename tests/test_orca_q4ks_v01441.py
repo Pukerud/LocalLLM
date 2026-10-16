@@ -111,7 +111,7 @@ class SourceTreeIntegrity(unittest.TestCase):
 
 
 class RuntimeRouting(unittest.TestCase):
-    def test_auto_remains_039_and_0441_is_explicit_one_slot_only(self):
+    def test_auto_selects_0441_and_039_is_explicit_rollback_one_slot_only(self):
         import strata_launcher as launcher
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -131,19 +131,25 @@ class RuntimeRouting(unittest.TestCase):
                  mock.patch.object(launcher.runtimes, 'configure',
                                    side_effect=AssertionError('generic runtime manager used')):
                 default = launcher.ready_runtime(assets.HOST_PROFILE, runtime='auto', parallel=1, batch_groups=1)
+                rollback = launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.39', parallel=1, batch_groups=1)
                 old = launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.41', parallel=1, batch_groups=1)
                 new = launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.44.1', parallel=1, batch_groups=1)
                 with self.assertRaisesRegex(SafetyError, 'single-slot'):
+                    launcher.ready_runtime(assets.HOST_PROFILE, runtime='auto', parallel=2, batch_groups=2)
+                with self.assertRaisesRegex(SafetyError, 'single-slot'):
                     launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.44.1', parallel=2, batch_groups=2)
-            self.assertEqual(default[0], baseline[0])
-            self.assertEqual(default[3], '0.1.39')
+            self.assertEqual(default[0], candidate_result[0])
+            self.assertEqual(default[3], '0.1.44.1')
+            self.assertEqual(rollback[0], baseline[0])
+            self.assertEqual(rollback[3], '0.1.39')
             self.assertEqual(old[0], old_candidate[0])
             self.assertEqual(old[3], '0.1.41')
             self.assertEqual(new[0], candidate_result[0])
             self.assertEqual(new[3], '0.1.44.1')
             base_ready.assert_called_once_with(root)
             old_ready.assert_called_once_with(root)
-            new_ready.assert_called_once_with(root)
+            self.assertEqual(new_ready.call_count, 2)
+            new_ready.assert_called_with(root)
             self.assertEqual(selection.read_bytes(), before)
 
     def test_0441_launch_environment_strips_arbitrary_engine_and_python_overrides(self):

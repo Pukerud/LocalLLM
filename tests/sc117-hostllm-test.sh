@@ -3,7 +3,6 @@ set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/HostLLM.sh"
-EXPECTED='READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.'
 SCRATCH="$(mktemp -d)"
 trap 'rm -rf -- "$SCRATCH"' EXIT
 
@@ -23,11 +22,6 @@ if [[ "${1:-}" == --check-ready ]]; then
         "${STRATA_STATE_ROOT-unset}" "${PYTHONPYCACHEPREFIX-unset}" "${PYTHONDONTWRITEBYTECODE-unset}" \
         "${SETUPTOOLS_USE_DISTUTILS-unset}" >> "$events.env"
     case "$variant" in
-        exact) printf '%s\n' 'READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.' ;;
-        prefix) printf 'prefix %s\n' 'READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.' ;;
-        suffix) printf '%s contradictory\n' 'READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.' ;;
-        duplicate) printf '%s\n%s\n' 'READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.' 'READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.' ;;
-        wrong) printf '%s\n' 'READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.41; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.' ;;
         trial-exact) printf '%s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.' ;;
         trial-prefix) printf 'prefix %s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.' ;;
         trial-suffix) printf '%s contradictory\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.' ;;
@@ -49,58 +43,49 @@ SCRIPT_DIR="$SCRATCH"
 HOSTLLM_STATE_ROOT="$SCRATCH/state"
 export SCRIPT_DIR HOSTLLM_STATE_ROOT
 
-for variant in prefix suffix duplicate wrong; do
-    printf '%s\n' "$variant" > "$SCRATCH/variant"
+# SC117 .39/auto/other-runtime starts are retired before readiness or service mutation.
+printf 'trial-exact\n' > "$SCRATCH/variant"
+for runtime in auto 0.1.39 0.1.41; do
     : > "$events"
-    if run_selected v1strata.sh --quickstart --profile iq3_s-sc117-abliterated \
-        --runtime 0.1.39 --parallel 1 --batch-groups 1; then
-        echo "unexpected launch with $variant readiness" >&2
+    if STRATA_SC117_IQ3S_TRIAL=1 STRATA_HOST=127.0.0.1 STRATA_PORT=18080 \
+        run_selected v1strata.sh --quickstart --profile iq3_s-sc117-abliterated \
+            --runtime "$runtime" --parallel 1 --batch-groups 1; then
+        echo "unexpected SC117 start with retired runtime $runtime" >&2
         exit 1
     fi
-    grep -qx 'check --check-ready --profile iq3_s-sc117-abliterated --runtime 0.1.39 --parallel 1 --batch-groups 1' "$events"
-    ! grep -q '^hosting begin ' "$events"
-    ! grep -q '^launch ' "$events"
+    [[ ! -s "$events" ]]
 done
 
-# Runtime and slot/group requirements are explicit and unique; reject before readiness or lease.
-printf 'exact\n' > "$SCRATCH/variant"
+# Runtime/slot/group requirements are explicit and unique; reject before readiness or lease.
+printf 'trial-exact\n' > "$SCRATCH/variant"
 for kind in omitted-pin alternate-runtime multiple-slots multiple-groups duplicate-option; do
     : > "$events"
     case "$kind" in
         omitted-pin) args=(--quickstart --profile iq3_s-sc117-abliterated) ;;
-        alternate-runtime) args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.41 --parallel 1 --batch-groups 1) ;;
-        multiple-slots) args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.39 --parallel 2 --batch-groups 1) ;;
-        multiple-groups) args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.39 --parallel 1 --batch-groups 2) ;;
-        duplicate-option) args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.39 --parallel 1 --batch-groups 1 --parallel=2) ;;
+        alternate-runtime) args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.39 --parallel 1 --batch-groups 1) ;;
+        multiple-slots) args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 2 --batch-groups 1) ;;
+        multiple-groups) args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 2) ;;
+        duplicate-option) args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 1 --parallel=2) ;;
     esac
-    if run_selected v1strata.sh "${args[@]}"; then
+    if STRATA_SC117_IQ3S_TRIAL=1 STRATA_HOST=127.0.0.1 STRATA_PORT=18080 \
+        run_selected v1strata.sh "${args[@]}"; then
         echo "unexpected launch with $kind" >&2
         exit 1
     fi
     [[ ! -s "$events" ]]
 done
 
-# Invalid hosts and unauthenticated non-loopback binding cannot acquire a lease.
+# Exact trial readiness finishes before HostLLM obtains a pause lease and invokes the launcher.
 : > "$events"
-if STRATA_HOST=localhost run_selected v1strata.sh --quickstart --profile iq3_s-sc117-abliterated \
-    --runtime 0.1.39 --parallel 1 --batch-groups 1; then exit 1; fi
-[[ ! -s "$events" ]]
-: > "$events"
-if STRATA_HOST=0.0.0.0 run_selected v1strata.sh --quickstart --profile iq3_s-sc117-abliterated \
-    --runtime 0.1.39 --parallel 1 --batch-groups 1; then exit 1; fi
-grep -qx 'check --check-ready --profile iq3_s-sc117-abliterated --runtime 0.1.39 --parallel 1 --batch-groups 1' "$events"
-! grep -q '^hosting begin ' "$events"
-
-# Exact readiness must finish before HostLLM obtains a pause lease and invokes the launcher.
-: > "$events"
-run_selected v1strata.sh --quickstart --profile=iq3_s-sc117-abliterated \
-    --runtime=0.1.39 --parallel=1 --batch-groups=1
+STRATA_SC117_IQ3S_TRIAL=1 STRATA_HOST=127.0.0.1 STRATA_PORT=18080 \
+    run_selected v1strata.sh --quickstart --profile=iq3_s-sc117-abliterated \
+    --runtime=0.1.44.1 --parallel=1 --batch-groups=1
 check_line="$(grep -n '^check ' "$events" | cut -d: -f1)"
 lease_line="$(grep -n '^hosting begin ' "$events" | cut -d: -f1)"
 launch_line="$(grep -n '^launch ' "$events" | cut -d: -f1)"
 [[ "$check_line" -lt "$lease_line" && "$lease_line" -lt "$launch_line" ]]
-grep -qx 'launch --quickstart --profile=iq3_s-sc117-abliterated --runtime=0.1.39 --parallel=1 --batch-groups=1' "$events"
-grep -Fq 'host=127.0.0.1 key=unset fd=unset' "$events.env"
+grep -qx 'check --check-ready --profile=iq3_s-sc117-abliterated --runtime=0.1.44.1 --parallel=1 --batch-groups=1' "$events"
+grep -Fq 'host=127.0.0.1 key=unset fd=unset marker=1 runtime=0.1.44.1 port=18080' "$events.env"
 
 # .44.1 is reachable only through its exact loopback trial environment and a trial-specific preflight.
 trial_state="${HOME:-/home/user}/.local/state/locallm-strata/sc117-iq3s-trial"
@@ -119,11 +104,12 @@ for variant in trial-prefix trial-suffix trial-duplicate; do
 done
 
 printf 'trial-exact\n' > "$SCRATCH/variant"
-for kind in trial-missing-marker trial-lan trial-wrong-port; do
+for kind in trial-missing-marker trial-lan trial-invalid-host trial-wrong-port; do
     : > "$events"
     case "$kind" in
         trial-missing-marker) host=127.0.0.1 port=18080 marker=0 ;;
         trial-lan) host=0.0.0.0 port=18080 marker=1 ;;
+        trial-invalid-host) host=localhost port=18080 marker=1 ;;
         trial-wrong-port) host=127.0.0.1 port=8080 marker=1 ;;
     esac
     if STRATA_SC117_IQ3S_TRIAL="$marker" STRATA_HOST="$host" STRATA_PORT="$port" \
@@ -153,4 +139,4 @@ grep -qx 'launch --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.44
 grep -Fq 'exec_with_stdin_api_key.py' "$ROOT/HostLLM.sh"
 grep -Fq 'Refusing exported STRATA_API_KEY' "$ROOT/HostLLM.sh"
 
-echo 'HostLLM SC117 exact preflight-before-lease, pin/slot refusals, loopback default, and LAN-key gate: PASS'
+echo 'HostLLM SC117 .39 retirement, exact .44.1 preflight-before-lease, one-slot refusals, loopback-only and 18080 gates: PASS'

@@ -18,6 +18,17 @@ WALLET_CONF="/hive-config/wallet.conf"
 BACKUP_SUFFIX=".llm-hosting.bak"
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+PROFILE_LOCK_FILE='/run/llm-hosting-profile-menu.lock'
+[[ -d /run && ! -L /run && "$(stat -c '%u' /run)" == 0 ]] || fail '/run is not a trusted root-owned directory'
+command -v flock >/dev/null 2>&1 || fail 'flock is unavailable; refusing an unsynchronized uninstall'
+[[ ! -L "$PROFILE_LOCK_FILE" ]] || fail 'Hive profile lock path is symlinked'
+if [[ -e "$PROFILE_LOCK_FILE" ]]; then
+    [[ -f "$PROFILE_LOCK_FILE" && "$(stat -c '%u' "$PROFILE_LOCK_FILE")" == 0 && \
+       "$(stat -c '%a' "$PROFILE_LOCK_FILE")" == 600 ]] || fail 'Hive profile lock file has unsafe ownership or mode'
+fi
+umask 077
+exec 9>"$PROFILE_LOCK_FILE"
+flock -n 9 || fail 'Hive profile selector or installer is active'
 [[ ! -e /run/hive/MINER_RUN ]] || fail 'Hive reports a miner running; stop it through its normal operator workflow first'
 command -v pgrep >/dev/null 2>&1 || fail 'cannot inspect LLM launcher processes; refusing uninstall'
 if pgrep -f 'strata_launcher[.]py|serve[.]server|llama_cpp[.]server|v1qwen38[.]sh|llama-server|/engine/strata[[:space:]]|/strata-vision[[:space:]]|/hive/miners/custom/llm-hosting/h-run[.]sh' >/dev/null 2>&1; then

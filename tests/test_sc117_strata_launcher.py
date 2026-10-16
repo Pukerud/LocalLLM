@@ -60,6 +60,7 @@ class LauncherModule:
                 TRIAL_OVERRIDE_ENV={'STRATA_SC117_IQ3S_TRIAL_PREFILL': 'prefill'},
                 TRIAL_EXPERIMENT_ENV={'STRATA_SC117_IQ3S_TRIAL_GPU_ORDER'},
                 settings_for_start=lambda **_: {}, authorize_start=lambda *_a, **_k: 'trial',
+                require_loopback_binding=lambda host: None,
                 build_effective_config=lambda *_: {}, build_v01441_trial_config=lambda *_: {}),
             'prepare_iq3_s_sc117_abliterated': module(
                 'prepare_iq3_s_sc117_abliterated', verify_readiness=lambda *_a, **_k: None),
@@ -114,24 +115,27 @@ class SC117LauncherSecretTests(unittest.TestCase):
             self.assertEqual(saved['host'], '127.0.0.1')
             self.assertEqual(config['api_key'], 'private-token')
 
-    def test_sc117_dispatch_requires_explicit_039_and_builds_separate_profile(self):
+    def test_sc117_dispatch_retires_039_and_requires_explicit_0441_trial(self):
         profile = LAUNCHER.sc117_profile
-        source, config_path, baseline, effective = Path('/source'), Path('/base.json'), {'args': []}, {'sc117': True}
         with mock.patch.object(LAUNCHER, 'data_root', return_value=Path('/data')), \
-                mock.patch.object(LAUNCHER, 'ready', return_value=(source, config_path, baseline)) as ready, \
-                mock.patch.object(LAUNCHER.runtimes, 'configure',
-                                  return_value=(source, config_path, baseline, '0.1.39')) as configure, \
-                mock.patch.object(profile, 'settings_for_start', return_value={'pinned': True}), \
-                mock.patch.object(profile, 'build_effective_config', return_value=effective):
-            result = LAUNCHER.ready_runtime(profile.PROFILE, '0.1.39', 1, 1)
-            ready.assert_called_once_with(profile.PROFILE)
-            configure.assert_called_once_with(Path('/data'), source, config_path, baseline,
-                                               'iq3_s', '0.1.39', 1, 1)
-            self.assertEqual(result, (source, config_path, effective, '0.1.39'))
-        with self.assertRaisesRegex(SAFETY_ERROR, 'pinned .39 runtime or explicit loopback-only .44.1 trial'):
-            LAUNCHER.ready_runtime(profile.PROFILE, 'auto', 1, 1)
+                mock.patch.object(LAUNCHER, 'ready') as ready, \
+                mock.patch.object(LAUNCHER.runtimes, 'configure') as configure:
+            for runtime in ('auto', '0.1.39', '0.1.41'):
+                with self.subTest(runtime=runtime), self.assertRaisesRegex(
+                        SAFETY_ERROR, 'only its explicit loopback .44.1 trial is allowed'):
+                    LAUNCHER.ready_runtime(profile.PROFILE, runtime, 1, 1)
+            ready.assert_not_called()
+            configure.assert_not_called()
         with self.assertRaisesRegex(SAFETY_ERROR, 'one serving slot and one batch group'):
-            LAUNCHER.ready_runtime(profile.PROFILE, '0.1.39', 2, 1)
+            LAUNCHER.ready_runtime(profile.PROFILE, '0.1.44.1', 2, 1)
+
+    def test_sc117_launcher_never_allows_a_lan_host(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(LAUNCHER._effective_host(LAUNCHER.sc117_profile.PROFILE,
+                                                      '0.1.44.1', '0.0.0.0'), '127.0.0.1')
+        with mock.patch.dict(os.environ, {'STRATA_HOST': '0.0.0.0'}, clear=True):
+            with self.assertRaisesRegex(SAFETY_ERROR, 'LAN binding is never permitted'):
+                LAUNCHER._effective_host(LAUNCHER.sc117_profile.PROFILE, '0.1.44.1', '127.0.0.1')
 
     def test_sc117_trial_preflight_requires_exact_isolation_and_cpu_vision(self):
         profile = LAUNCHER.sc117_profile
@@ -189,7 +193,7 @@ class SC117LauncherSecretTests(unittest.TestCase):
             build.assert_called_once_with(Path('/data'), candidate[2])
             self.assertEqual(result, (candidate[0], candidate[1], effective, '0.1.44.1'))
         with mock.patch.dict(os.environ, {}, clear=True):
-            with self.assertRaisesRegex(SAFETY_ERROR, 'trial-only until its own qualification'):
+            with self.assertRaisesRegex(SAFETY_ERROR, 'only through its explicit unqualified loopback trial'):
                 LAUNCHER.ready_runtime(profile.PROFILE, '0.1.44.1', 1, 1)
 
     def test_sc117_baseline_readiness_does_not_require_generic_model_or_pack_files(self):

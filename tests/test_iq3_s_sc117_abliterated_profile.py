@@ -546,41 +546,43 @@ class SC117ProfileTests(unittest.TestCase):
                 with self.assertRaises(SafetyError):
                     profile.require_qualification(self.root, profile.DEFAULT_SETTINGS)
 
-    def test_non_loopback_sc117_binding_requires_api_key(self):
-        profile.require_api_key_for_binding('127.0.0.1', None)
-        profile.require_api_key_for_binding('0.0.0.0', 'test-key')
-        with self.assertRaisesRegex(SafetyError, 'requires an API key'):
-            profile.require_api_key_for_binding('0.0.0.0', None)
+    def test_sc117_binding_is_loopback_only_even_with_api_key(self):
+        profile.require_loopback_binding('127.0.0.1')
+        for host in ('0.0.0.0', '192.168.1.69'):
+            with self.subTest(host=host), self.assertRaisesRegex(SafetyError, 'LAN binding is never permitted'):
+                profile.require_loopback_binding(host)
 
-    def test_authorize_start_gates_normal_launch_and_allows_only_explicit_trial(self):
+    def test_authorize_start_disables_normal_hosting_and_allows_only_explicit_trial(self):
         home = self.root / 'home'
         state = home / '.local/state/locallm-strata' / profile.TRIAL_STATE_ROOT_NAME
         with patch.dict(os.environ, {}, clear=True), \
                 patch.object(profile, 'require_qualification') as qualified:
-            self.assertEqual(profile.authorize_start(self.root, dict(profile.DEFAULT_SETTINGS),
-                                                     host='0.0.0.0', port=8080,
-                                                     state_root=home / '.local/state/locallm-strata'),
-                             'qualified')
-            qualified.assert_called_once()
-        with patch.dict(os.environ, {}, clear=True), \
-                patch.object(profile, 'require_qualification', side_effect=SafetyError('report missing')):
-            with self.assertRaisesRegex(SafetyError, 'report missing'):
-                profile.authorize_start(self.root, dict(profile.DEFAULT_SETTINGS), host='0.0.0.0',
-                                        port=8080, state_root=home / '.local/state/locallm-strata')
+            with self.assertRaisesRegex(SafetyError, 'normal/qualified hosting is disabled'):
+                profile.authorize_start(self.root, dict(profile.DEFAULT_SETTINGS),
+                                        host='127.0.0.1', port=18080,
+                                        state_root=home / '.local/state/locallm-strata')
+            qualified.assert_not_called()
         settings = dict(profile.DEFAULT_SETTINGS)
         cache_prefix = state / 'pycache'
+        env = {'STRATA_SC117_IQ3S_TRIAL': '1', 'STRATA_RUNTIME': '0.1.44.1',
+               'PYTHONPYCACHEPREFIX': str(cache_prefix), 'SETUPTOOLS_USE_DISTUTILS': 'stdlib'}
         with patch('pathlib.Path.home', return_value=home), \
-                patch.dict(os.environ, {'STRATA_SC117_IQ3S_TRIAL': '1',
-                                        'PYTHONPYCACHEPREFIX': str(cache_prefix),
-                                        'SETUPTOOLS_USE_DISTUTILS': 'stdlib'}, clear=True), \
-                patch.object(profile, '_verify_trial_artifacts') as trial_artifacts:
+                patch.dict(os.environ, env, clear=True), \
+                patch.object(profile, '_verify_v01441_trial_artifacts') as trial_artifacts:
             self.assertEqual(profile.authorize_start(self.root, settings,
                                                      host='127.0.0.1', port=18080, state_root=state), 'trial')
-            trial_artifacts.assert_called_once_with(self.root, settings, state)
+            trial_artifacts.assert_called_once_with(self.root, state)
             with self.assertRaises(SafetyError):
                 profile.authorize_start(self.root, settings, host='0.0.0.0',
                                         port=18080, state_root=state)
-            trial_artifacts.assert_called_once_with(self.root, settings, state)
+            with self.assertRaises(SafetyError):
+                profile.authorize_start(self.root, settings, host='127.0.0.1',
+                                        port=8080, state_root=state)
+            trial_artifacts.assert_called_once_with(self.root, state)
+        with patch('pathlib.Path.home', return_value=home), \
+                patch.dict(os.environ, env | {'STRATA_RUNTIME': '0.1.39'}, clear=True):
+            with self.assertRaisesRegex(SafetyError, 'require Strata .44.1'):
+                profile.authorize_start(self.root, settings, host='127.0.0.1', port=18080, state_root=state)
 
     def test_readiness_recomputes_profile_fingerprint_and_rejects_fabricated_probe_receipts(self):
         report = self._passing_report()

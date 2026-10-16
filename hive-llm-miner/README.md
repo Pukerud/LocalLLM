@@ -1,6 +1,6 @@
 # HiveOS LocalLLM custom miner
 
-This package installs one Hive custom miner with an atomic next-start profile selector. Its retained default remains Orca Q4_K_S Strata 0.1.39. The user-facing HostLLM actions are Swift, Hauhau, Orca .44.1, and the isolated SC117 .44.1 CPU-vision trial. The older SC117 .39 selector route is retired; its shared model/native-pack assets are preserved.
+This package installs one Hive custom miner with an atomic next-start profile selector. The standard Strata selection is Orca Q4_K_S Strata 0.1.44.1 with auto prefill and trimmed `14,24,36` split; the windows-2 override is omitted. Orca .39 is rollback-only. Hive's standard Orca profile deliberately binds `0.0.0.0:8080` for trusted-LAN serving and is unauthenticated; do not expose it to an untrusted network. HostLLM's Orca route defaults to loopback, and the isolated SC117 `.44.1` trial is fixed to `127.0.0.1:18080`. The other user-facing actions are Swift, Hauhau, and that SC117 trial. The old SC117 .39 selector route is retired; shared model/native-pack assets are preserved.
 
 ## Interactive selector
 
@@ -20,8 +20,8 @@ sudo /hive/miners/custom/llm-hosting/profile-menu.sh
 The selector changes only the `current` symlink; it never starts or stops Hive,
 Strata, Docker, or `osn.service`. It checks both API ports (8080 and 18080),
 processes, Docker, GPU compute, and the HostLLM lease before changing the next
-profile. `.39` remains the generic default/explicit rollback, and `.41` rollback
-profiles remain available by explicit profile name rather than visible menu rows.
+profile. Orca `.44.1` is the standard Strata default. `.39` is rollback-only, and
+`.41` rollback profiles remain available by explicit profile name rather than visible menu rows.
 
 Noninteractive selections include:
 
@@ -60,13 +60,14 @@ assets are deleted by the menu cleanup.
 
 ## Install and rollback
 
-The installer checks the Orca .39 default, preserved .41 profiles, Orca .44.1,
-and the exact SC117 trial preflight before changing Hive configuration. If the
-current pointer still targets the obsolete SC117 .39 route, it atomically moves
-the next-start pointer to the generic Orca .39 default before replacing that
-profile directory with the isolated trial package. Other recognized selections
+The installer checks the pinned Orca .44.1 standard profile, the retained .39/.41
+rollback profiles, and the exact SC117 trial preflight before changing Hive
+configuration. If the current pointer selects generic Orca .39 or the obsolete
+SC117 .39 route, it atomically migrates the next-start pointer to standard Orca
+.44.1 before replacing the SC117 profile directory with the isolated trial
+package. Other recognized selections, including the explicit SC117 .44.1 trial,
 are preserved. The installer does not start/stop Hive or `osn.service`.
 
 The menu does not expose `.41` rows, but explicit `.41` profile names remain
-available for rollback. Keep the generic `.39` default and the `.41`/`.44.1`
-profile files; do not delete shared model/native-pack assets.
+available for rollback. Keep Orca `.44.1` as standard, `.39`/`.41` as rollback,
+and all shared model/native-pack assets.

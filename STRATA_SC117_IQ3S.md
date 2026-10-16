@@ -2,7 +2,7 @@
 
 **Status: unqualified; preparation and deployment have not been performed.** This page documents the existing opt-in SC117 route. No model files have been downloaded, no native pack built, no inference or qualification run, and no HostLLM/Hive deployment has occurred as part of this documentation task. Do not read the configuration below as a result or readiness claim.
 
-The route replaces the old HostLLM IQ3_S entry at choice **[3]** and uses Hive profile `iq3_s-sc117-abliterated`. It is a distinct model/profile, not the older base IQ3_S route documented in [STRATA_IQ3S.md](STRATA_IQ3S.md). It must remain blocked from normal hosting until an identity-bound qualification is recorded.
+The route uses HostLLM choice **[4]** and Hive profile `iq3_s-sc117-abliterated`. It is a distinct model/profile, not the older base IQ3_S route documented in [STRATA_IQ3S.md](STRATA_IQ3S.md). SC117 remains unqualified: its legacy `.39` normal-start path is retired, and no qualified/production start is enabled. Only the explicit `.44.1` loopback trial is permitted.
 
 ## Immutable model and runtime pins
 
@@ -113,30 +113,20 @@ The attestation location on Linux is fixed and outside the model user's writable
 
 It must be a regular non-symlink file owned by root with mode `0444`; its parent directories must be root-owned and not group/other-writable. The candidate runner now defines serialized fixed synthetic probes and response/counter/log-window receipts, but **issuance is still disabled and the CLI exits before inference** while the reviewed root-owned artifact pin policy is unprovisioned, the operator/server share a UID, pinned .39 lacks a per-request BF16 execution attestation, and the installed runner hash is not pinned by readiness. A successful probe session is not enough to waive any of those blockers. The active probe code has not been run against a model; no report can be emitted or imported to unlock normal hosting. Caller-supplied pass assertions are rejected. Stale assets/config/runtime, changed settings, missing checks, or mismatched before/after identity must fail readiness. The asset-preparation CLI does not generate qualification evidence; `--check` cannot stand in for live measurements, and CPU-only unit tests do not qualify the model.
 
-The launcher contains a narrow, explicit unqualified trial exception for controlled testing: it requires `STRATA_SC117_IQ3S_TRIAL=1`, binds to `127.0.0.1:18080`, and uses the separate state directory `~/.local/state/locallm-strata/sc117-iq3s-trial`. It is not normal readiness, does not create an attestation, and must not be used as a route to LAN/Hive deployment. HostLLM and Hive apply the normal qualification gate.
+The launcher contains a narrow, explicit unqualified trial exception for controlled testing: it requires `STRATA_SC117_IQ3S_TRIAL=1`, binds to `127.0.0.1:18080`, and uses the separate state directory `~/.local/state/locallm-strata/sc117-iq3s-trial`. It is not normal readiness and does not create an attestation. The old `.39` SC117 start path is disabled; no SC117 path may use LAN binding or production port `8080`.
 
-## HostLLM and Hive gates; preserve runtime defaults
+## SC117 launch and network guardrails
 
-Normal readiness is checked with the explicit profile/runtime/slot contract:
+There is **no normal or qualified SC117 start command**. Strata `.39` remains pinned as source/native-pack and qualification provenance only; the runtime selector and HostLLM reject `.39`, `auto`, `.41`, and other non-trial starts for this profile. A future qualification report does not itself enable normal hosting.
 
-```bash
-./v1strata.sh --check-ready \
-  --profile iq3_s-sc117-abliterated --runtime 0.1.39 \
-  --parallel 1 --batch-groups 1
-```
+The only permitted start is the explicit Strata `.44.1` trial, requiring all of: `STRATA_SC117_IQ3S_TRIAL=1`, `STRATA_RUNTIME=0.1.44.1`, one slot/group, `STRATA_HOST=127.0.0.1`, `STRATA_PORT=18080`, dedicated `STRATA_STATE_ROOT=~/.local/state/locallm-strata/sc117-iq3s-trial`, and its private Python-cache environment. HostLLM [4] and Hive's SC117 profile set this environment and verify the exact trial-readiness line before starting or selecting the route. Direct launcher invocation is subject to the same profile/host/port/state checks.
 
-Without a matching root-owned report this must fail; asset/pack readiness by itself is not enough. Once qualified, its exact normal readiness line is:
+- **HostLLM:** choice [4] performs the exact trial preflight before acquiring its hosting pause lease. Its lifecycle checks still block Docker uncertainty/rentals, existing or unidentified GPU work, an occupied API port, and unsafe service state. Use the HostLLM controller rather than a raw command for the authorized trial; it does not promote trial evidence to qualification.
+- **Hive:** the root-only profile selector checks readiness and idle state before changing `current`. The SC117 `h-run.sh` wrapper repeats the exact `.44.1` trial readiness check and forces `127.0.0.1:18080` plus the dedicated state. It fails closed on an occupied listener/state/port, Docker uncertainty/workloads, incomplete GPU inventory, low GPU headroom, or low RAM. The selector does not start/stop Hive or change `osn.service`; use Hive's normal operator workflow only after a successful selection gate.
+- **Binding/authentication:** SC117 permits only `127.0.0.1:18080`; an API key never enables LAN binding. Port `8080`, `0.0.0.0`, and other non-loopback hosts are rejected in HostLLM and the direct launcher. The separate standard Orca Q4 `.44.1` route is not SC117 and has its own trusted-LAN behavior.
 
-```text
-READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.
-```
-
-- **HostLLM:** choice [3] checks the explicit .39/one-slot/one-group request, exact readiness line, and qualification before acquiring its hosting pause lease or pausing the miner/OctaSpace service. Its lifecycle safety checks still block on Docker uncertainty/rentals, existing or unidentified GPU work, an occupied API port, or unsafe service state. Use HostLLM for normal hosting and restoration, not a raw launcher as a substitute for its lifecycle controller.
-- **Hive:** the root-only profile selector checks readiness before changing the `current` profile pointer and runs only while idle. The SC117 `h-run.sh` wrapper repeats the exact .39/qualification check before launch, and fails closed if the listener/state or port is occupied, Docker is unavailable/nonempty, four GPUs cannot be inventoried, any GPU has less than **23,700 MiB free**, or available RAM is below **12,288 MiB**. The Hive selector does not start/stop the miner or change `osn.service`; use Hive's normal operator workflow only after a successful selection gate.
-- **Binding/authentication:** both routes accept only `127.0.0.1` or `0.0.0.0` and default to loopback. Explicit `STRATA_HOST=0.0.0.0` requires an API key in HostLLM or the Hive environment; the launcher enforces this even when started directly. The API key stays out of argv/environment and the persistent run-config, using a private RAM-backed tmpfs config removed on stop. Protect the Hive configuration that stores the key. Traffic is still plain HTTP, so use a trusted LAN or trusted tunnel and never expose the API to an untrusted network.
-
-This profile is pinned to **Strata 0.1.39 regardless of generic runtime selection**; `auto`, 0.1.38, 0.1.41, and 0.1.44.1 are not substitutes. Preserve the existing .39 default/rollback selection. The .44.1 runtime is a separate Orca Q4 candidate and its source, config, evidence, and future-launch selection must remain unchanged by this SC117 route. Preparing or qualifying SC117 does not promote another runtime or rewrite the shared baseline.
+The `.39` source/runtime pins remain relevant to SC117 asset packing and any future reviewed qualification work; they are not authorization to start SC117. Preserve the SC117 model/native-pack assets and the separate standard Orca Q4 `.44.1` profile; this route does not rewrite the Q4 source, config, evidence, or selection.
 
 ## Current disposition
 
-**Unqualified and hard-blocked.** No SC117 download, asset preparation, native pack, inference, live qualification, root attestation, HostLLM launch, or Hive deployment is claimed here. The active-probe runner implementation is uninstalled and unpinned, report issuance remains disabled, and its current known blockers stop it before inference; no qualification report can unlock normal starts. Preserve the existing .39 default and the separate .44.1 candidate.
+**Unqualified and blocked from normal hosting.** The `.44.1` SC117 profile is a trial-only route; this document makes no claim that a current `.69` trial is running or that it passed qualification. The active-probe runner remains uninstalled/unpinned and report issuance disabled, so no qualification report can unlock normal starts. Preserve model/native-pack assets and the `.39` source/runtime provenance; preserve Orca Q4 `.44.1` as the separate standard route with `.39`/`.41` as its explicit rollback profiles.
