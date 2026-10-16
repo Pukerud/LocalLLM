@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import copy
 import csv
+import importlib.util
 import hashlib
 import json
 import math
@@ -349,7 +350,8 @@ def _metadata_record(path, info):
             info.st_uid, info.st_gid, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
-def _runtime_python_import_surface(root, runtime_root, runtime_source, manifest):
+def _runtime_python_import_surface(root, runtime_root, runtime_source, manifest, *,
+                                   allow_inactive_bytecode=False):
     """Inventory importable Python paths without starting the prepared interpreter."""
     root = Path(root)
     runtime_root = Path(runtime_root)
@@ -429,8 +431,18 @@ def _runtime_python_import_surface(root, runtime_root, runtime_source, manifest)
             if not _is_importable_python_path(path, import_root):
                 continue
             if path.suffix.lower() in ('.pyc', '.pyo'):
-                # A valid cache can execute code different from its tracked .py source. Hashing
-                # that cache would bind an arbitrary payload, not establish its source identity.
+                # Only an explicit, isolated trial may ignore canonical __pycache__ entries, and
+                # only because its server subprocess uses PYTHONPYCACHEPREFIX to bypass them.
+                # Qualification and normal readiness continue to reject every executable cache.
+                if allow_inactive_bytecode and path.suffix.lower() == '.pyc' and path.parent.name == '__pycache__' and stat.S_ISREG(info.st_mode):
+                    try:
+                        source_path = Path(importlib.util.source_from_cache(str(path)))
+                        source_info = source_path.lstat()
+                    except (OSError, ValueError, NotImplementedError) as exc:
+                        raise SafetyError(f'SC117 trial Python cache has no canonical source: {path}') from exc
+                    if source_path.parent != path.parent.parent or not stat.S_ISREG(source_info.st_mode):
+                        raise SafetyError(f'SC117 trial Python cache has no regular adjacent source: {path}')
+                    continue
                 raise SafetyError(f'SC117 runtime rejects executable cached Python bytecode: {path}')
             if not stat.S_ISREG(info.st_mode):
                 raise SafetyError(f'SC117 Python import artifact must be a regular file: {path}')
@@ -809,7 +821,8 @@ def machine_identity():
             'driver_version': next(iter(drivers))}
 
 
-def fingerprint(root, settings, *, verify_content=False, _machine_identity=None):
+def fingerprint(root, settings, *, verify_content=False, _machine_identity=None,
+                allow_inactive_bytecode=False):
     """Bind live evidence to pinned asset/pack contents, .39 runtime, baseline config, and settings.
 
     Qualification issuance requests full verification of the pinned model and native-pack assets.
@@ -856,7 +869,8 @@ def fingerprint(root, settings, *, verify_content=False, _machine_identity=None)
                 runtime_manifest.get('source') != str(runtime_root / 'source')):
             raise SafetyError('SC117 qualification requires the exact prepared Strata 0.1.39 runtime pin')
         runtime_python_import_surface = _runtime_python_import_surface(
-            root, runtime_root, runtime_source, runtime_manifest)
+            root, runtime_root, runtime_source, runtime_manifest,
+            allow_inactive_bytecode=allow_inactive_bytecode)
         runtime_python = (runtime_source / '.venv/bin/python').resolve(strict=True)
         runtime_python_sha = _stable_file_hash(runtime_python, 'pinned .39 Python interpreter',
                                                max_bytes=512 * 1024 * 1024)
@@ -1247,6 +1261,14 @@ def require_api_key_for_binding(host, api_key):
         raise SafetyError('SC117 non-loopback binding requires an API key; use loopback or configure STRATA_API_KEY')
 
 
+def _verify_trial_artifacts(root, settings, state_root):
+    """Verify pinned inputs while ensuring the trial interpreter ignores shared bytecode caches."""
+    cache_prefix = Path(state_root) / 'pycache'
+    if os.environ.get('PYTHONPYCACHEPREFIX') != str(cache_prefix):
+        raise SafetyError('SC117 trial requires its isolated Python bytecode-cache prefix')
+    fingerprint(root, settings, verify_content=True, allow_inactive_bytecode=True)
+
+
 def authorize_start(root, settings, *, host, port, state_root):
     """Apply the one explicit exception to the normal qualification gate."""
     if os.environ.get(TRIAL_ENV) == '1':
@@ -1255,7 +1277,9 @@ def authorize_start(root, settings, *, host, port, state_root):
         if settings != trial_settings or not allow_trial_start(
                 root, host=host, port=port, state_root=state_root):
             raise SafetyError('Unqualified SC117 trials require loopback 127.0.0.1:18080 and isolated sc117-iq3s-trial state')
-        fingerprint(root, settings, verify_content=True)  # Verify pinned bytes, pack, baseline config, and runtime.
+        # Trials are explicitly not qualification evidence. The isolated cache prefix makes these
+        # existing __pycache__ entries inactive; the normal/qualification path still rejects them.
+        _verify_trial_artifacts(root, settings, state_root)
         return 'trial'
     normal_settings = settings_for_start(allow_trial_env=False)
     validate_settings(settings)

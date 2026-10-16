@@ -508,14 +508,19 @@ class SC117ProfileTests(unittest.TestCase):
             with self.assertRaisesRegex(SafetyError, 'report missing'):
                 profile.authorize_start(self.root, dict(profile.DEFAULT_SETTINGS), host='0.0.0.0',
                                         port=8080, state_root=home / '.local/state/locallm-strata')
+        settings = dict(profile.DEFAULT_SETTINGS)
+        cache_prefix = state / 'pycache'
         with patch('pathlib.Path.home', return_value=home), \
-                patch.dict(os.environ, {'STRATA_SC117_IQ3S_TRIAL': '1'}, clear=True), \
-                patch.object(profile, 'fingerprint', return_value='a' * 64):
-            self.assertEqual(profile.authorize_start(self.root, dict(profile.DEFAULT_SETTINGS),
+                patch.dict(os.environ, {'STRATA_SC117_IQ3S_TRIAL': '1',
+                                        'PYTHONPYCACHEPREFIX': str(cache_prefix)}, clear=True), \
+                patch.object(profile, '_verify_trial_artifacts') as trial_artifacts:
+            self.assertEqual(profile.authorize_start(self.root, settings,
                                                      host='127.0.0.1', port=18080, state_root=state), 'trial')
+            trial_artifacts.assert_called_once_with(self.root, settings, state)
             with self.assertRaises(SafetyError):
-                profile.authorize_start(self.root, dict(profile.DEFAULT_SETTINGS), host='0.0.0.0',
+                profile.authorize_start(self.root, settings, host='0.0.0.0',
                                         port=18080, state_root=state)
+            trial_artifacts.assert_called_once_with(self.root, settings, state)
 
     def test_readiness_recomputes_profile_fingerprint_and_rejects_fabricated_probe_receipts(self):
         report = self._passing_report()

@@ -852,6 +852,14 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     else:
         env = dict(os.environ)
         env.update(runtimes.runtime_env(version, parallel))
+    if sc117_authorization == 'trial':
+        cache_prefix = state_root / 'pycache'
+        cache_prefix.mkdir(mode=0o700, parents=True, exist_ok=True)
+        cache_info = cache_prefix.lstat()
+        if (not stat.S_ISDIR(cache_info.st_mode) or cache_info.st_uid != os.geteuid() or
+                stat.S_IMODE(cache_info.st_mode) & 0o077 or any(cache_prefix.iterdir())):
+            raise SafetyError('SC117 trial Python bytecode-cache prefix must be private and empty')
+        env['PYTHONPYCACHEPREFIX'] = str(cache_prefix)
     if version == runtimes.LEGACY_VERSION and parallel > 1:
         print('Pinned 0.1.39 batching: all-resident zero-doorbell optimization disabled to avoid the verified layer-0 timeout.', flush=True)
     elif version == runtimes.VERSION:
