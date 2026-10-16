@@ -33,6 +33,36 @@ owned_stop() {
 }
 detect_engine() { safety active 2>/dev/null || printf 'unknown\n'; }
 
+sc117_trial_command() {
+    local owner_user owner_home trial_state
+    local -a trial_env=()
+    if [[ "$EUID" -eq 0 ]]; then
+        owner_user="${QWEN38_OWNER_USER:-${SUDO_USER:-user}}"
+        owner_home="$(getent passwd "$owner_user" | cut -d: -f6)"
+        [[ -n "$owner_home" ]] || { echo 'Cannot resolve the SC117 trial owner home.' >&2; return 1; }
+        command -v runuser >/dev/null 2>&1 || { echo 'runuser is unavailable; refusing SC117 trial control.' >&2; return 1; }
+    else
+        owner_user="${USER:-$(id -un)}"
+        owner_home="${HOME:-}"
+        [[ -n "$owner_home" ]] || { echo 'Cannot resolve the SC117 trial owner home.' >&2; return 1; }
+    fi
+    trial_state="$owner_home/.local/state/locallm-strata/sc117-iq3s-trial"
+    trial_env=(
+        "HOME=$owner_home" "USER=$owner_user" "LOGNAME=$owner_user"
+        'PATH=/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin'
+        'PYTHONDONTWRITEBYTECODE=1' "PYTHONPYCACHEPREFIX=$trial_state/pycache" 'SETUPTOOLS_USE_DISTUTILS=stdlib'
+        "QWEN38_OWNER_USER=$owner_user" "STRATA_DATA_ROOT=$owner_home/.local/share/localllm-strata"
+        "STRATA_STATE_ROOT=$trial_state" 'STRATA_RUNTIME=0.1.44.1' 'STRATA_PARALLEL=1'
+        'STRATA_BATCH_GROUPS=1' 'STRATA_PORT=18080' 'STRATA_HOST=127.0.0.1'
+        'STRATA_SC117_IQ3S_TRIAL=1'
+    )
+    if [[ "$EUID" -eq 0 ]]; then
+        runuser -u "$owner_user" -- /usr/bin/env -i "${trial_env[@]}" "$SCRIPT_DIR/v1strata.sh" "$@" --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 1
+    else
+        /usr/bin/env -i "${trial_env[@]}" "$SCRIPT_DIR/v1strata.sh" "$@" --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 1
+    fi
+}
+
 host_gpu_summary() {
     nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null || printf 'GPU inventory unavailable\n'
 }
@@ -74,6 +104,7 @@ check_update() {
 stop_owned_engines() {
     # Each helper validates PID/start time/executable and uses pidfds. No pkill/killall.
     local rc=0
+    sc117_trial_command --stop || rc=1
     owned_stop "$SCRIPT_DIR/v1strata.sh" --stop || rc=1
     owned_stop "$SCRIPT_DIR/v1qwen38.sh" --stop || rc=1
     if [[ "$(detect_engine)" == unmanaged ]]; then
@@ -97,10 +128,10 @@ run_selected() {
         return 1
     fi
     if [[ "$launcher" == v1strata.sh ]]; then
-        local arg previous='' i candidate_041=0 candidate_0441=0 candidate_sc117_iq3s=0
+        local arg previous='' i candidate_041=0 candidate_0441=0 candidate_sc117_iq3s=0 candidate_sc117_trial=0
         local requested_profile='' requested_runtime='' requested_parallel=1 requested_groups=1
         local requested_host readiness expected_readiness actual_readiness
-        local requested_profile_count=0 requested_runtime_count=0 requested_parallel_count=0 requested_groups_count=0
+        local requested_profile_count=0 requested_runtime_count=0 requested_parallel_count=0 requested_groups_count=0 requested_runtime_valid=0
         local -a check_args=(--check-ready) candidate_env=()
         for arg in "$@"; do
             case "$previous" in
@@ -153,16 +184,46 @@ run_selected() {
                     ;;
             esac
         done
+        [[ "$requested_runtime" == 0.1.39 || "$requested_runtime" == 0.1.44.1 ]] && requested_runtime_valid=1
         if [[ "$candidate_sc117_iq3s" -eq 1 ]]; then
             if [[ "$requested_profile_count" -ne 1 || "$requested_profile" != iq3_s-sc117-abliterated || \
                   "$requested_runtime_count" -ne 1 || "$requested_parallel_count" -ne 1 || "$requested_groups_count" -ne 1 || \
-                  "$candidate_041" -ne 0 || "$candidate_0441" -ne 0 || \
-                  "$requested_runtime" != 0.1.39 || "$requested_parallel" != 1 || "$requested_groups" != 1 ]]; then
-                echo 'SC117 abliterated IQ3_S requires explicit Strata 0.1.39, one slot, and one group; refusing before service pause.' >&2
+                  "$candidate_041" -ne 0 || \
+                  "$requested_runtime_valid" -ne 1 || \
+                  "$requested_parallel" != 1 || "$requested_groups" != 1 ]]; then
+                echo 'SC117 IQ3_S requires explicit runtime .39 or isolated .44.1 trial, one slot, and one group; refusing before service pause.' >&2
                 return 1
             fi
         fi
-        if [[ "$candidate_041" -eq 1 ]]; then
+        if [[ "$candidate_sc117_iq3s" -eq 1 && "$requested_runtime" == 0.1.44.1 ]]; then
+            if [[ "$candidate_0441" -ne 1 || "${STRATA_SC117_IQ3S_TRIAL:-0}" != 1 || "${STRATA_HOST:-}" != 127.0.0.1 || "${STRATA_PORT:-}" != 18080 ]]; then
+                echo 'SC117 .44.1 is trial-only and requires explicit loopback 127.0.0.1:18080 with its trial marker; refusing before service pause.' >&2
+                return 1
+            fi
+            candidate_sc117_trial=1
+        fi
+        if [[ "$candidate_sc117_trial" -eq 1 ]]; then
+            local trial_home="${HOME:-/home/user}" trial_state expected_readiness
+            trial_state="$trial_home/.local/state/locallm-strata/sc117-iq3s-trial"
+            candidate_env=(
+                "HOME=$trial_home" "USER=${USER:-user}" "LOGNAME=${LOGNAME:-${USER:-user}}"
+                'PATH=/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin'
+                'PYTHONDONTWRITEBYTECODE=1' "PYTHONPYCACHEPREFIX=$trial_state/pycache" 'SETUPTOOLS_USE_DISTUTILS=stdlib'
+                "QWEN38_OWNER_USER=${QWEN38_OWNER_USER:-${USER:-user}}"
+                "STRATA_DATA_ROOT=$trial_home/.local/share/localllm-strata" "STRATA_STATE_ROOT=$trial_state"
+                'STRATA_RUNTIME=0.1.44.1' 'STRATA_PARALLEL=1' 'STRATA_BATCH_GROUPS=1'
+                'STRATA_PORT=18080' 'STRATA_HOST=127.0.0.1' 'STRATA_SC117_IQ3S_TRIAL=1'
+            )
+            [[ -z "${HOSTLLM_STATE_ROOT:-}" ]] || candidate_env+=("HOSTLLM_STATE_ROOT=$HOSTLLM_STATE_ROOT")
+            readiness="$(/usr/bin/env -i "${candidate_env[@]}" "$SCRIPT_DIR/$launcher" "${check_args[@]}")" || return 1
+            printf '%s\n' "$readiness"
+            expected_readiness='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
+            actual_readiness="$(grep '^TRIAL CONFIG:' <<< "$readiness" || true)"
+            [[ "$actual_readiness" == "$expected_readiness" ]] || {
+                echo 'SC117 .44.1 trial preflight is incomplete or mismatched; no service pause was started.' >&2
+                return 1
+            }
+        elif [[ "$candidate_041" -eq 1 ]]; then
             local requested_host="${STRATA_HOST:-127.0.0.1}" readiness expected_readiness
             case "$requested_host" in
                 127.0.0.1|0.0.0.0) ;;
@@ -244,7 +305,8 @@ run_selected() {
             "$SCRIPT_DIR/$launcher" "${check_args[@]}" || return 1
         fi
     fi
-    if [[ "$launcher" == v1strata.sh && -z "$HOSTLLM_STRATA_API_KEY" && -t 0 && -r /dev/tty ]]; then
+    if [[ "$launcher" == v1strata.sh && -z "$HOSTLLM_STRATA_API_KEY" && -t 0 && -r /dev/tty &&
+          "${candidate_sc117_trial:-0}" -ne 1 ]]; then
         if [[ "${candidate_sc117_iq3s:-0}" -eq 1 && "${requested_host:-127.0.0.1}" == 0.0.0.0 ]]; then
             read -r -s -p 'SC117 LAN binding requires an API key: ' HOSTLLM_STRATA_API_KEY < /dev/tty
         else
@@ -432,28 +494,23 @@ main() {
         echo ''
         echo '  [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
         echo '  [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
-        echo '  [3] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.39 | native 262K | BF16 GPU vision | MTP-4 | one serving slot'
-        echo '  [4] Orca Q4_K_S — Strata 0.1.39 recorded default | native 262K | CPU vision | one serving slot'
-        echo '  [5] Orca Q4_K_S — Strata 0.1.41 | native 262K | CPU vision | 8 GiB conversation cache | one serving slot'
-        echo '  [6] Orca Q4_K_S — Strata 0.1.41 | two serving slots / two batch groups | experimental, very low VRAM headroom'
-        echo '  [7] Orca Q4_K_S — Strata 0.1.44.1 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted'
+        echo '  [3] Orca Q4_K_S — Strata 0.1.44.1 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted'
+        echo '  [4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot'
         echo ''
         printf '  Strata slots: %s (STRATA_PARALLEL; default 1), batch groups: %s. Runtime override: %s.\n' "${STRATA_PARALLEL:-1}" "${STRATA_BATCH_GROUPS:-1}" "${STRATA_RUNTIME:-selected default}"
         echo '  Starting hosting pauses the miner and OctaSpace automatically (never an active rental).'
-        echo '  Strata UI/API: http://127.0.0.1:8080/ for SC117 by default; explicit LAN binding requires a key.'
-        echo '  Strata API keys are entered at a secure prompt and forwarded through stdin; SC117 defaults to loopback and requires a key for LAN binding.'
+        echo '  Orca API defaults to 127.0.0.1:8080. SC117 .44.1 is an unqualified trial on 127.0.0.1:18080 with dedicated state; it cannot use normal Hive/production hosting.'
+        echo '  Strata API keys are entered at a secure prompt and forwarded through stdin; SC117 trial is loopback-only and requires no LAN binding.'
         echo '  [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit'
-        echo '  [12] Set next Hive miner profile to Orca Q4_K_S'
-        echo '  [13] Restore previous Swift 1.5 Q8 Hive miner profile'
-        echo '  [14] Set next Hive miner profile to Orca Q4_K_S .41 (native 262K, CPU vision, one slot)'
-        echo '  [15] Set next Hive miner profile to Orca Q4_K_S .41 (native 262K, two slots / two groups)'
-        echo '  [16] Set next Hive miner profile to Orca Q4_K_S .44.1 (auto prefill, trimmed split; windows-2 override omitted)'
-        echo '  [17] Set next Hive miner profile to SC117 abliterated IQ3_S (MTP)'
+        echo '  [12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
+        echo '  [13] Set next Hive miner - Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
+        echo '  [14] Set next Hive miner - Orca Q4_K_S .44.1 (auto prefill, trimmed split; windows-2 override omitted)'
+        echo '  [15] Set next Hive miner - profile to SC117 abliterated IQ3_S (MTP)'
         echo '  Hive profile changes are idle-only; they never start/stop a miner or osn.service.'
         read -r -p '  Select: ' choice || return 0
         choice="${choice//[[:space:]]/}"
         case "$choice" in
-            1|2|q|Q)
+            1|2)
                 profile=swift15u-q8
                 [[ "$choice" == 2 ]] && profile=hauhau-q8-fastmtp-q4kv-xhigh
                 if [[ "$active" == qwen38 ]] && ! hosting managed-qwen; then
@@ -465,40 +522,34 @@ main() {
                     run_selected v1qwen38.sh --quickstart --profile "$profile"
                 fi
                 ;;
-            3|4|5|6|7|s|S|o|O)
+            3|4)
                 profile=orca-q4_k_s
-                [[ "$choice" == 3 || "$choice" == s || "$choice" == S ]] && profile=iq3_s-sc117-abliterated
+                [[ "$choice" == 4 ]] && profile=iq3_s-sc117-abliterated
                 if [[ "$active" == strata ]]; then
+                    [[ "$choice" == 4 ]] && sc117_trial_command --status
                     "$SCRIPT_DIR/v1strata.sh" --status
                     echo 'The running Strata model was left alone. Use [9] only when you are ready to switch.'
                 elif [[ "$active" == qwen38 ]] && ! hosting managed-qwen; then
                     echo 'A manual Qwen hosting session is already running; stop it before switching.'
                 elif [[ "$active" != none ]] && ! hosting managed-qwen; then
                     echo 'Another/unmanaged LLM is running. Stop it in its own verified lifecycle first.'
-                elif [[ "$choice" == 5 ]]; then
-                    Q4KS_V0141_VALIDATION_ONLY=0 STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.41 --parallel 1 --batch-groups 1
-                elif [[ "$choice" == 6 ]]; then
-                    Q4KS_V0141_VALIDATION_ONLY=0 STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.41 --parallel 2 --batch-groups 2
-                elif [[ "$choice" == 7 ]]; then
+                elif [[ "$choice" == 3 ]]; then
                     STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.44.1 --parallel 1 --batch-groups 1
-                elif [[ "$choice" == 3 || "$choice" == s || "$choice" == S ]]; then
-                    run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.39 --parallel 1 --batch-groups 1
-                elif [[ "$profile" == orca-q4_k_s ]]; then
-                    run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.39
                 else
-                    run_selected v1strata.sh --quickstart --profile "$profile"
+                    STRATA_SC117_IQ3S_TRIAL=1 STRATA_RUNTIME=0.1.44.1 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 \
+                        STRATA_HOST=127.0.0.1 STRATA_PORT=18080 \
+                        run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.44.1 --parallel 1 --batch-groups 1
                 fi
                 ;;
+            q|Q) return 0 ;;
             9) stop_owned_engines ;;
             10) check_update ;;
             11|x|X) return 0 ;;
-            12|13|14|15|16|17)
-                hive_profile=orca-q4_k_s
-                [[ "$choice" == 13 ]] && hive_profile=swift15u-q8
-                [[ "$choice" == 14 ]] && hive_profile=orca-q4_k_s-v0141
-                [[ "$choice" == 15 ]] && hive_profile=orca-q4_k_s-v0141-2slot
-                [[ "$choice" == 16 ]] && hive_profile=orca-q4_k_s-v01441
-                [[ "$choice" == 17 ]] && hive_profile=iq3_s-sc117-abliterated
+            12|13|14|15)
+                hive_profile=swift15u-q8
+                [[ "$choice" == 13 ]] && hive_profile=hauhau-q8-fastmtp-q4kv-xhigh
+                [[ "$choice" == 14 ]] && hive_profile=orca-q4_k_s-v01441
+                [[ "$choice" == 15 ]] && hive_profile=iq3_s-sc117-abliterated
                 if [[ ! -x /hive/miners/custom/llm-hosting/profile-menu.sh ]]; then
                     echo 'Hive profile menu is not installed. Install the Hive custom miner package first.'
                 elif ! command -v sudo >/dev/null 2>&1; then

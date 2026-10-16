@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Install HiveOS custom-miner profiles with Orca Q4 .39 as default, opt-in .41
-# one/two-slot variants, and the previous Swift/Qwen Q8 profile. Never starts/stops Hive or osn.service.
+# Install HiveOS profiles with Orca Q4 .39 retained as the default, Swift/Hauhau Qwen routes,
+# Orca .44.1, and the isolated unqualified SC117 .44.1 trial. Never starts/stops Hive or osn.service.
 set -Eeuo pipefail
 unset STRATA_API_KEY
 
@@ -21,6 +21,19 @@ BACKUP_SUFFIX=".llm-hosting.bak"
 SOURCE_DIR="${SCRIPT_DIR}/hive-llm-miner"
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+read_profile_runtime() {
+    local config="$1"
+    [[ -f "$config" && ! -L "$config" ]] || return 1
+    awk -F= '$1 == "RUNTIME" { count++; value=substr($0, index($0, "=") + 1) } END { if (count != 1) exit 1; print value }' \
+        < <(tr -d '\r' < "$config")
+}
+sc117_profile_for_runtime() {
+    case "$1" in
+        0.1.39) printf 'orca-q4_k_s' ;;
+        0.1.44.1) printf 'iq3_s-sc117-abliterated' ;;
+        *) return 1 ;;
+    esac
+}
 
 [[ -x "${LLM_ROOT}/v1qwen38.sh" ]] || fail "Qwen launcher not found: ${LLM_ROOT}/v1qwen38.sh"
 [[ -x "${LLM_ROOT}/v1strata.sh" ]] || fail "Strata launcher not found: ${LLM_ROOT}/v1strata.sh"
@@ -33,17 +46,22 @@ fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 # Never replace miner files during a rental, active server, or unidentified
 # GPU/Docker workload. Recheck after readiness immediately before installation.
 assert_idle() {
-    local listeners containers gpu_apps
+    local listeners containers gpu_apps port lease_path
     [[ ! -e /run/hive/MINER_RUN ]] || fail 'Hive reports a miner running; refusing package update'
     command -v pgrep >/dev/null 2>&1 || fail 'cannot inspect LLM launcher processes; refusing package update'
-    if pgrep -f 'strata_launcher[.]py|serve[.]server|llama_cpp[.]server|v1qwen38[.]sh|llama-server|/engine/strata(-vision)?|/hive/miners/custom/llm-hosting/h-run[.]sh' >/dev/null 2>&1; then
+    if pgrep -f 'strata_launcher[.]py|serve[.]server|llama_cpp[.]server|v1qwen38[.]sh|llama-server|/engine/strata[[:space:]]|/strata-vision[[:space:]]|/hive/miners/custom/llm-hosting/h-run[.]sh' >/dev/null 2>&1; then
         fail 'an LLM launcher/server process is present; refusing package update'
     fi
-    [[ ! -e /home/user/.local/state/hostllm/pause.json ]] || fail 'HostLLM pause lease exists; refusing package update'
-    if ! listeners="$(ss -Hltpn '( sport = :8080 )' 2>/dev/null)"; then
-        fail 'cannot inspect API port 8080; refusing package update'
+    if ! lease_path="$(python3 "$SCRIPT_DIR/hosting_lifecycle.py" lease-path 2>/dev/null)"; then
+        fail 'cannot resolve HostLLM pause lease state; refusing package update'
     fi
-    [[ -z "$listeners" ]] || fail 'API port 8080 is occupied; refusing package update'
+    [[ ! -e "$lease_path" ]] || fail 'HostLLM pause lease exists; refusing package update'
+    for port in 8080 18080; do
+        if ! listeners="$(ss -Hltpn "( sport = :${port} )" 2>/dev/null)"; then
+            fail "cannot inspect API port ${port}; refusing package update"
+        fi
+        [[ -z "$listeners" ]] || fail "API port ${port} is occupied; refusing package update"
+    done
     if ! command -v docker >/dev/null 2>&1 || ! containers="$(docker ps --format '{{.ID}} {{.Names}}' 2>/dev/null)"; then
         fail 'Docker workload state unavailable; refusing package update'
     fi
@@ -58,7 +76,7 @@ assert_idle() {
 }
 assert_idle
 
-for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 iq3_s-sc117-abliterated; do
+for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated; do
     [[ -d "$SOURCE_DIR/profiles/$profile" && ! -L "$SOURCE_DIR/profiles/$profile" ]] || \
         fail "profile directory missing or symlinked: profiles/$profile"
     for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
@@ -105,14 +123,39 @@ candidate_expected_readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.44.1; futur
 candidate_actual_readiness="$(grep '^READY CONFIG:' <<< "$candidate_readiness" || true)"
 [[ "$candidate_actual_readiness" == "$candidate_expected_readiness" ]] || \
     fail 'Orca Q4_K_S .44.1 effective config is not pinned; Hive configuration was not changed'
+sc117_trial_state='/home/user/.local/state/locallm-strata/sc117-iq3s-trial'
+sc117_trial_readiness="$(runuser -u user -- env -i \
+    HOME=/home/user USER=user LOGNAME=user \
+    PATH='/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin' \
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPYCACHEPREFIX="$sc117_trial_state/pycache" \
+    SETUPTOOLS_USE_DISTUTILS=stdlib STRATA_SC117_IQ3S_TRIAL=1 \
+    STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata STRATA_STATE_ROOT="$sc117_trial_state" \
+    STRATA_RUNTIME=0.1.44.1 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 \
+    STRATA_PORT=18080 STRATA_HOST=127.0.0.1 \
+    "$LLM_ROOT/v1strata.sh" --check-ready --profile iq3_s-sc117-abliterated \
+    --runtime 0.1.44.1 --parallel 1 --batch-groups 1)" || \
+    fail 'SC117 unqualified .44.1 trial preflight failed; Hive configuration was not changed'
+sc117_trial_expected='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
+sc117_trial_actual="$(grep '^TRIAL CONFIG:' <<< "$sc117_trial_readiness" || true)"
+[[ "$sc117_trial_actual" == "$sc117_trial_expected" && "$sc117_trial_readiness" != *'READY CONFIG:'* ]] || \
+    fail 'SC117 .44.1 CPU-vision preflight is not the exact unqualified trial; Hive configuration was not changed'
 assert_idle
 
-# Preserve a recognized existing profile selection. A fresh install keeps the .39 Q4 default.
+# Preserve recognized selections, except the old SC117 .39 route: retire that route to
+# the generic .39 default before replacing the shared profile directory with the isolated .44.1 trial.
 initial_profile='orca-q4_k_s'
+migrate_sc117_pointer=0
 if [[ -L "$CUSTOM_DIR/current" ]]; then
     current_target="$(readlink -- "$CUSTOM_DIR/current")" || fail 'cannot read existing Hive profile pointer'
     case "$current_target" in
-        profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/iq3_s-sc117-abliterated)
+        profiles/iq3_s-sc117-abliterated)
+            current_sc117_runtime="$(read_profile_runtime "$CUSTOM_DIR/profiles/iq3_s-sc117-abliterated/llm-hosting.conf")" || \
+                fail 'cannot identify the installed SC117 runtime; refusing to change its Hive selection'
+            initial_profile="$(sc117_profile_for_runtime "$current_sc117_runtime")" || \
+                fail "installed SC117 Hive runtime is unrecognized: $current_sc117_runtime"
+            [[ "$initial_profile" != orca-q4_k_s ]] || migrate_sc117_pointer=1
+            ;;
+        profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/hauhau-q8-fastmtp-q4kv-xhigh)
             initial_profile="${current_target#profiles/}"
             ;;
         *) fail "existing Hive profile pointer is not recognized: $current_target" ;;
@@ -129,16 +172,28 @@ elif [[ -e "$CUSTOM_DIR/llm-hosting.conf" ]]; then
     [[ -f "$CUSTOM_DIR/llm-hosting.conf" && ! -L "$CUSTOM_DIR/llm-hosting.conf" ]] || \
         fail 'legacy Hive profile config is not a regular file; refusing to infer a default'
     recognized_legacy_profile=''
-    for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 iq3_s-sc117-abliterated; do
+    for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated; do
         if cmp -s <(tr -d '\r' < "$CUSTOM_DIR/llm-hosting.conf") \
                   <(tr -d '\r' < "$SOURCE_DIR/profiles/$profile/llm-hosting.conf"); then
             recognized_legacy_profile="$profile"
             break
         fi
     done
+    if [[ -z "$recognized_legacy_profile" ]] && \
+       grep -qx 'PROFILE=iq3_s-sc117-abliterated' "$CUSTOM_DIR/llm-hosting.conf" && \
+       grep -qx 'RUNTIME=0.1.39' "$CUSTOM_DIR/llm-hosting.conf"; then
+        recognized_legacy_profile='iq3_s-sc117-abliterated'
+    fi
     [[ -n "$recognized_legacy_profile" ]] || \
         fail 'legacy Hive profile config is unrecognized; refusing to switch it to the .39 default'
-    initial_profile="$recognized_legacy_profile"
+    if [[ "$recognized_legacy_profile" == iq3_s-sc117-abliterated ]]; then
+        legacy_sc117_runtime="$(read_profile_runtime "$CUSTOM_DIR/llm-hosting.conf")" || \
+            fail 'cannot identify the legacy SC117 runtime; refusing to change its Hive selection'
+        initial_profile="$(sc117_profile_for_runtime "$legacy_sc117_runtime")" || \
+            fail "legacy SC117 Hive runtime is unrecognized: $legacy_sc117_runtime"
+    else
+        initial_profile="$recognized_legacy_profile"
+    fi
 fi
 
 if ! dpkg-query -W -f='${Status}' hive-miners-custom 2>/dev/null | grep -q 'install ok installed'; then
@@ -156,15 +211,27 @@ assert_idle
    ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v0141" && \
    ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v0141-2slot" && \
    ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v01441" && ! -L "$CUSTOM_DIR/profiles/swift15u-q8" && \
-   ! -L "$CUSTOM_DIR/profiles/iq3_s-sc117-abliterated" ]] || \
+   ! -L "$CUSTOM_DIR/profiles/hauhau-q8-fastmtp-q4kv-xhigh" && ! -L "$CUSTOM_DIR/profiles/iq3_s-sc117-abliterated" ]] || \
     fail 'custom miner profile path is symlinked; refusing package update'
-for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 iq3_s-sc117-abliterated; do
+for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated; do
     for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
         [[ ! -L "$CUSTOM_DIR/profiles/$profile/$file" ]] || fail "installed profile file is symlinked: $profile/$file"
     done
 done
+if [[ "$migrate_sc117_pointer" -eq 1 ]]; then
+    [[ -L "$CUSTOM_DIR/current" && "$(readlink -- "$CUSTOM_DIR/current")" == profiles/iq3_s-sc117-abliterated ]] || \
+        fail 'SC117 Hive pointer changed during retirement; no profile files were replaced'
+    [[ -d "$CUSTOM_DIR/profiles/orca-q4_k_s" && ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s" ]] || \
+        fail 'generic .39 rollback profile is unavailable; SC117 pointer was not changed'
+    migration_link="$CUSTOM_DIR/.current-migrate.$$.$RANDOM"
+    ln -s -- 'profiles/orca-q4_k_s' "$migration_link"
+    mv -Tf -- "$migration_link" "$CUSTOM_DIR/current"
+    initial_profile='orca-q4_k_s'
+    sync
+    printf 'Retired the obsolete SC117 .39 Hive route to the preserved generic .39 default before replacing the trial profile.\n'
+fi
 install -d -m 755 "$CUSTOM_DIR" "$CUSTOM_DIR/profiles" /var/log/miner/custom/llm-hosting
-for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 iq3_s-sc117-abliterated; do
+for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated; do
     install -d -m 755 "$CUSTOM_DIR/profiles/$profile"
     for file in h-manifest.conf llm-hosting.conf; do
         install -m 644 "$SOURCE_DIR/profiles/$profile/$file" "$CUSTOM_DIR/profiles/$profile/$file"
@@ -216,7 +283,8 @@ printf '  MINER=custom\n'
 printf '  CUSTOM_MINER=%s\n' "$CUSTOM_NAME"
 printf '  Profile: %s%s\n' "$initial_profile" "$([[ "$initial_profile" == orca-q4_k_s ]] && printf ' (initial default)' || printf ' (preserved selection)')"
 printf '  Switch menu: %s/profile-menu.sh\n' "$CUSTOM_DIR"
-printf '  Previous profile: swift15u-q8\n'
-printf '  Optional profiles: .41 one-slot, .41 experimental two-slot, machine-specific .44.1, and readiness-gated SC117 abliterated IQ3_S\n'
+printf '  Retained default/rollback: Orca .39 default; .41 files remain available by explicit profile name\n'
+printf '  Menu routes: Swift, Hauhau, Orca .44.1, and SC117 .44.1 CPU-vision trial\n'
+printf '  SC117 remains unqualified, loopback-only on 127.0.0.1:18080, and uses dedicated trial state\n'
 printf '  No miner start/stop command was run; osn.service was not modified.\n'
 printf '\nThe profile menu refuses changes while Hive, the API, Docker, or GPU compute is active.\n'

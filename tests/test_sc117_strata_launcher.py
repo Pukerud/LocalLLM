@@ -55,7 +55,11 @@ class LauncherModule:
             'iq3_s_sc117_abliterated_profile': module(
                 'iq3_s_sc117_abliterated_profile', PROFILE='iq3_s-sc117-abliterated',
                 RUNTIME_VERSION='0.1.39', TRIAL_RUNTIME_VERSION='0.1.44.1',
-                TRIAL_ENV='STRATA_SC117_IQ3S_TRIAL', settings_for_start=lambda **_: {},
+                TRIAL_STATE_ROOT_NAME='sc117-iq3s-trial',
+                TRIAL_ENV='STRATA_SC117_IQ3S_TRIAL',
+                TRIAL_OVERRIDE_ENV={'STRATA_SC117_IQ3S_TRIAL_PREFILL': 'prefill'},
+                TRIAL_EXPERIMENT_ENV={'STRATA_SC117_IQ3S_TRIAL_GPU_ORDER'},
+                settings_for_start=lambda **_: {}, authorize_start=lambda *_a, **_k: 'trial',
                 build_effective_config=lambda *_: {}, build_v01441_trial_config=lambda *_: {}),
             'prepare_iq3_s_sc117_abliterated': module(
                 'prepare_iq3_s_sc117_abliterated', verify_readiness=lambda *_a, **_k: None),
@@ -128,6 +132,47 @@ class SC117LauncherSecretTests(unittest.TestCase):
             LAUNCHER.ready_runtime(profile.PROFILE, 'auto', 1, 1)
         with self.assertRaisesRegex(SAFETY_ERROR, 'one serving slot and one batch group'):
             LAUNCHER.ready_runtime(profile.PROFILE, '0.1.39', 2, 1)
+
+    def test_sc117_trial_preflight_requires_exact_isolation_and_cpu_vision(self):
+        profile = LAUNCHER.sc117_profile
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            state = home / '.local/state/locallm-strata/sc117-iq3s-trial'
+            env = {
+                'HOME': str(home), 'STRATA_SC117_IQ3S_TRIAL': '1',
+                'STRATA_RUNTIME': '0.1.44.1', 'STRATA_HOST': '127.0.0.1',
+                'STRATA_PORT': '18080', 'STRATA_STATE_ROOT': str(state),
+                'PYTHONPYCACHEPREFIX': str(state / 'pycache'),
+                'PYTHONDONTWRITEBYTECODE': '1', 'SETUPTOOLS_USE_DISTUTILS': 'stdlib',
+            }
+            cfg = {'vision': {'gpu': False}}
+            with mock.patch.dict(os.environ, env, clear=True), \
+                    mock.patch.object(LAUNCHER, 'data_root', return_value=Path('/data')), \
+                    mock.patch.object(LAUNCHER, 'strata_state', return_value=state), \
+                    mock.patch.object(profile, 'settings_for_start', return_value={'trial': True}), \
+                    mock.patch.object(profile, 'authorize_start', return_value='trial') as authorize:
+                result = LAUNCHER.sc117_trial_readiness_line(profile.PROFILE, '0.1.44.1', 1, 1, cfg)
+            self.assertEqual(result, LAUNCHER.SC117_V01441_TRIAL_READY_CONFIG)
+            self.assertTrue(result.startswith('TRIAL CONFIG:'))
+            self.assertNotIn('READY CONFIG:', result)
+            authorize.assert_called_once_with(Path('/data'), {'trial': True}, host='127.0.0.1', port=18080,
+                                              state_root=state)
+
+            for key, value in (('STRATA_HOST', '0.0.0.0'), ('STRATA_PORT', '8080'),
+                               ('STRATA_STATE_ROOT', str(home / '.local/state/locallm-strata')),
+                               ('PYTHONPYCACHEPREFIX', str(home / 'wrong-cache'))):
+                bad_env = dict(env)
+                bad_env[key] = value
+                with mock.patch.dict(os.environ, bad_env, clear=True):
+                    with self.assertRaisesRegex(SAFETY_ERROR, 'exact loopback, port, state'):
+                        LAUNCHER.sc117_trial_readiness_line(profile.PROFILE, '0.1.44.1', 1, 1, cfg)
+            with mock.patch.dict(os.environ, env | {'STRATA_SC117_IQ3S_TRIAL_GPU_ORDER': '1,0,2,3'}, clear=True):
+                with self.assertRaisesRegex(SAFETY_ERROR, 'does not accept experimental tuning overrides'):
+                    LAUNCHER.sc117_trial_readiness_line(profile.PROFILE, '0.1.44.1', 1, 1, cfg)
+            with mock.patch.dict(os.environ, env, clear=True):
+                with self.assertRaisesRegex(SAFETY_ERROR, 'requires CPU vision'):
+                    LAUNCHER.sc117_trial_readiness_line(profile.PROFILE, '0.1.44.1', 1, 1,
+                                                        {'vision': {'gpu': True}})
 
     def test_sc117_0441_route_is_explicit_trial_and_uses_q4_candidate_preset(self):
         profile = LAUNCHER.sc117_profile

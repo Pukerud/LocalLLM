@@ -93,6 +93,15 @@ exit_lease_trace="$scratch/exit-lease.trace"
 )
 [[ ! -s "$exit_lease_trace" ]]  # An unrelated menu exit cannot release another operation's lease.
 (
+  detect_engine() { echo none; }
+  show_workload_status() { :; }
+  host_gpu_summary() { :; }
+  hosting() { echo 'unexpected-quit-lease' >> "$exit_lease_trace"; }
+  run_selected() { echo 'unexpected-quit-start' >> "$exit_lease_trace"; }
+  main < <(printf 'q\n') > /dev/null
+)
+[[ ! -s "$exit_lease_trace" ]]  # q is a quit shortcut, never an alias for model 1.
+(
   HOSTLLM_ACTIVE_LEASE_ID="$(printf 'c%.0s' {1..64})"
   hosting() { printf '%s\n' "$*" >> "$exit_lease_trace"; }
   release_menu_lease_on_exit
@@ -181,18 +190,19 @@ if [[ "$EUID" -ne 0 ]]; then
   grep -Eq '^--verify-orca-q4ks-141-parity --lease-id [a-f0-9]{64} --port 18200$' "$parity_trace"
   grep -Eq '^release --lease-id [a-f0-9]{64}$' "$parity_trace"
 fi
-grep -q '\[1\] Swift 1.5 Uncensored' "$root/HostLLM.sh"
-grep -q '\[2\] Hauhau Q8_K_P' "$root/HostLLM.sh"
-grep -q '\[3\] SC117 GSQ-RCO IQ3_S (abliterated)' "$root/HostLLM.sh"
-grep -q '\[4\] Orca Q4_K_S — Strata 0.1.39 recorded default | native 262K | CPU vision | one serving slot' "$root/HostLLM.sh"
-grep -q '\[5\] Orca Q4_K_S — Strata 0.1.41 | native 262K | CPU vision | 8 GiB conversation cache | one serving slot' "$root/HostLLM.sh"
-grep -q '\[6\] Orca Q4_K_S — Strata 0.1.41 | two serving slots / two batch groups' "$root/HostLLM.sh"
-grep -q '\[7\] Orca Q4_K_S — Strata 0.1.44.1' "$root/HostLLM.sh"
-grep -q '\[14\] Set next Hive miner profile to Orca Q4_K_S .41' "$root/HostLLM.sh"
-grep -q '\[15\] Set next Hive miner profile to Orca Q4_K_S .41' "$root/HostLLM.sh"
-grep -q '\[16\] Set next Hive miner profile to Orca Q4_K_S .44.1' "$root/HostLLM.sh"
-grep -q 'STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected .*--runtime 0.1.41' "$root/HostLLM.sh"
+grep -q '\[1\] Swift 1.5 Uncensored Q8_K_XL — DEFAULT' "$root/HostLLM.sh"
+grep -q '\[2\] Hauhau Q8_K_P — BF16 vision' "$root/HostLLM.sh"
+grep -q '\[3\] Orca Q4_K_S — Strata 0.1.44.1 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted' "$root/HostLLM.sh"
+grep -q '\[4\] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot' "$root/HostLLM.sh"
+grep -q '\[12\] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL' "$root/HostLLM.sh"
+grep -q '\[13\] Set next Hive miner - Hauhau Q8_K_P' "$root/HostLLM.sh"
+grep -q '\[14\] Set next Hive miner - Orca Q4_K_S .44.1' "$root/HostLLM.sh"
+grep -q '\[15\] Set next Hive miner - profile to SC117 abliterated IQ3_S (MTP)' "$root/HostLLM.sh"
+! grep -qE '^ *echo .*\[(5|6|7)\] Orca Q4_K_S — Strata 0\.1\.(41|44\.1)' "$root/HostLLM.sh"
+! grep -q '\[3\] SC117.*0.1.39' "$root/HostLLM.sh"
+! grep -q '\[17\].*SC117' "$root/HostLLM.sh"
 grep -q 'STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected .*--runtime 0.1.44.1' "$root/HostLLM.sh"
+grep -q 'SC117.*127.0.0.1:18080' "$root/HostLLM.sh"
 grep -q 'windows-2 override omitted' "$root/HostLLM.sh"
 grep -q -- '--prepare-q4ks141' "$root/HostLLM.sh"
 grep -q -- '--run-q4ks141-32k-validation' "$root/HostLLM.sh"
@@ -214,31 +224,28 @@ trace="$scratch/maintrace"
   hosting() { :; }  # Never invoke real service operations from this test.
   run_selected() {
     printf '%s\n' "$*" >> "$trace"
-    printf '%s\n' "${STRATA_HOST:-unset}" >> "$trace.hosts"
+    printf '%s|%s|%s\n' "${STRATA_SC117_IQ3S_TRIAL-unset}" "${STRATA_HOST:-unset}" "${STRATA_PORT:-unset}" >> "$trace.env"
   }
-  unset STRATA_HOST
-  main < <(printf '1\n 2 \n3\n4\n5\n6\n7\n11\n') > /dev/null
+  unset STRATA_HOST STRATA_PORT STRATA_SC117_IQ3S_TRIAL
+  main < <(printf '1\n 2 \n3\n4\n11\n') > /dev/null
 )
 grep -qx 'v1qwen38.sh --quickstart --profile swift15u-q8' "$trace"
 grep -qx 'v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q4kv-xhigh' "$trace"
-grep -qx 'v1strata.sh --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.39 --parallel 1 --batch-groups 1' "$trace"
-grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.39' "$trace"
-grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.41 --parallel 1 --batch-groups 1' "$trace"
-grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.41 --parallel 2 --batch-groups 2' "$trace"
 grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$trace"
-grep -qx '0.0.0.0' "$trace.hosts"
-grep -qx 'unset' "$trace.hosts"
-[[ "$(wc -l < "$trace")" -eq 7 ]]
+grep -qx 'v1strata.sh --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$trace"
+grep -qx 'unset|0.0.0.0|unset' "$trace.env"
+grep -qx '1|127.0.0.1|18080' "$trace.env"
+[[ "$(wc -l < "$trace")" -eq 4 ]]
 # Root-side lifecycle identity can prove a Qwen session managed even if user-side /proc reports unmanaged.
 (
   detect_engine() { echo unmanaged; }
   hosting() { [[ "$1" == managed-qwen ]]; }
   run_selected() { printf '%s\n' "$*" >> "$trace"; }
-  main < <(printf '4\n11\n') > /dev/null
+  main < <(printf '3\n11\n') > /dev/null
 )
-[[ "$(tail -n1 "$trace")" == 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.39' ]]
-[[ "$(wc -l < "$trace")" -eq 8 ]]
-# Choosing Orca while original Strata runs must not call the launch/pause/stop path.
+[[ "$(tail -n1 "$trace")" == 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.44.1 --parallel 1 --batch-groups 1' ]]
+[[ "$(wc -l < "$trace")" -eq 5 ]]
+# Choosing Orca while Strata runs must not call the launch/pause/stop path.
 (
   SCRIPT_DIR="$scratch/live-menu"
   mkdir -p "$SCRIPT_DIR"
@@ -249,9 +256,9 @@ grep -qx 'unset' "$trace.hosts"
   host_gpu_summary() { :; }
   hosting() { :; }
   run_selected() { echo 'unexpected-start' >> "$trace"; }
-  main < <(printf '5\n11\n') > /dev/null
+  main < <(printf '3\n11\n') > /dev/null
 )
-[[ "$(wc -l < "$trace")" -eq 8 ]]
+[[ "$(wc -l < "$trace")" -eq 5 ]]
 # An unprepared Q4 request must use its readiness gate, before any service/engine mutation.
 ready_trace="$scratch/readiness.trace"
 export ready_trace
@@ -414,4 +421,4 @@ grep -qx -- '--check-ready --profile iq3_s --runtime 0.1.39 --parallel 2 --batch
 )
 grep -qx -- '--check-ready --profile orca-iq3_xxs' "$ready_trace"
 [[ "$(wc -l < "$ready_trace")" -eq 5 ]]
-echo 'HostLLM [4] .39 default, [5]/[6] .41 routes, [7] .44.1 opt-in, preflight-before-hosting and running-Strata preservation: PASS'
+echo 'HostLLM [1]–[4]/[12]–[15] menu dispatch, SC117 loopback trial gate, preflight-before-hosting, and running-Strata preservation: PASS'

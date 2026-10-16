@@ -10,6 +10,7 @@ if [[ "${EUID}" -ne 0 ]]; then
     exit 1
 fi
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CUSTOM_NAME="llm-hosting"
 CUSTOM_DIR="/hive/miners/custom/${CUSTOM_NAME}"
 RIG_CONF="/hive-config/rig.conf"
@@ -19,14 +20,19 @@ BACKUP_SUFFIX=".llm-hosting.bak"
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 [[ ! -e /run/hive/MINER_RUN ]] || fail 'Hive reports a miner running; stop it through its normal operator workflow first'
 command -v pgrep >/dev/null 2>&1 || fail 'cannot inspect LLM launcher processes; refusing uninstall'
-if pgrep -f 'strata_launcher[.]py|serve[.]server|llama_cpp[.]server|v1qwen38[.]sh|llama-server|/engine/strata(-vision)?|/hive/miners/custom/llm-hosting/h-run[.]sh' >/dev/null 2>&1; then
+if pgrep -f 'strata_launcher[.]py|serve[.]server|llama_cpp[.]server|v1qwen38[.]sh|llama-server|/engine/strata[[:space:]]|/strata-vision[[:space:]]|/hive/miners/custom/llm-hosting/h-run[.]sh' >/dev/null 2>&1; then
     fail 'an LLM launcher/server process is present; refusing uninstall'
 fi
-[[ ! -e /home/user/.local/state/hostllm/pause.json ]] || fail 'HostLLM pause lease exists; refusing uninstall'
-if ! listeners="$(ss -Hltpn '( sport = :8080 )' 2>/dev/null)"; then
-    fail 'cannot inspect API port 8080; refusing uninstall'
+if ! lease_path="$(python3 "$SCRIPT_DIR/hosting_lifecycle.py" lease-path 2>/dev/null)"; then
+    fail 'cannot resolve HostLLM pause lease state; refusing uninstall'
 fi
-[[ -z "$listeners" ]] || fail 'API port 8080 is occupied; refusing uninstall'
+[[ ! -e "$lease_path" ]] || fail 'HostLLM pause lease exists; refusing uninstall'
+for port in 8080 18080; do
+    if ! listeners="$(ss -Hltpn "( sport = :${port} )" 2>/dev/null)"; then
+        fail "cannot inspect API port ${port}; refusing uninstall"
+    fi
+    [[ -z "$listeners" ]] || fail "API port ${port} is occupied; refusing uninstall"
+done
 if ! command -v docker >/dev/null 2>&1 || ! containers="$(docker ps --format '{{.ID}} {{.Names}}' 2>/dev/null)"; then
     fail 'Docker workload state unavailable; refusing uninstall'
 fi

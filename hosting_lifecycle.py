@@ -334,7 +334,7 @@ def release(expected_lease_id=None):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('mode', choices=['begin', 'release', 'status', 'managed-qwen', 'verify-lease'])
+    ap.add_argument('mode', choices=['begin', 'release', 'status', 'managed-qwen', 'verify-lease', 'lease-path'])
     ap.add_argument('--port', type=int, default=8080)
     ap.add_argument('--require-new-lease', action='store_true',
                     help='for begin only: refuse an existing pause lease instead of sharing it')
@@ -350,6 +350,9 @@ def main():
         ap.error('--require-new-lease requires --lease-id')
     if args.mode == 'verify-lease' and not args.lease_id:
         ap.error('verify-lease requires --lease-id')
+    if args.mode == 'lease-path':
+        print(ROOT / 'pause.json')
+        return 0
     if os.geteuid() != 0 and args.mode != 'verify-lease':
         # Narrow, explicit sudo; no configuration/ownership changes to grant extra access.
         command = ['sudo', '-n', 'env', f'HOSTLLM_STATE_ROOT={ROOT}',

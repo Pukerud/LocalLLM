@@ -40,6 +40,12 @@ import strata_runtime as runtimes
 SOURCE_COMMIT = '99f3dbd0b21d1401b3769e0c0d963913607f380b'
 MODEL_REVISION = 'ed59f92082b1e93c0e96d60a8b11aab089b52f09'
 MODEL = 'Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S'
+SC117_V01441_TRIAL_READY_CONFIG = (
+    'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; '
+    'native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; '
+    'prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; '
+    'pipeline-windows omitted. This is not qualification.'
+)
 HIVE_CUR_MINER = Path('/run/hive/cur_miner')
 
 _Q4_V01441_LAUNCH_ENV = frozenset({
@@ -208,6 +214,35 @@ def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
         return source, path, cfg, ORCA_Q4KS_RUNTIME
     source, path, cfg = ready() if profile == 'iq3_s' else ready(profile)
     return runtimes.configure(data_root(), source, path, cfg, profile, runtime, parallel, batch_groups)
+
+
+def sc117_trial_readiness_line(profile, version, parallel, batch_groups, cfg):
+    """Verify the exact isolated SC117 .44.1 trial inputs without granting qualification."""
+    expected_state = Path.home() / '.local/state/locallm-strata' / sc117_profile.TRIAL_STATE_ROOT_NAME
+    expected_cache = expected_state / 'pycache'
+    if (profile != sc117_profile.PROFILE or version != sc117_profile.TRIAL_RUNTIME_VERSION or
+            (parallel, batch_groups) != (1, 1) or
+            os.environ.get(sc117_profile.TRIAL_ENV) != '1' or
+            os.environ.get('STRATA_RUNTIME') != sc117_profile.TRIAL_RUNTIME_VERSION or
+            os.environ.get('STRATA_HOST') != '127.0.0.1' or
+            os.environ.get('STRATA_PORT') != '18080' or
+            Path(os.environ.get('STRATA_STATE_ROOT', '')) != expected_state or
+            os.environ.get('PYTHONPYCACHEPREFIX') != str(expected_cache) or
+            os.environ.get('PYTHONDONTWRITEBYTECODE') != '1' or
+            os.environ.get('SETUPTOOLS_USE_DISTUTILS') != 'stdlib'):
+        raise SafetyError('SC117 .44.1 trial preflight requires its exact loopback, port, state, and Python-cache environment')
+    if any(name in os.environ for name in sc117_profile.TRIAL_OVERRIDE_ENV) or any(
+            name in os.environ for name in sc117_profile.TRIAL_EXPERIMENT_ENV):
+        raise SafetyError('SC117 menu trial preflight does not accept experimental tuning overrides')
+    vision = cfg.get('vision')
+    if not isinstance(vision, dict) or vision.get('gpu') is not False:
+        raise SafetyError('SC117 .44.1 trial preflight requires CPU vision')
+    settings = sc117_profile.settings_for_start(allow_trial_env=True)
+    authorization = sc117_profile.authorize_start(
+        data_root(), settings, host='127.0.0.1', port=18080, state_root=strata_state())
+    if authorization != 'trial':
+        raise SafetyError('SC117 .44.1 preflight did not authorize the isolated trial')
+    return SC117_V01441_TRIAL_READY_CONFIG
 
 
 def _q4ks_recorded_identity_valid(value):
@@ -743,8 +778,9 @@ def require_frontend_listener(state, port):
     raise SafetyError('Strata TCP listener is not owned by its verified frontend; credential probe refused')
 
 
-def verify_serving(cfg, version, port):
+def verify_serving(cfg, version, port, requested_parallel=None):
     """Verify effective slots and the reported engine version when loaded."""
+    expected_parallel = cfg.get('parallel', 1) if requested_parallel is None else requested_parallel
     if version == '0.1.38':
         return 1
     headers = {'Authorization': 'Bearer ' + cfg['api_key']} if cfg.get('api_key') else {}
@@ -759,7 +795,7 @@ def verify_serving(cfg, version, port):
     lazy_unloaded = (version == q4ks_v01441.RUNTIME_VERSION and 'engine' in status and
                      engine is None and status.get('loaded') is False)
     if ((engine != version and not lazy_unloaded) or type(count) is not int or
-            count != cfg.get('parallel', 1)):
+            type(expected_parallel) is not int or count != expected_parallel):
         raise SafetyError('Effective runtime/slot count differs from the request; no silent single-slot fallback')
     return count
 
@@ -1010,7 +1046,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
             time.sleep(1)
         if cfg.get('api_key'):
             require_frontend_listener(state, port)
-        serving = verify_serving(cfg, version, port)
+        serving = verify_serving(cfg, version, port, requested_parallel=parallel)
         cfg.pop('api_key', None)
         verify_batch_groups(state, version, parallel, groups=batch_groups)
         print(f'Strata ready: this host, port {port}, serving slots={serving}, API /v1. Ctrl+C stops only Strata.', flush=True)
@@ -1120,10 +1156,14 @@ def main():
                 print('PREPARED: pinned Orca IQ3_XXS, own compatibility pack/tokenizer, F16 vision configured, native 262144, INT8 streaming KV.')
                 print('Readiness verifies assets/config only; bounded live results are separate in ORCA_IQ3XXS.md. No full-context quality claim.')
             elif profile == sc117_profile.PROFILE:
-                settings = sc117_profile.settings_for_start(allow_trial_env=False)
-                sc117_profile.require_qualification(data_root(), settings)
-                print(sc117_profile.readiness_line(settings))
-                print('Readiness is bound to the SC117 model, its native pack and Strata MTP runtime, the pinned .39 engine, and this exact serving configuration.')
+                if version == sc117_profile.TRIAL_RUNTIME_VERSION:
+                    print('UNQUALIFIED TRIAL PREFLIGHT ONLY: no normal-hosting or qualification authorization is granted.')
+                    print(sc117_trial_readiness_line(profile, version, a.parallel, a.batch_groups, cfg))
+                else:
+                    settings = sc117_profile.settings_for_start(allow_trial_env=False)
+                    sc117_profile.require_qualification(data_root(), settings)
+                    print(sc117_profile.readiness_line(settings))
+                    print('Readiness is bound to the SC117 model, its native pack and Strata MTP runtime, the pinned .39 engine, and this exact serving configuration.')
                 print(sc117_assets.MTP_SOURCE_NOTE)
             elif profile == ORCA_Q4KS_PROFILE:
                 context = cfg['args'][cfg['args'].index('--max-context') + 1]

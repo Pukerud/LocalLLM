@@ -179,6 +179,19 @@ class Runtime(unittest.TestCase):
         with mock.patch.object(s,'open_local_api',return_value=response):
             with self.assertRaisesRegex(SafetyError,'silent single-slot'):s.verify_serving({'parallel':2},r.VERSION,18080)
 
+    def test_effective_slots_use_requested_count_when_candidate_config_omits_parallel(self):
+        import strata_launcher as s
+        candidate=s.q4ks_v01441.RUNTIME_VERSION
+        response=io.BytesIO(json.dumps({'engine':None,'loaded':False,
+                                        'concurrency':{'serving':1,'requested':1}}).encode())
+        with mock.patch.object(s,'open_local_api',return_value=response):
+            self.assertEqual(s.verify_serving({'parallel':None},candidate,18080,requested_parallel=1),1)
+        response=io.BytesIO(json.dumps({'engine':None,'loaded':False,
+                                        'concurrency':{'serving':1,'requested':1}}).encode())
+        with mock.patch.object(s,'open_local_api',return_value=response):
+            with self.assertRaisesRegex(SafetyError,'silent single-slot'):
+                s.verify_serving({'parallel':None},candidate,18080,requested_parallel=2)
+
     def test_effective_slots_checked_with_private_api_auth(self):
         import strata_launcher as s
         response=io.BytesIO(json.dumps({'engine':r.VERSION,'concurrency':{'serving':2}}).encode())

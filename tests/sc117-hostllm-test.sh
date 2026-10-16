@@ -17,13 +17,21 @@ variant="$(<"$root/variant")"
 events="$(<"$root/events-path")"
 if [[ "${1:-}" == --check-ready ]]; then
     printf 'check %s\n' "$*" >> "$events"
-    printf 'host=%s key=%s fd=%s\n' "${STRATA_HOST-unset}" "${STRATA_API_KEY-unset}" "${STRATA_API_KEY_FD-unset}" >> "$events.env"
+    printf 'host=%s key=%s fd=%s marker=%s runtime=%s port=%s state=%s cache=%s pycache=%s distutils=%s\n' \
+        "${STRATA_HOST-unset}" "${STRATA_API_KEY-unset}" "${STRATA_API_KEY_FD-unset}" \
+        "${STRATA_SC117_IQ3S_TRIAL-unset}" "${STRATA_RUNTIME-unset}" "${STRATA_PORT-unset}" \
+        "${STRATA_STATE_ROOT-unset}" "${PYTHONPYCACHEPREFIX-unset}" "${PYTHONDONTWRITEBYTECODE-unset}" \
+        "${SETUPTOOLS_USE_DISTUTILS-unset}" >> "$events.env"
     case "$variant" in
         exact) printf '%s\n' 'READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.' ;;
         prefix) printf 'prefix %s\n' 'READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.' ;;
         suffix) printf '%s contradictory\n' 'READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.' ;;
         duplicate) printf '%s\n%s\n' 'READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.' 'READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.' ;;
         wrong) printf '%s\n' 'READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.41; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.' ;;
+        trial-exact) printf '%s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.' ;;
+        trial-prefix) printf 'prefix %s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.' ;;
+        trial-suffix) printf '%s contradictory\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.' ;;
+        trial-duplicate) printf '%s\n%s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.' ;;
     esac
     exit 0
 fi
@@ -93,6 +101,52 @@ launch_line="$(grep -n '^launch ' "$events" | cut -d: -f1)"
 [[ "$check_line" -lt "$lease_line" && "$lease_line" -lt "$launch_line" ]]
 grep -qx 'launch --quickstart --profile=iq3_s-sc117-abliterated --runtime=0.1.39 --parallel=1 --batch-groups=1' "$events"
 grep -Fq 'host=127.0.0.1 key=unset fd=unset' "$events.env"
+
+# .44.1 is reachable only through its exact loopback trial environment and a trial-specific preflight.
+trial_state="${HOME:-/home/user}/.local/state/locallm-strata/sc117-iq3s-trial"
+for variant in trial-prefix trial-suffix trial-duplicate; do
+    printf '%s\n' "$variant" > "$SCRATCH/variant"
+    : > "$events"
+    if STRATA_SC117_IQ3S_TRIAL=1 STRATA_HOST=127.0.0.1 STRATA_PORT=18080 \
+        run_selected v1strata.sh --quickstart --profile iq3_s-sc117-abliterated \
+            --runtime 0.1.44.1 --parallel 1 --batch-groups 1; then
+        echo "unexpected SC117 trial launch with $variant readiness" >&2
+        exit 1
+    fi
+    grep -qx 'check --check-ready --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$events"
+    ! grep -q '^hosting begin ' "$events"
+    ! grep -q '^launch ' "$events"
+done
+
+printf 'trial-exact\n' > "$SCRATCH/variant"
+for kind in trial-missing-marker trial-lan trial-wrong-port; do
+    : > "$events"
+    case "$kind" in
+        trial-missing-marker) host=127.0.0.1 port=18080 marker=0 ;;
+        trial-lan) host=0.0.0.0 port=18080 marker=1 ;;
+        trial-wrong-port) host=127.0.0.1 port=8080 marker=1 ;;
+    esac
+    if STRATA_SC117_IQ3S_TRIAL="$marker" STRATA_HOST="$host" STRATA_PORT="$port" \
+        run_selected v1strata.sh --quickstart --profile iq3_s-sc117-abliterated \
+            --runtime 0.1.44.1 --parallel 1 --batch-groups 1; then
+        echo "unexpected SC117 trial with $kind" >&2
+        exit 1
+    fi
+    [[ ! -s "$events" ]]
+done
+
+: > "$events"
+STRATA_SC117_IQ3S_TRIAL=1 STRATA_HOST=127.0.0.1 STRATA_PORT=18080 \
+    run_selected v1strata.sh --quickstart --profile iq3_s-sc117-abliterated \
+        --runtime 0.1.44.1 --parallel 1 --batch-groups 1
+trial_check_line="$(grep -n '^check ' "$events" | cut -d: -f1)"
+trial_lease_line="$(grep -n '^hosting begin ' "$events" | cut -d: -f1)"
+trial_launch_line="$(grep -n '^launch ' "$events" | cut -d: -f1)"
+[[ "$trial_check_line" -lt "$trial_lease_line" && "$trial_lease_line" -lt "$trial_launch_line" ]]
+grep -qx 'check --check-ready --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$events"
+grep -Fqx "host=127.0.0.1 key=unset fd=unset marker=1 runtime=0.1.44.1 port=18080 state=$trial_state cache=$trial_state/pycache pycache=1 distutils=stdlib" "$events.env"
+grep -Fqx 'hosting begin --require-new-lease --lease-id 0000000000000000000000000000000000000000000000000000000000000000 --port 18080' "$events"
+grep -qx 'launch --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$events"
 
 # The launcher is never asked to parse a key from an argument or inherit one in its environment.
 ! grep -Fq 'candidate_env+=("STRATA_API_KEY=' "$ROOT/HostLLM.sh"

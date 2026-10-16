@@ -1,5 +1,6 @@
 """Mocked host boundaries: no real miner/systemctl/Docker changes by these tests."""
 import fcntl
+import io
 import os
 from pathlib import Path
 import sys
@@ -59,6 +60,14 @@ class HostingLease(unittest.TestCase):
             h.RUN.write_text('1')
             h.STOP.unlink(missing_ok=True)
         return 0
+
+    def test_lease_path_reports_the_resolved_state_without_creating_files(self):
+        with mock.patch.object(h, 'ROOT', self.root), \
+             mock.patch.object(sys, 'argv', ['hosting_lifecycle.py', 'lease-path']), \
+             mock.patch('sys.stdout', new_callable=io.StringIO) as output:
+            self.assertEqual(h.main(), 0)
+        self.assertEqual(output.getvalue().strip(), str(self.root / 'pause.json'))
+        self.assertFalse((self.root / 'lifecycle.lock').exists())
 
     def test_verify_lease_checks_exact_held_identity_under_shared_reservation(self):
         token = 'a' * 64

@@ -1,26 +1,22 @@
 #!/usr/bin/env bash
-# HiveOS custom miner: pinned SC117 abliterated IQ3_S on Strata 0.1.39.
+# HiveOS custom miner: unqualified SC117 IQ3_S .44.1 isolated loopback trial.
 # Hive supervises this wrapper; the model launcher runs as unprivileged user.
 # Keep osn.service running as the prior Qwen Hive miner does.
 set -Eeuo pipefail
 # Hive may invoke wrappers with tracing enabled; never trace the secret handoff.
 set +x
-unset HIVE_STRATA_API_KEY
-HIVE_STRATA_API_KEY="${STRATA_API_KEY:-}"
-export -n HIVE_STRATA_API_KEY
-unset STRATA_API_KEY
+unset STRATA_API_KEY HIVE_STRATA_API_KEY
 
 LLM_ROOT='/home/user/LocalLLM'
 STRATA_LAUNCHER="${LLM_ROOT}/v1strata.sh"
 STRATA_OWNER_USER='user'
 STRATA_HOME='/home/user'
 STRATA_DATA_ROOT='/home/user/.local/share/localllm-strata'
-STRATA_STATE_ROOT='/home/user/.local/state/locallm-strata'
+STRATA_STATE_ROOT='/home/user/.local/state/locallm-strata/sc117-iq3s-trial'
 PROFILE='iq3_s-sc117-abliterated'
-RUNTIME='0.1.39'
-PORT='8080'
-# Default to local-only access. Operators may explicitly set STRATA_HOST=0.0.0.0 for trusted LAN use.
-STRATA_HOST="${STRATA_HOST:-127.0.0.1}"
+RUNTIME='0.1.44.1'
+PORT='18080'
+STRATA_HOST='127.0.0.1'
 STOP_FILE="${MINER_STOP:-/run/hive/MINER_STOP}"
 STATE_FILE="${STRATA_STATE_ROOT}/server.json"
 STRATA_LAUNCH_TOKEN=''
@@ -48,13 +44,8 @@ request_hive_stop() {
     printf '1\n' > "$STOP_FILE"
 }
 
-case "$STRATA_HOST" in
-    127.0.0.1|0.0.0.0) ;;
-    *) say 'SC117 IQ3_S STRATA_HOST may only be 127.0.0.1 or 0.0.0.0'; request_hive_stop; exit 1 ;;
-esac
-
-if [[ "$STRATA_HOST" != 127.0.0.1 && -z "$HIVE_STRATA_API_KEY" ]]; then
-    say 'SC117 non-loopback binding requires STRATA_API_KEY; refusing unauthenticated network access'
+if [[ "$STRATA_HOST" != 127.0.0.1 || "$PORT" != 18080 || "$RUNTIME" != 0.1.44.1 ]]; then
+    say 'SC117 trial is fixed to Strata 0.1.44.1 on 127.0.0.1:18080'
     request_hive_stop
     exit 1
 fi
@@ -94,17 +85,13 @@ run_strata_user() {
     local -a clean_env=(
         "HOME=$STRATA_HOME" "USER=$STRATA_OWNER_USER" "LOGNAME=$STRATA_OWNER_USER"
         'PATH=/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin'
-        'PYTHONDONTWRITEBYTECODE=1' "STRATA_DATA_ROOT=$STRATA_DATA_ROOT"
-        "STRATA_STATE_ROOT=$STRATA_STATE_ROOT" "STRATA_RUNTIME=$RUNTIME"
+        'PYTHONDONTWRITEBYTECODE=1' "PYTHONPYCACHEPREFIX=$STRATA_STATE_ROOT/pycache"
+        'SETUPTOOLS_USE_DISTUTILS=stdlib' 'STRATA_SC117_IQ3S_TRIAL=1'
+        "STRATA_DATA_ROOT=$STRATA_DATA_ROOT" "STRATA_STATE_ROOT=$STRATA_STATE_ROOT" "STRATA_RUNTIME=$RUNTIME"
         'STRATA_PARALLEL=1' 'STRATA_BATCH_GROUPS=1' "STRATA_PORT=$PORT"
         "STRATA_HOST=$STRATA_HOST" "HIVE_STRATA_LAUNCH_ID=$STRATA_LAUNCH_TOKEN"
     )
-    if [[ -n "$HIVE_STRATA_API_KEY" && "${1:-}" == "$STRATA_LAUNCHER" && "${2:-}" == '--quickstart' ]]; then
-        printf '%s' "$HIVE_STRATA_API_KEY" | runuser -u "$STRATA_OWNER_USER" -- env -i "${clean_env[@]}" \
-            /usr/bin/python3 "${LLM_ROOT}/exec_with_stdin_api_key.py" "$@"
-    else
-        runuser -u "$STRATA_OWNER_USER" -- env -i "${clean_env[@]}" "$@"
-    fi
+    runuser -u "$STRATA_OWNER_USER" -- env -i "${clean_env[@]}" "$@"
 }
 
 owned_state_identity() {
@@ -288,17 +275,17 @@ if (( available_mib < 12288 )); then
 fi
 abort_if_stopping
 
-say 'checking pinned SC117 abliterated IQ3_S profile (native context 262144, BF16 GPU vision, MTP=4, one slot, Strata 0.1.39)'
+say 'checking unqualified SC117 IQ3_S isolated trial (native context 262144, CPU vision, MTP=4, one slot, Strata 0.1.44.1, loopback port 18080)'
 readiness="$(run_strata_user "$STRATA_LAUNCHER" --check-ready --profile "$PROFILE" \
         --runtime "$RUNTIME" --parallel 1 --batch-groups 1)" || {
-    say 'SC117 IQ3_S readiness/qualification failed; no existing service was stopped'
+    say 'SC117 trial preflight failed; no existing service was stopped'
     request_hive_stop
     exit 1
 }
-expected_readiness='READY CONFIG: pinned SC117 abliterated IQ3_S; runtime=0.1.39; context=262144; INT8 KV (32768 resident); MTP=4 (SC117 strata/rt; stock/non-abliterated head); BF16 GPU vision; one serving slot/group; prefill=auto; split=auto; conversation cache=8192 MiB / 4 slots.'
-actual_readiness="$(grep '^READY CONFIG:' <<< "$readiness" || true)"
-if [[ "$actual_readiness" != "$expected_readiness" ]]; then
-    say 'SC117 IQ3_S exact readiness line is missing or mismatched; refusing start without qualification'
+expected_readiness='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
+actual_readiness="$(grep '^TRIAL CONFIG:' <<< "$readiness" || true)"
+if [[ "$actual_readiness" != "$expected_readiness" || "$readiness" == *'READY CONFIG:'* ]]; then
+    say 'SC117 isolated trial preflight line is missing or mismatched; refusing start'
     request_hive_stop
     exit 1
 fi
@@ -327,7 +314,7 @@ fi
 abort_if_stopping
 
 STRATA_LAUNCH_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(24))')"
-say 'starting SC117 abliterated IQ3_S through Hive custom miner (four GPUs, one slot; osn.service remains running)'
+say 'starting UNQUALIFIED SC117 IQ3_S .44.1 loopback trial on port 18080 through Hive (dedicated state; no qualification evidence; osn.service remains running)'
 run_strata_user "$STRATA_LAUNCHER" --quickstart --profile "$PROFILE" \
     --runtime "$RUNTIME" --parallel 1 --batch-groups 1 &
 LAUNCH_JOB_PID=$!
