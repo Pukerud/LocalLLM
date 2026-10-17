@@ -170,6 +170,6 @@ The pinned 111.77 GB shards, separate 0.1.39 CUDA build, compatibility pack, pre
 32K report and native/vision report are present under Q4-only paths on `.69`. The future profile is native 262144,
 INT8 KV / 32768 resident, CPU vision, and one slot. Q4 was stopped through its identity-bound launcher after
 validation; the previous miner and OctaSpace state were restored. IQ3_XXS model/pack assets were later removed; the
-selected generic `.39` runtime and normal default remain intact. No renter, Docker workload, or unknown GPU job was stopped.
+at that time, the generic `.39` runtime and normal default remained intact; the current Orca Q4 standard is `.44.1` and `.39` is rollback-only. No renter, Docker workload, or unknown GPU job was stopped.
 
 Upstream technical basis: [Strata `ORCA_Q4_K_S.md` at the pinned 0.1.39 commit](https://github.com/Niko1221/Strata/blob/6f32ec070f23ced9f50e704d854d775da52591ab/docs/ORCA_Q4_K_S.md).

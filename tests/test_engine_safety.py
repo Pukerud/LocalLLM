@@ -413,7 +413,9 @@ class ForegroundIntegration(unittest.TestCase):
             (source / '.venv/bin/python').symlink_to(sys.executable)
             (source / 'serve').mkdir()
             (source / 'serve/__init__.py').write_text('')
-            (source / 'serve/server.py').write_text('''import argparse,json\nfrom http.server import HTTPServer,BaseHTTPRequestHandler\np=argparse.ArgumentParser();p.add_argument('--port',type=int);a,_=p.parse_known_args()\nclass H(BaseHTTPRequestHandler):\n def do_GET(self):\n  self.send_response(200);self.end_headers();self.wfile.write(b'{"engine":"0.1.39","concurrency":{"serving":1},"status":"ok"}' if self.path == '/v1/status' else b'{"status":"ok"}')\n def do_POST(self):\n  self.rfile.read(int(self.headers.get('Content-Length','0')));self.send_response(200);self.end_headers();self.wfile.write(b'{"choices":[{"message":{"content":"ANSWER=42"}}]}')\nHTTPServer(('127.0.0.1',a.port),H).serve_forever()\n''')
+            status_version = '0.1.44.1' if profile == 'orca-q4_k_s' else '0.1.39'
+            server_script = '''import argparse,json\nfrom http.server import HTTPServer,BaseHTTPRequestHandler\np=argparse.ArgumentParser();p.add_argument('--port',type=int);a,_=p.parse_known_args()\nclass H(BaseHTTPRequestHandler):\n def do_GET(self):\n  self.send_response(200);self.end_headers();self.wfile.write(b'{"engine":"__ENGINE_VERSION__","concurrency":{"serving":1},"status":"ok"}' if self.path == '/v1/status' else b'{"status":"ok"}')\n def do_POST(self):\n  self.rfile.read(int(self.headers.get('Content-Length','0')));self.send_response(200);self.end_headers();self.wfile.write(b'{"choices":[{"message":{"content":"ANSWER=42"}}]}')\nHTTPServer(('127.0.0.1',a.port),H).serve_forever()\n'''
+            (source / 'serve/server.py').write_text(server_script.replace('__ENGINE_VERSION__', status_version))
             with socket.socket() as sock:
                 sock.bind(('127.0.0.1', 0))
                 port = sock.getsockname()[1]
@@ -449,6 +451,16 @@ sys.path.insert(0,{str(ROOT)!r})
 import strata_launcher as s
 s.ready=lambda *args: (pathlib.Path({str(source)!r}),pathlib.Path('unused'),{cfg!r})
 s.ready_q4ks=lambda root: (pathlib.Path({str(source)!r}),pathlib.Path('unused'),{cfg!r})
+original_ready_runtime=s.ready_runtime
+def fixture_ready_runtime(profile='iq3_s',runtime='auto',parallel=1,batch_groups=1):
+    if profile=='orca-q4_k_s':
+        return pathlib.Path({str(source)!r}),pathlib.Path('unused'),{cfg!r},'0.1.44.1'
+    return original_ready_runtime(profile,runtime,parallel,batch_groups)
+s.ready_runtime=fixture_ready_runtime
+# The fake-runner test isolates lifecycle handoff; candidate authorization has dedicated tests.
+s.require_q4ks_candidate_authorization=lambda *args,**kwargs:{{'authorization':'hostllm','lease_id':'a'*64}}
+s.require_q4ks_candidate_lease=lambda *args,**kwargs:'a'*64
+s.q4ks_v01441.candidate_evidence_summary=lambda root: []
 s.launch_gate=lambda port: None
 s.runtime_gate=lambda state: None
 original=s.host_lifecycle.launch_reservation

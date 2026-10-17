@@ -1,6 +1,6 @@
 # Orca Q4_K_S / Strata 0.1.41 — isolated candidate
 
-**Status: opt-in candidate path only; Q4 .39 remains the default and rollback.** The recorded Q4 .39 prefill baseline is `956.4` input tokens/s median over three uncached 5,295-token prompts, capped at 16 output tokens. No .41 speed or generalized-quality claim is made; any .41 result is a bounded operator self-attestation, not qualification.
+**Status: opt-in `.41` rollback path; Orca Q4 `.44.1` is the standard Strata profile, while `.39`/`.41` remain rollback-only.** The recorded Q4 .39 prefill baseline is `956.4` input tokens/s median over three uncached 5,295-token prompts, capped at 16 output tokens. No .41 speed or generalized-quality claim is made; any .41 result is a bounded operator self-attestation, not qualification.
 
 The candidate pins Strata `fb58e0dbc8399662c0e47c76578c6e878b14f6cf` and is independent of `strata_runtime.py`'s default-selection manager. It reuses the already prepared .39 Q4 shards/compatibility pack as read-only shared inputs, and requires the exact prepared generic .41 llama.cpp commit and vision-helper hash to pass manifest/source/hash checks. The candidate records its own full llama.cpp source-tree hash without modifying the generic .41 manifest. It has a distinct Q4 source checkout and CMake cache with CUDA, `STRATA_NATIVE_EXPERTS=ON`, `STRATA_ORCA_Q4KS_MMQ=ON`, and `STRATA_BUILD_TESTS=ON`.
 
@@ -43,7 +43,7 @@ The native/vision runner requires an already-running identity-verified HostLLM .
 
 HostLLM runs `--check-ready` before acquiring a pause lease. The candidate parity command requires a new HostLLM-owned pause lease, refuses an already-active or unmanaged server, verifies exact pinned shard hashes, and uses identity-bound child cleanup (pidfd only; no numeric-PID fallback). Direct candidate parity as root is refused. Do not launch its parity binaries directly.
 
-The candidate does not change `runtime-selection.json`, the default Q4 .39 profile/config/runtime, the recorded baseline result, or the separate IQ3_XXS asset-cleanup state. HostLLM [4] stays pinned to Q4 .39; [5] explicitly routes Q4 to the .41 one-slot candidate, and [6] routes only to the separately gated .41 two-slot/two-group experiment. Hive options [14] and [15] select the .41 one-slot and two-slot profiles respectively. The normal IQ3 runtime selection behavior is unchanged; neither .41 profile changes the Q4 .39 default.
+The `.41` rollback path does not change `runtime-selection.json`, the generic `.39` rollback profile/config/runtime, the recorded baseline result, or the separate IQ3_XXS asset-cleanup state. Current user-facing Orca Q4 selection is HostLLM [3]/Hive [14] for `.44.1`; `.39` and `.41` remain explicit rollback profiles, and no `.41` row appears in the requested menu. The normal IQ3 runtime-selection behavior is unchanged.
 
 ## Candidate-specific 32K gate
 
@@ -77,7 +77,7 @@ The isolated loopback 32K text-only gate passed health, arithmetic, strict JSON,
 
 The bounded native/CPU-vision run also passed: text smoke answered `437`, one generated synthetic image was identified as `Magenta`, and the short token-count control reconciled 7 uncached + 20 cache-read tokens with the API's 27-token total. The near-full prompt's count and response usage matched exactly at 261,000 / 262,144 tokens (99.56%); it retrieved `Q4-141-NATIVE-CTX-39B7` in 264.6 seconds. Minimum available RAM was 43,615 MiB. Per-GPU peaks were 23,740 / 19,502 / 22,410 / 23,316 MiB (aggregate sum 88,968 MiB); 260 sampler samples had no errors. This is one controlled tail-marker retrieval and one synthetic CPU-vision probe, not general context/image quality, worst-case memory, snapshot capacity, throughput, or multi-user/sustained-load evidence.
 
-The identity-bound reports remain private on `.69` at `profiles/orca-q4_k_s-v0141/validation-32k.json` and `profiles/orca-q4_k_s-v0141/validation-native.json` (mode `0600`); they are not committed. An initial native attempt was retained separately as `validation-native-first-run-failed.json` after its short control exposed an uncached-vs-total token accounting bug; only the subsequent passing report is counted. The `.39` default, Hive miner, and `osn.service` were restored after the earlier migration checks; no inference request was sent to the restored `.39` service.
+The identity-bound reports remain private on `.69` at `profiles/orca-q4_k_s-v0141/validation-32k.json` and `profiles/orca-q4_k_s-v0141/validation-native.json` (mode `0600`); they are not committed. An initial native attempt was retained separately as `validation-native-first-run-failed.json` after its short control exposed an uncached-vs-total token accounting bug; only the subsequent passing report is counted. The `.39` rollback profile, Hive miner, and `osn.service` were restored after the earlier migration checks; no inference request was sent to the restored `.39` service.
 
 ## Experimental .41 two-slot observation — 2026-10-11
 

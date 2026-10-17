@@ -273,18 +273,25 @@ class Q4Profile(unittest.TestCase):
         with self.assertRaisesRegex(SafetyError, 'ple_q5_parity'):
             profile.ready_q4ks(self.root)
 
-    def test_generic_runtime_selection_is_not_consulted_or_changed(self):
+    def test_q4_auto_selects_0441_without_changing_generic_runtime_selection(self):
         import strata_launcher as launcher
         selection = self.root / 'runtime-selection.json'
         selection.write_text('{"version":"0.1.41"}\n')
         before = selection.read_bytes()
+        baseline = (self.source, self.cfg_path, self.cfg)
+        standard = (self.source / 'v01441', self.pr / 'v01441.json', self.cfg)
         with mock.patch.object(launcher, 'data_root', return_value=self.root), \
-             mock.patch.object(launcher, 'ready_q4ks', return_value=(self.source, self.cfg_path, self.cfg)) as q4ready, \
+             mock.patch.object(launcher, 'ready_q4ks', return_value=baseline) as q4ready, \
+             mock.patch.object(launcher.q4ks_v01441, 'ready_q4ks_v01441', return_value=standard) as standard_ready, \
              mock.patch.object(launcher.runtimes, 'configure', side_effect=AssertionError('generic runtime manager used')):
             result = launcher.ready_runtime(assets.PROFILE, runtime='auto', parallel=1, batch_groups=1)
-        self.assertEqual(result[0], self.source)
-        self.assertEqual(result[3], '0.1.39')
+            rollback = launcher.ready_runtime(assets.PROFILE, runtime='0.1.39', parallel=1, batch_groups=1)
+        self.assertEqual(result[0], standard[0])
+        self.assertEqual(result[3], '0.1.44.1')
+        self.assertEqual(rollback[0], self.source)
+        self.assertEqual(rollback[3], '0.1.39')
         q4ready.assert_called_once_with(self.root)
+        standard_ready.assert_called_once_with(self.root)
         self.assertEqual(selection.read_bytes(), before)
 
     def test_explicit_041_routes_to_candidate_and_other_runtime_or_slots_are_refused(self):
@@ -293,7 +300,7 @@ class Q4Profile(unittest.TestCase):
         with mock.patch.object(launcher, 'data_root', return_value=self.root), \
              mock.patch.object(launcher.q4ks_v0141, 'ready_q4ks_v0141', return_value=candidate_result) as ready_candidate:
             result = launcher.ready_runtime(assets.PROFILE, runtime='0.1.41', parallel=1, batch_groups=1)
-            with self.assertRaisesRegex(SafetyError, 'baseline or the explicit .41'):
+            with self.assertRaisesRegex(SafetyError, 'standard .44.1 or explicit .39/.41 rollback'):
                 launcher.ready_runtime(assets.PROFILE, runtime='0.1.38', parallel=1, batch_groups=1)
             with self.assertRaisesRegex(SafetyError, 'single-slot'):
                 launcher.ready_runtime(assets.PROFILE, runtime='auto', parallel=2, batch_groups=1)

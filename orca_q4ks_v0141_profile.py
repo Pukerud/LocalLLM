@@ -171,7 +171,7 @@ def _file_record(path, saved, *, sealed=False, hash_file=True):
 
 
 def _baseline(root):
-    """The .39 profile remains the default and is read-only shared input for this candidate."""
+    """The .39 profile remains rollback-only and is read-only shared input for this candidate."""
     _, config_path, config = baseline_profile.ready_q4ks(root)
     manifest_path = baseline_profile_root(root) / 'prepared.json'
     manifest = _json(manifest_path, 'baseline .39 manifest')

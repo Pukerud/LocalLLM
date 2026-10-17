@@ -8,8 +8,10 @@ import os
 from pathlib import Path
 import re
 import signal
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -30,11 +32,20 @@ from orca_q4ks_profile import (configure_native_context as configure_q4ks_native
                                rollback_q4ks_vision)
 import orca_q4ks_v0141_profile as q4ks_v0141
 import orca_q4ks_v01441_profile as q4ks_v01441
+import iq3_s_sc117_abliterated_assets as sc117_assets
+import iq3_s_sc117_abliterated_profile as sc117_profile
+import prepare_iq3_s_sc117_abliterated as prepare_sc117
 import strata_runtime as runtimes
 
 SOURCE_COMMIT = '99f3dbd0b21d1401b3769e0c0d963913607f380b'
 MODEL_REVISION = 'ed59f92082b1e93c0e96d60a8b11aab089b52f09'
 MODEL = 'Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S'
+SC117_V01441_TRIAL_READY_CONFIG = (
+    'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); '
+    'native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; '
+    'prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; '
+    'pipeline-windows omitted. This is not qualification.'
+)
 HIVE_CUR_MINER = Path('/run/hive/cur_miner')
 
 _Q4_V01441_LAUNCH_ENV = frozenset({
@@ -43,7 +54,14 @@ _Q4_V01441_LAUNCH_ENV = frozenset({
     'QWEN38_OWNER_USER', 'HOSTLLM_STATE_ROOT', 'HOSTLLM_LAUNCH_LOCK_FD',
     'HOSTLLM_LAUNCH_LEASE_ID', 'HIVE_STRATA_LAUNCH_ID',
     'STRATA_DATA_ROOT', 'STRATA_STATE_ROOT', 'STRATA_RUNTIME', 'STRATA_PARALLEL',
-    'STRATA_BATCH_GROUPS', 'STRATA_PORT', 'STRATA_HOST', 'STRATA_API_KEY',
+    'STRATA_BATCH_GROUPS', 'STRATA_PORT', 'STRATA_HOST',
+})
+_IQ3S_LAUNCH_ENV = frozenset({
+    'HOME', 'USER', 'LOGNAME', 'PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'TMPDIR',
+    'PYTHONDONTWRITEBYTECODE', 'QWEN38_OWNER_USER', 'HIVE_STRATA_LAUNCH_ID',
+    'HOSTLLM_LAUNCH_LEASE_ID', 'STRATA_DATA_ROOT', 'STRATA_STATE_ROOT', 'STRATA_RUNTIME',
+    'STRATA_PARALLEL', 'STRATA_BATCH_GROUPS', 'STRATA_PORT', 'STRATA_HOST',
+    'STRATA_HEALTH_TIMEOUT',
 })
 
 
@@ -51,6 +69,14 @@ def _q4_v01441_launch_environment(environ=None):
     """Keep service/lifecycle inputs but exclude inherited engine/Python tuning overrides."""
     environ = os.environ if environ is None else environ
     clean = {key: value for key, value in environ.items() if key in _Q4_V01441_LAUNCH_ENV}
+    clean['PYTHONDONTWRITEBYTECODE'] = '1'
+    return clean
+
+
+def _iq3s_launch_environment(environ=None):
+    """Keep required service ownership/API inputs but exclude unreviewed tuning overrides."""
+    environ = os.environ if environ is None else environ
+    clean = {key: value for key, value in environ.items() if key in _IQ3S_LAUNCH_ENV}
     clean['PYTHONDONTWRITEBYTECODE'] = '1'
     return clean
 
@@ -65,7 +91,13 @@ def ready(profile='iq3_s'):
         return ready_orca(root)
     if profile == ORCA_Q4KS_PROFILE:
         return ready_q4ks(root)
-    if profile != 'iq3_s':
+    if profile == sc117_profile.PROFILE:
+        # SC117 has separate pinned model/MTP assets; validate them without requiring generic IQ3_S files.
+        prepare_sc117.verify_readiness(root, full_hash=False)
+        verify_model_assets = False
+    elif profile == 'iq3_s':
+        verify_model_assets = True
+    else:
         raise SafetyError('Unknown prepared Strata profile')
     manifest = json.loads((root / 'prepared.json').read_text())
     if manifest['source_commit'] != SOURCE_COMMIT:
@@ -99,8 +131,9 @@ def ready(profile='iq3_s'):
             raise SafetyError(f'Unexpected Strata setting: {key}')
     if cfg['vision']['model'] != str(model_paths[0]) or cfg['vision']['mmproj'] != str(model_paths[2]):
         raise SafetyError('Vision must use the verified Flash-Next model/projector pair')
-    if cfg['tokenizer'] != str(pack / 'tokenizer') or not (pack / 'dense.bin').is_file() or \
-            not (pack / 'tokenizer/tokenizer.json').is_file():
+    if (cfg['tokenizer'] != str(pack / 'tokenizer') or
+            (verify_model_assets and (not (pack / 'dense.bin').is_file() or
+                                      not (pack / 'tokenizer/tokenizer.json').is_file()))):
         raise SafetyError('Prepared model pack/tokenizer missing or miswired')
     if cfg.get('gpu') != [0, 1, 2, 3] or cfg.get('layer_split') != 'auto':
         raise SafetyError('Expected the prepared four-GPU automatic layer split')
@@ -108,18 +141,21 @@ def ready(profile='iq3_s'):
         raise SafetyError('Prepared GPU vision configuration missing')
     if any(a.startswith('--cvec') for a in args):
         raise SafetyError('Experimental speed projection must remain off')
-    verified = {asset['path']: asset for asset in manifest['assets']}
-    for relative, digest in DIGESTS.items():
-        p = root / relative
-        asset = verified.get(str(p))
-        if not asset or asset['sha256'] != digest or not p.is_file() or p.stat().st_size != asset['bytes']:
-            raise SafetyError(f'Missing or changed model asset: {p}')
-        if 'mtime_ns' in asset and p.stat().st_mtime_ns != asset['mtime_ns']:
-            raise SafetyError(f'Model asset changed since checksum verification: {p}')
-    for p in [source / '.venv/bin/python', Path(cfg['exe']), Path(cfg['vision']['exe']),
-              Path(args[args.index('--mtp') + 1]) / 'experts.bin']:
+    runtime_paths = [source / '.venv/bin/python', Path(cfg['exe']), Path(cfg['vision']['exe'])]
+    if verify_model_assets:
+        runtime_paths.append(Path(args[args.index('--mtp') + 1]) / 'experts.bin')
+    for p in runtime_paths:
         if not p.is_file():
             raise SafetyError(f'Prepared runtime asset missing: {p}')
+    if verify_model_assets:
+        verified = {asset['path']: asset for asset in manifest['assets']}
+        for relative, digest in DIGESTS.items():
+            p = root / relative
+            asset = verified.get(str(p))
+            if not asset or asset['sha256'] != digest or not p.is_file() or p.stat().st_size != asset['bytes']:
+                raise SafetyError(f'Missing or changed model asset: {p}')
+            if 'mtime_ns' in asset and p.stat().st_mtime_ns != asset['mtime_ns']:
+                raise SafetyError(f'Model asset changed since checksum verification: {p}')
     return source, config_path, cfg
 
 
@@ -129,14 +165,29 @@ def _effective_host(profile, version, configured_host):
         if requested not in (None, '127.0.0.1', '0.0.0.0'):
             raise SafetyError(f'Q4 {version} STRATA_HOST may only be 127.0.0.1 or 0.0.0.0')
         return requested or '127.0.0.1'
+    if profile == sc117_profile.PROFILE:
+        if requested not in (None, sc117_profile.TRIAL_BIND_HOST):
+            raise SafetyError(f'SC117 trial binding is fixed to trusted-LAN {sc117_profile.TRIAL_BIND_HOST}')
+        return sc117_profile.TRIAL_BIND_HOST
     return requested or configured_host
 
 
 def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
+    if profile == sc117_profile.PROFILE:
+        if (parallel, batch_groups) != (1, 1):
+            raise SafetyError('SC117 abliterated IQ3_S is restricted to one serving slot and one batch group')
+        if runtime != sc117_profile.TRIAL_RUNTIME_VERSION:
+            raise SafetyError('SC117 is unqualified: only its explicit trusted-LAN .44.1 trial is allowed; .39 hosting is retired')
+        if os.environ.get(sc117_profile.TRIAL_ENV) != '1':
+            raise SafetyError('SC117 Strata .44.1 is available only through its explicit unqualified trusted-LAN trial')
+        root = data_root()
+        prepare_sc117.verify_readiness(root, full_hash=False)
+        source, path, cfg = q4ks_v01441.ready_q4ks_v01441(root)
+        return source, path, sc117_profile.build_v01441_trial_config(root, cfg), runtime
     if profile == ORCA_Q4KS_PROFILE:
         if runtime not in ('auto', ORCA_Q4KS_RUNTIME, '0.1.41', q4ks_v01441.RUNTIME_VERSION):
-            raise SafetyError('Q4_K_S supports its .39 baseline or the explicit .41 or .44.1 candidate only')
-        if runtime == q4ks_v01441.RUNTIME_VERSION:
+            raise SafetyError('Q4_K_S supports standard .44.1 or explicit .39/.41 rollback profiles only')
+        if runtime in ('auto', q4ks_v01441.RUNTIME_VERSION):
             if (parallel, batch_groups) != (1, 1):
                 raise SafetyError('Q4 .44.1 is restricted to the validated single-slot/single-group profile')
             source, path, cfg = q4ks_v01441.ready_q4ks_v01441(data_root())
@@ -155,6 +206,36 @@ def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
         return source, path, cfg, ORCA_Q4KS_RUNTIME
     source, path, cfg = ready() if profile == 'iq3_s' else ready(profile)
     return runtimes.configure(data_root(), source, path, cfg, profile, runtime, parallel, batch_groups)
+
+
+def sc117_trial_readiness_line(profile, version, parallel, batch_groups, cfg):
+    """Verify the exact isolated SC117 .44.1 trial inputs without granting qualification."""
+    expected_state = Path.home() / '.local/state/locallm-strata' / sc117_profile.TRIAL_STATE_ROOT_NAME
+    expected_cache = expected_state / 'pycache'
+    if (profile != sc117_profile.PROFILE or version != sc117_profile.TRIAL_RUNTIME_VERSION or
+            (parallel, batch_groups) != (1, 1) or
+            os.environ.get(sc117_profile.TRIAL_ENV) != '1' or
+            os.environ.get('STRATA_RUNTIME') != sc117_profile.TRIAL_RUNTIME_VERSION or
+            os.environ.get('STRATA_HOST') != sc117_profile.TRIAL_BIND_HOST or
+            os.environ.get('STRATA_PORT') != str(sc117_profile.TRIAL_PORT) or
+            Path(os.environ.get('STRATA_STATE_ROOT', '')) != expected_state or
+            os.environ.get('PYTHONPYCACHEPREFIX') != str(expected_cache) or
+            os.environ.get('PYTHONDONTWRITEBYTECODE') != '1' or
+            os.environ.get('SETUPTOOLS_USE_DISTUTILS') != 'stdlib'):
+        raise SafetyError('SC117 .44.1 trial preflight requires its exact trusted-LAN bind, port, state, and Python-cache environment')
+    if any(name in os.environ for name in sc117_profile.TRIAL_OVERRIDE_ENV) or any(
+            name in os.environ for name in sc117_profile.TRIAL_EXPERIMENT_ENV):
+        raise SafetyError('SC117 menu trial preflight does not accept experimental tuning overrides')
+    vision = cfg.get('vision')
+    if not isinstance(vision, dict) or vision.get('gpu') is not False:
+        raise SafetyError('SC117 .44.1 trial preflight requires CPU vision')
+    settings = sc117_profile.settings_for_start(allow_trial_env=True)
+    authorization = sc117_profile.authorize_start(
+        data_root(), settings, host=sc117_profile.TRIAL_BIND_HOST,
+        port=sc117_profile.TRIAL_PORT, state_root=strata_state())
+    if authorization != 'trial':
+        raise SafetyError('SC117 .44.1 preflight did not authorize the isolated trial')
+    return SC117_V01441_TRIAL_READY_CONFIG
 
 
 def _q4ks_recorded_identity_valid(value):
@@ -291,6 +372,144 @@ def require_q4ks_candidate_authorization(port, expected_lease_id=None, *, host_l
     return {'authorization': 'hive', 'launch_id': token}
 
 
+def consume_api_key():
+    """Accept secrets only through the stdin helper's inherited pipe FD."""
+    if 'STRATA_API_KEY' in os.environ:
+        os.environ.pop('STRATA_API_KEY', None)
+        raise SafetyError('STRATA_API_KEY environment input is unsupported; use exec_with_stdin_api_key.py')
+    raw_fd = os.environ.pop('STRATA_API_KEY_FD', None)
+    if raw_fd is None:
+        return None
+    if not raw_fd.isascii() or not raw_fd.isdecimal():
+        raise SafetyError('Invalid API-key pipe descriptor')
+    fd = int(raw_fd)
+    if fd < 3:
+        raise SafetyError('API-key pipe descriptor must not replace standard I/O')
+    try:
+        if not stat.S_ISFIFO(os.fstat(fd).st_mode):
+            raise SafetyError('API-key descriptor is not an anonymous pipe')
+        chunks = []
+        size = 0
+        while True:
+            chunk = os.read(fd, min(1024, 4097 - size))
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > 4096:
+                raise SafetyError('API key exceeds the 4096-byte limit')
+            chunks.append(chunk)
+    except OSError as exc:
+        raise SafetyError(f'Cannot read API-key pipe: {exc}') from exc
+    finally:
+        os.close(fd)
+    raw = b''.join(chunks)
+    if any(char in raw for char in (b'\\0', b'\\r', b'\\n')):
+        raise SafetyError('API key contains a forbidden control character')
+    try:
+        key = raw.decode('utf-8')
+    except UnicodeDecodeError as exc:
+        raise SafetyError('API key is not valid UTF-8') from exc
+    return key or None
+
+
+def create_ephemeral_auth_config(cfg):
+    """Keep the serving API key only in a private RAM-backed config file."""
+    root = Path('/dev/shm')
+    try:
+        info = root.lstat()
+        mounts = Path('/proc/mounts').read_text().splitlines()
+    except OSError as exc:
+        raise SafetyError(f'Cannot verify volatile Strata config storage: {exc}') from exc
+    if (not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or
+            stat.S_IMODE(info.st_mode) != 0o1777 or
+            not any(len(line.split()) >= 3 and line.split()[1] == '/dev/shm' and line.split()[2] == 'tmpfs'
+                    for line in mounts)):
+        raise SafetyError('/dev/shm is not a root-owned sticky tmpfs; authenticated launch refused')
+    prefix = f'localllm-strata-{os.getuid()}-'
+    if any(root.glob(prefix + '*')):
+        raise SafetyError('Stale volatile authenticated Strata config exists; inspect it before retrying')
+    directory = Path(tempfile.mkdtemp(prefix=prefix, dir=root))
+    config_path = directory / 'run-config.json'
+    try:
+        fd = os.open(config_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            os.fchmod(fd, 0o600)
+            payload = json.dumps(cfg, indent=2).encode('utf-8')
+            view = memoryview(payload)
+            while view:
+                written = os.write(fd, view)
+                if written <= 0:
+                    raise OSError('short write to volatile authenticated config')
+                view = view[written:]
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        directory_info = directory.lstat()
+        if (not stat.S_ISDIR(directory_info.st_mode) or directory_info.st_uid != os.geteuid() or
+                stat.S_IMODE(directory_info.st_mode) != 0o700):
+            raise SafetyError('Volatile authenticated config directory changed during creation')
+        return str(config_path), str(directory), {'device': directory_info.st_dev, 'inode': directory_info.st_ino}
+    except Exception:
+        try:
+            config_path.unlink(missing_ok=True)
+            directory.rmdir()
+        except OSError:
+            pass
+        raise
+
+
+def remove_ephemeral_auth_config(state):
+    """Remove only a recorded user-owned tmpfs directory and known config sidecars."""
+    raw_dir = state.get('runtime_config_dir')
+    if raw_dir is None:
+        return
+    directory = Path(raw_dir)
+    identity = state.get('runtime_config_dir_identity')
+    prefix = f'localllm-strata-{os.geteuid()}-'
+    if (directory.parent != Path('/dev/shm') or not directory.name.startswith(prefix) or
+            not isinstance(identity, dict) or type(identity.get('device')) is not int or
+            type(identity.get('inode')) is not int):
+        raise SafetyError('Volatile Strata config location differs from its recorded identity; cleanup refused')
+    try:
+        before = directory.lstat()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise SafetyError(f'Cannot inspect volatile Strata config directory: {exc}') from exc
+    expected = (identity['device'], identity['inode'])
+    if (not stat.S_ISDIR(before.st_mode) or before.st_uid != os.geteuid() or
+            stat.S_IMODE(before.st_mode) != 0o700 or expected != (before.st_dev, before.st_ino)):
+        raise SafetyError('Volatile Strata config directory identity/mode mismatch; cleanup refused')
+    allowed = {'run-config.json', 'run-config.json.bak', 'run-config.json.tmp'}
+    for child in directory.iterdir():
+        if child.name not in allowed:
+            raise SafetyError('Unexpected file in volatile Strata config directory; cleanup refused')
+        try:
+            item = child.lstat()
+            if (not stat.S_ISREG(item.st_mode) or item.st_uid != os.geteuid() or
+                    stat.S_IMODE(item.st_mode) != 0o600 or item.st_nlink != 1):
+                raise SafetyError('Volatile Strata config sidecar has unsafe type/owner/mode; cleanup refused')
+            fd = os.open(child, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0))
+            try:
+                opened = os.fstat(fd)
+                current = child.lstat()
+                identity = (item.st_dev, item.st_ino, item.st_size, item.st_mtime_ns, item.st_ctime_ns)
+                if (identity != (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns) or
+                        identity != (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns, current.st_ctime_ns)):
+                    raise SafetyError('Volatile Strata config sidecar changed during cleanup')
+                child.unlink()
+            finally:
+                os.close(fd)
+        except SafetyError:
+            raise
+        except OSError as exc:
+            raise SafetyError(f'Cannot safely remove volatile Strata config sidecar: {exc}') from exc
+    current = directory.lstat()
+    if expected != (current.st_dev, current.st_ino):
+        raise SafetyError('Volatile Strata config directory changed during cleanup')
+    directory.rmdir()
+
+
 def read_state():
     p = strata_state() / 'server.json'
     return json.loads(p.read_text()) if p.exists() else None
@@ -307,6 +526,17 @@ def write_state(state):
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp, p)
+
+
+def write_private_run_config(path, cfg):
+    """Persist the effective serving config while always redacting authentication keys."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, 'O_NOFOLLOW', 0)
+    fd = os.open(path, flags, 0o600)
+    os.fchmod(fd, 0o600)
+    recorded = dict(cfg)
+    recorded.pop('api_key', None)
+    with os.fdopen(fd, 'w') as stream:
+        json.dump(recorded, stream, indent=2)
 
 
 def remember_children(state):
@@ -480,6 +710,7 @@ def stop(expected=None):
         else:
             raise SafetyError('Strata teardown could not be confirmed')
     if read_state() == state:
+        remove_ephemeral_auth_config(state)
         (strata_state() / 'server.json').unlink(missing_ok=True)
     print('Only the identity-verified Strata frontend/engine/vision helper were stopped.')
 
@@ -492,8 +723,57 @@ def health(port):
         return False
 
 
-def verify_serving(cfg, version, port):
+def require_frontend_listener(state, port):
+    """Prove the verified Strata frontend owns the listener before sending credentials."""
+    leader = state.get('identity')
+    live = proc(leader.get('pid')) if isinstance(leader, dict) else None
+    if not same_process(leader, live):
+        raise SafetyError('Strata frontend identity changed before authenticated API verification')
+    inodes = set()
+    for table in (Path('/proc/net/tcp'), Path('/proc/net/tcp6')):
+        try:
+            lines = table.read_text().splitlines()[1:]
+        except FileNotFoundError:
+            if table.name == 'tcp6':
+                continue
+            raise SafetyError('Cannot inspect TCP listeners before sending API credentials')
+        except OSError as exc:
+            raise SafetyError(f'Cannot inspect TCP listeners before sending API credentials: {exc}') from exc
+        for line in lines:
+            fields = line.split()
+            if len(fields) < 10 or fields[3] != '0A':
+                continue
+            try:
+                local_port = int(fields[1].rsplit(':', 1)[1], 16)
+                socket_uid = int(fields[7])
+                inode = int(fields[9])
+            except (ValueError, IndexError):
+                raise SafetyError('Malformed kernel TCP listener inventory; refusing credential probe')
+            if local_port == port:
+                if socket_uid != os.geteuid():
+                    raise SafetyError('TCP port is owned by another user; refusing credential probe')
+                inodes.add(inode)
+    if len(inodes) != 1:
+        raise SafetyError('Expected exactly one listener on the Strata port before credential probe')
+    target = f'socket:[{next(iter(inodes))}]'
+    try:
+        descriptors = list((Path('/proc') / str(leader['pid']) / 'fd').iterdir())
+    except OSError as exc:
+        raise SafetyError('Cannot prove the verified frontend owns the Strata listener') from exc
+    for descriptor in descriptors:
+        try:
+            if os.readlink(descriptor) == target:
+                return
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        except OSError as exc:
+            raise SafetyError('Cannot prove the verified frontend owns the Strata listener') from exc
+    raise SafetyError('Strata TCP listener is not owned by its verified frontend; credential probe refused')
+
+
+def verify_serving(cfg, version, port, requested_parallel=None):
     """Verify effective slots and the reported engine version when loaded."""
+    expected_parallel = cfg.get('parallel', 1) if requested_parallel is None else requested_parallel
     if version == '0.1.38':
         return 1
     headers = {'Authorization': 'Bearer ' + cfg['api_key']} if cfg.get('api_key') else {}
@@ -508,7 +788,7 @@ def verify_serving(cfg, version, port):
     lazy_unloaded = (version == q4ks_v01441.RUNTIME_VERSION and 'engine' in status and
                      engine is None and status.get('loaded') is False)
     if ((engine != version and not lazy_unloaded) or type(count) is not int or
-            count != cfg.get('parallel', 1)):
+            type(expected_parallel) is not int or count != expected_parallel):
         raise SafetyError('Effective runtime/slot count differs from the request; no silent single-slot fallback')
     return count
 
@@ -525,8 +805,9 @@ def verify_batch_groups(state, version, parallel, groups):
 
 
 def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hosting_lock=None):
-    if os.geteuid() == 0 and profile == ORCA_Q4KS_PROFILE:
-        raise SafetyError('Q4 Strata starts must run as the normal operator; use sudo only for identity-bound administration')
+    api_key = consume_api_key()
+    if os.geteuid() == 0 and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE):
+        raise SafetyError('This Strata profile must start as the normal operator; use sudo only for identity-bound administration')
     inherited_fd = host_lifecycle.inherited_launch_reservation_fd()
     requested_lease_id = os.environ.get('HOSTLLM_LAUNCH_LEASE_ID')
     if (inherited_fd is None) != (requested_lease_id is None):
@@ -537,6 +818,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
                 lease.get('phase') != 'held' or lease.get('lease_id') != requested_lease_id):
             raise SafetyError('HostLLM launch lease changed before model startup')
     source, config_path, cfg, version = ready_runtime(profile, runtime, parallel, batch_groups)
+    if cfg.get('api_key'):
+        raise SafetyError('API keys must not be stored in profile configs; use the stdin credential helper')
     launcher_python = cfg.pop('_launcher_python', None)
     state = read_state()
     if state and family(state):
@@ -544,7 +827,15 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     active = host_lifecycle.active_engine()
     if active != 'none':
         raise SafetyError(f'Another LLM session is active ({active}); start refused')
-    port = int(os.environ.get('STRATA_PORT', cfg.get('port', 8080)))
+    default_port = sc117_profile.TRIAL_PORT if profile == sc117_profile.PROFILE else cfg.get('port', 8080)
+    port = int(os.environ.get('STRATA_PORT', default_port))
+    effective_host = _effective_host(profile, version, cfg.get('host', '0.0.0.0'))
+    sc117_authorization = None
+    if profile == sc117_profile.PROFILE:
+        sc117_profile.require_trial_binding(effective_host)
+        settings = sc117_profile.settings_for_start(allow_trial_env=True)
+        sc117_authorization = sc117_profile.authorize_start(
+            data_root(), settings, host=effective_host, port=port, state_root=strata_state())
     hosting_lease_id = None
     hive_launch_id = None
     if profile == ORCA_Q4KS_PROFILE and version in ('0.1.41', q4ks_v01441.RUNTIME_VERSION):
@@ -557,8 +848,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     launch_gate(port)
     state_root = strata_state()
     state_root.mkdir(parents=True, exist_ok=True)
-    # A private effective config permits optional API credentials without editing the pinned source config.
-    cfg['host'] = _effective_host(profile, version, cfg.get('host', '0.0.0.0'))
+    # Keep the inspectable effective config private; API credentials never enter persistent config.
+    cfg['host'] = effective_host
     cfg['port'] = port
     if profile == ORCA_PROFILE:
         cfg['model_name'] = ORCA_MODEL_ID
@@ -566,30 +857,46 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     elif profile == ORCA_Q4KS_PROFILE:
         cfg['model_name'] = ORCA_Q4KS_MODEL_ID
         cfg['aliases'] = ['orca-q4ks', 'orca-q4_k_s']
+    elif profile == sc117_profile.PROFILE:
+        cfg['model_name'] = sc117_profile.MODEL_ID
+        cfg['aliases'] = ['qwen38-iq3s-sc117-abliterated', sc117_profile.PROFILE]
     else:
         cfg['model_name'] = 'qwen3.8-flash-next-iq3_s-strata'
         cfg['aliases'] = ['qwen38', 'strata']
     cfg['sampling'] = {'temperature': 1.0, 'top_p': 0.95, 'top_k': 20,
                        'experimental_speed_projection': False}
-    if os.environ.get('STRATA_API_KEY'):
-        cfg['api_key'] = os.environ['STRATA_API_KEY']
+    if api_key:
+        cfg['api_key'] = api_key
     run_config = state_root / 'run-config.json'
     log_root = data_root() / 'logs'
     log_root.mkdir(parents=True, exist_ok=True)
     log = log_root / f'server-{time.strftime("%Y%m%d-%H%M%S")}.log'
     cfg['log'] = str(log.with_name(log.stem + '-engine.log'))
-    fd = os.open(run_config, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
-    os.fchmod(fd, 0o600)
-    with os.fdopen(fd, 'w') as f:
-        json.dump(cfg, f, indent=2)
+    write_private_run_config(run_config, cfg)
+    config_arg = str(run_config)
+    runtime_config_dir = None
+    runtime_config_dir_identity = None
+    api_key = None
     if version == q4ks_v01441.RUNTIME_VERSION:
         env = _q4_v01441_launch_environment()
         env.update({'STRATA_RUNTIME': version, 'STRATA_PARALLEL': str(parallel),
                     'STRATA_BATCH_GROUPS': str(batch_groups), 'STRATA_HOST': cfg['host'],
                     'STRATA_PORT': str(port)})
+    elif profile == sc117_profile.PROFILE:
+        env = _iq3s_launch_environment()
+        env.update(runtimes.runtime_env(version, parallel))
     else:
         env = dict(os.environ)
         env.update(runtimes.runtime_env(version, parallel))
+    if sc117_authorization == 'trial':
+        cache_prefix = state_root / 'pycache'
+        cache_prefix.mkdir(mode=0o700, parents=True, exist_ok=True)
+        cache_info = cache_prefix.lstat()
+        if (not stat.S_ISDIR(cache_info.st_mode) or cache_info.st_uid != os.geteuid() or
+                stat.S_IMODE(cache_info.st_mode) & 0o077 or any(cache_prefix.iterdir())):
+            raise SafetyError('SC117 trial Python bytecode-cache prefix must be private and empty')
+        env['PYTHONPYCACHEPREFIX'] = str(cache_prefix)
+        env['SETUPTOOLS_USE_DISTUTILS'] = 'stdlib'
     if version == runtimes.LEGACY_VERSION and parallel > 1:
         print('Pinned 0.1.39 batching: all-resident zero-doorbell optimization disabled to avoid the verified layer-0 timeout.', flush=True)
     elif version == runtimes.VERSION:
@@ -617,25 +924,52 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
             evidence = q4ks_evidence_summary(data_root(), config_path)
         for evidence_line in evidence:
             print(evidence_line)
+    elif profile == sc117_profile.PROFILE:
+        if sc117_authorization == 'trial':
+            print('UNQUALIFIED SC117 IQ3_S TRIAL: isolated loopback test only; no readiness or quality claim.')
+            if version == sc117_profile.TRIAL_RUNTIME_VERSION:
+                print('PROVISIONAL CONFIG: SC117 IQ3_S; Strata=0.1.44.1; context=262144; INT8 KV '
+                      '(32768 resident); MTP=4 from the stock/non-abliterated head; CPU vision; one serving slot/group; '
+                      'prefill auto; split 14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; '
+                      'pipeline-windows omitted.')
+            else:
+                print(sc117_profile.default_readiness_line())
+        else:
+            print(sc117_profile.readiness_line(settings))
+        print(sc117_assets.MTP_SOURCE_NOTE)
     else:
         print('EXPERIMENTAL Strata IQ3_S | BF16 GPU vision | native 262144 | INT8 KV | MTP | high reasoning')
     if version == q4ks_v01441.RUNTIME_VERSION:
-        print('Q4 .44.1 tuning note: the exploratory pipeline-windows 2 override is omitted; its corrected decode interval crosses zero.', flush=True)
+        print('Strata .44.1 note: pipeline-windows is omitted from this serving baseline.', flush=True)
     print(f'Strata {version}; four-GPU layer split {cfg.get("layer_split", "auto")}; requested slots={parallel}, batch groups={batch_groups}. Log: {log}', flush=True)
     if parallel > 1:
         print('Experimental batching: concurrent slots decode without MTP drafts; solo requests retain MTP. Verify effective serving count.', flush=True)
     if cfg['host'] == '0.0.0.0' and not cfg.get('api_key'):
         print('WARNING: unauthenticated LAN API. Use STRATA_API_KEY before exposing beyond a trusted LAN.')
     python = Path(launcher_python) if launcher_python else source / '.venv/bin/python'
-    with log.open('a') as out:
-        child = subprocess.Popen([str(python), '-m', 'serve.server', '--engine', 'strata', '--config', str(run_config),
-                                  '--host', cfg['host'], '--port', str(port)], cwd=source, env=env,
-                                 stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
+    if cfg.get('api_key'):
+        try:
+            config_arg, runtime_config_dir, runtime_config_dir_identity = create_ephemeral_auth_config(cfg)
+        except Exception:
+            raise
+    try:
+        with log.open('a') as out:
+            child = subprocess.Popen([str(python), '-m', 'serve.server', '--engine', 'strata', '--config', config_arg,
+                                      '--host', cfg['host'], '--port', str(port)], cwd=source, env=env,
+                                     stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
+    except Exception:
+        if runtime_config_dir is not None:
+            remove_ephemeral_auth_config({'runtime_config_dir': runtime_config_dir,
+                                          'runtime_config_dir_identity': runtime_config_dir_identity})
+        raise
     identity = proc(child.pid)
     if not identity or identity['exe'] != str(python.resolve()) or identity['sid'] != child.pid:
         # Popen's exec handshake plus retained child identity, never a guessed global process name.
         child.terminate()
         child.wait(timeout=10)
+        if runtime_config_dir is not None:
+            remove_ephemeral_auth_config({'runtime_config_dir': runtime_config_dir,
+                                          'runtime_config_dir_identity': runtime_config_dir_identity})
         raise SafetyError('Frontend launch identity could not be recorded')
     hive_parent_identity = None
     if hive_launch_id:
@@ -644,21 +978,37 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         except Exception:
             signal_identity(identity, signal.SIGTERM)
             child.wait(timeout=10)
+            if runtime_config_dir is not None:
+                remove_ephemeral_auth_config({'runtime_config_dir': runtime_config_dir,
+                                              'runtime_config_dir_identity': runtime_config_dir_identity})
             raise
-    source_commit = (q4ks_v01441.SOURCE_COMMIT
-                     if profile == ORCA_Q4KS_PROFILE and version == q4ks_v01441.RUNTIME_VERSION
+    source_commit = (q4ks_v01441.SOURCE_COMMIT if version == q4ks_v01441.RUNTIME_VERSION
                      else runtimes.PINS[version])
     state = {'identity': identity, 'port': port, 'log': str(log),
              'source_commit': source_commit,
              'runtime_version': version, 'parallel': parallel, 'batch_groups': batch_groups, 'profile': profile,
              'config': str(run_config), 'allowed_executables': [str(python.resolve()), cfg['exe']] +
              ([cfg['vision']['exe']] if cfg.get('vision') else [])}
+    if runtime_config_dir is not None:
+        state['runtime_config_dir'] = runtime_config_dir
+        state['runtime_config_dir_identity'] = runtime_config_dir_identity
     if hosting_lease_id or requested_lease_id:
         state['hosting_lease_id'] = hosting_lease_id or requested_lease_id
     if hive_launch_id:
         state['hive_launch_id_sha256'] = hashlib.sha256(hive_launch_id.encode()).hexdigest()
         state['hive_launcher_identity'] = hive_parent_identity
-    write_state(state)
+    try:
+        write_state(state)
+    except Exception:
+        if runtime_config_dir is not None:
+            try:
+                for member in family(state):
+                    signal_identity(member, signal.SIGTERM)
+                child.wait(timeout=10)
+                remove_ephemeral_auth_config(state)
+            except Exception as cleanup_error:
+                raise SafetyError(f'Authenticated Strata launch cleanup is incomplete: {cleanup_error}')
+        raise
     # Serialize the launch handoff, not the whole foreground server lifetime.
     host_lifecycle.release_inherited_launch_reservation()
     if hosting_lock is not None:
@@ -688,8 +1038,11 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
                 print('Loading Strata; no long-context request is being sent...', flush=True)
                 next_report = time.monotonic() + 15
             time.sleep(1)
-        serving = verify_serving(cfg, version, port)
-        verify_batch_groups(state, version, parallel, batch_groups)
+        if cfg.get('api_key'):
+            require_frontend_listener(state, port)
+        serving = verify_serving(cfg, version, port, requested_parallel=parallel)
+        cfg.pop('api_key', None)
+        verify_batch_groups(state, version, parallel, groups=batch_groups)
         print(f'Strata ready: this host, port {port}, serving slots={serving}, API /v1. Ctrl+C stops only Strata.', flush=True)
         while not interrupted and child.poll() is None:
             if time.monotonic() >= next_guard:
@@ -738,15 +1091,15 @@ def main():
     modes.add_argument('--enable-q4ks141-vision', action='store_true')
     modes.add_argument('--rollback-q4ks141-vision', action='store_true')
     modes.add_argument('--select-runtime', choices=runtimes.VERSIONS)
-    ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE, ORCA_Q4KS_PROFILE], default=None)
+    ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE, ORCA_Q4KS_PROFILE, sc117_profile.PROFILE], default=None)
     ap.add_argument('--runtime', choices=['auto', *runtimes.VERSIONS, q4ks_v01441.RUNTIME_VERSION], default=os.environ.get('STRATA_RUNTIME', 'auto'))
     ap.add_argument('--parallel', type=int, choices=[1, 2], default=os.environ.get('STRATA_PARALLEL', '1'))
     ap.add_argument('--batch-groups', type=int, choices=[1, 2], default=os.environ.get('STRATA_BATCH_GROUPS', '1'))
     a = ap.parse_args()
     profile = a.profile or 'iq3_s'
     q4_mutation = not (a.stop or a.status or a.check_ready or a.select_runtime)
-    if os.geteuid() == 0 and profile == ORCA_Q4KS_PROFILE and q4_mutation:
-        print('BLOCKED: Q4 starts/configuration/evidence updates must run as the normal operator; use sudo only for identity-bound administration.', file=sys.stderr)
+    if os.geteuid() == 0 and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE) and q4_mutation:
+        print('BLOCKED: this profile must start/configure as the normal operator; use sudo only for identity-bound administration.', file=sys.stderr)
         return 1
     try:
         if a.select_runtime:
@@ -796,6 +1149,10 @@ def main():
             if profile == ORCA_PROFILE:
                 print('PREPARED: pinned Orca IQ3_XXS, own compatibility pack/tokenizer, F16 vision configured, native 262144, INT8 streaming KV.')
                 print('Readiness verifies assets/config only; bounded live results are separate in ORCA_IQ3XXS.md. No full-context quality claim.')
+            elif profile == sc117_profile.PROFILE:
+                print('UNQUALIFIED TRIAL PREFLIGHT ONLY: no normal-hosting or qualification authorization is granted.')
+                print(sc117_trial_readiness_line(profile, version, a.parallel, a.batch_groups, cfg))
+                print(sc117_assets.MTP_SOURCE_NOTE)
             elif profile == ORCA_Q4KS_PROFILE:
                 context = cfg['args'][cfg['args'].index('--max-context') + 1]
                 vision_cfg = cfg.get('vision')

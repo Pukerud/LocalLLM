@@ -3,12 +3,14 @@
 # Remove the HiveOS custom-miner integration only while all LLM/miner workloads
 # are idle. Never stop Hive or OctaSpace services on the operator's behalf.
 set -Eeuo pipefail
+unset STRATA_API_KEY
 
 if [[ "${EUID}" -ne 0 ]]; then
     printf 'Run as root: sudo %s\n' "$0" >&2
     exit 1
 fi
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CUSTOM_NAME="llm-hosting"
 CUSTOM_DIR="/hive/miners/custom/${CUSTOM_NAME}"
 RIG_CONF="/hive-config/rig.conf"
@@ -16,16 +18,32 @@ WALLET_CONF="/hive-config/wallet.conf"
 BACKUP_SUFFIX=".llm-hosting.bak"
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+PROFILE_LOCK_FILE='/run/llm-hosting-profile-menu.lock'
+[[ -d /run && ! -L /run && "$(stat -c '%u' /run)" == 0 ]] || fail '/run is not a trusted root-owned directory'
+command -v flock >/dev/null 2>&1 || fail 'flock is unavailable; refusing an unsynchronized uninstall'
+[[ ! -L "$PROFILE_LOCK_FILE" ]] || fail 'Hive profile lock path is symlinked'
+if [[ -e "$PROFILE_LOCK_FILE" ]]; then
+    [[ -f "$PROFILE_LOCK_FILE" && "$(stat -c '%u' "$PROFILE_LOCK_FILE")" == 0 && \
+       "$(stat -c '%a' "$PROFILE_LOCK_FILE")" == 600 ]] || fail 'Hive profile lock file has unsafe ownership or mode'
+fi
+umask 077
+exec 9>"$PROFILE_LOCK_FILE"
+flock -n 9 || fail 'Hive profile selector or installer is active'
 [[ ! -e /run/hive/MINER_RUN ]] || fail 'Hive reports a miner running; stop it through its normal operator workflow first'
 command -v pgrep >/dev/null 2>&1 || fail 'cannot inspect LLM launcher processes; refusing uninstall'
-if pgrep -f 'strata_launcher[.]py|serve[.]server|llama_cpp[.]server|v1qwen38[.]sh|llama-server|/engine/strata(-vision)?|/hive/miners/custom/llm-hosting/h-run[.]sh' >/dev/null 2>&1; then
+if pgrep -f 'strata_launcher[.]py|serve[.]server|llama_cpp[.]server|v1qwen38[.]sh|llama-server|/engine/strata[[:space:]]|/strata-vision[[:space:]]|/hive/miners/custom/llm-hosting/h-run[.]sh' >/dev/null 2>&1; then
     fail 'an LLM launcher/server process is present; refusing uninstall'
 fi
-[[ ! -e /home/user/.local/state/hostllm/pause.json ]] || fail 'HostLLM pause lease exists; refusing uninstall'
-if ! listeners="$(ss -Hltpn '( sport = :8080 )' 2>/dev/null)"; then
-    fail 'cannot inspect API port 8080; refusing uninstall'
+if ! lease_path="$(python3 "$SCRIPT_DIR/hosting_lifecycle.py" lease-path 2>/dev/null)"; then
+    fail 'cannot resolve HostLLM pause lease state; refusing uninstall'
 fi
-[[ -z "$listeners" ]] || fail 'API port 8080 is occupied; refusing uninstall'
+[[ ! -e "$lease_path" ]] || fail 'HostLLM pause lease exists; refusing uninstall'
+for port in 8080 18080; do
+    if ! listeners="$(ss -Hltpn "( sport = :${port} )" 2>/dev/null)"; then
+        fail "cannot inspect API port ${port}; refusing uninstall"
+    fi
+    [[ -z "$listeners" ]] || fail "API port ${port} is occupied; refusing uninstall"
+done
 if ! command -v docker >/dev/null 2>&1 || ! containers="$(docker ps --format '{{.ID}} {{.Names}}' 2>/dev/null)"; then
     fail 'Docker workload state unavailable; refusing uninstall'
 fi
@@ -38,6 +56,7 @@ if grep -qvE '^[[:space:]]*(None)?[[:space:]]*$' <<< "$gpu_apps"; then
     fail 'GPU compute processes are present; refusing uninstall'
 fi
 
+# The custom directory contains all installed profiles, including the SC117 opt-in.
 rm -rf -- "$CUSTOM_DIR"
 
 rig_backup="${RIG_CONF}${BACKUP_SUFFIX}"
