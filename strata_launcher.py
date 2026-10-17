@@ -782,14 +782,18 @@ def verify_serving(cfg, version, port, requested_parallel=None):
         status = json.load(response)
     count = (status.get('concurrency') or {}).get('serving')
     engine = status.get('engine')
-    # With auto-load disabled, this pinned candidate reports engine=None until its
-    # first inference. Tolerate only that explicit unloaded state; keep slot counts
+    # This pinned candidate lazily loads its engine on the first chat request.
+    # Tolerate only that explicit unloaded state; keep slot counts
     # strict and require an exact version whenever the API reports a loaded engine.
-    lazy_unloaded = (version == q4ks_v01441.RUNTIME_VERSION and 'engine' in status and
-                     engine is None and status.get('loaded') is False)
-    if ((engine != version and not lazy_unloaded) or type(count) is not int or
+    lazy_unloaded = (cfg.get('lazy_load') is True and version == q4ks_v01441.RUNTIME_VERSION and
+                     'engine' in status and engine is None and status.get('loaded') is False)
+    eager_unloaded = (version == q4ks_v01441.RUNTIME_VERSION and cfg.get('lazy_load') is False and
+                      status.get('loaded') is not True)
+    if ((engine != version and not lazy_unloaded) or eager_unloaded or type(count) is not int or
             type(expected_parallel) is not int or count != expected_parallel):
         raise SafetyError('Effective runtime/slot count differs from the request; no silent single-slot fallback')
+    if lazy_unloaded:
+        print('API frontend ready; model weights are not loaded yet. The first chat request loads them (about one minute).', flush=True)
     return count
 
 
@@ -802,6 +806,14 @@ def verify_batch_groups(state, version, parallel, groups):
     args = native[0]['cmd']
     if ('--batch-groups' not in args or args[args.index('--batch-groups') + 1] != str(groups)):
         raise SafetyError('Native batching must receive the explicit requested groups; automatic grouping refused')
+
+
+def startup_config(cfg, version):
+    """Load retained .44.1 models before opening the API; keep pinned engine settings unchanged."""
+    effective = dict(cfg)
+    if version == q4ks_v01441.RUNTIME_VERSION:
+        effective.update(lazy_load=False, idle_unload_s=0)
+    return effective
 
 
 def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hosting_lock=None):
@@ -818,6 +830,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
                 lease.get('phase') != 'held' or lease.get('lease_id') != requested_lease_id):
             raise SafetyError('HostLLM launch lease changed before model startup')
     source, config_path, cfg, version = ready_runtime(profile, runtime, parallel, batch_groups)
+    cfg = startup_config(cfg, version)
     if cfg.get('api_key'):
         raise SafetyError('API keys must not be stored in profile configs; use the stdin credential helper')
     launcher_python = cfg.pop('_launcher_python', None)
@@ -926,7 +939,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
             print(evidence_line)
     elif profile == sc117_profile.PROFILE:
         if sc117_authorization == 'trial':
-            print('UNQUALIFIED SC117 IQ3_S TRIAL: isolated loopback test only; no readiness or quality claim.')
+            print('UNQUALIFIED SC117 IQ3_S TRIAL: isolated trusted-LAN test only; no readiness or quality claim.')
             if version == sc117_profile.TRIAL_RUNTIME_VERSION:
                 print('PROVISIONAL CONFIG: SC117 IQ3_S; Strata=0.1.44.1; context=262144; INT8 KV '
                       '(32768 resident); MTP=4 from the stock/non-abliterated head; CPU vision; one serving slot/group; '
@@ -945,7 +958,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     if parallel > 1:
         print('Experimental batching: concurrent slots decode without MTP drafts; solo requests retain MTP. Verify effective serving count.', flush=True)
     if cfg['host'] == '0.0.0.0' and not cfg.get('api_key'):
-        print('WARNING: unauthenticated LAN API. Use STRATA_API_KEY before exposing beyond a trusted LAN.')
+        print('WARNING: unauthenticated LAN API; use only on a trusted, firewalled network.')
     python = Path(launcher_python) if launcher_python else source / '.venv/bin/python'
     if cfg.get('api_key'):
         try:
@@ -1035,7 +1048,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
             if time.monotonic() >= deadline:
                 raise SafetyError(f'Strata health timeout; see {log}')
             if time.monotonic() >= next_report:
-                print('Loading Strata; no long-context request is being sent...', flush=True)
+                print('Loading Strata model and vision encoder; API becomes ready after loading. No chat request is needed.', flush=True)
                 next_report = time.monotonic() + 15
             time.sleep(1)
         if cfg.get('api_key'):
@@ -1043,7 +1056,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         serving = verify_serving(cfg, version, port, requested_parallel=parallel)
         cfg.pop('api_key', None)
         verify_batch_groups(state, version, parallel, groups=batch_groups)
-        print(f'Strata ready: this host, port {port}, serving slots={serving}, API /v1. Ctrl+C stops only Strata.', flush=True)
+        print(f'Strata model loaded and API ready: bind={cfg["host"]}:{port}, serving slots={serving}, API /v1. Ctrl+C stops only Strata.', flush=True)
         while not interrupted and child.poll() is None:
             if time.monotonic() >= next_guard:
                 if not guard_during_run(state):

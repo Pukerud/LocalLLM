@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-17",
+  "host": "OctaSpace-WorkerFifteen",
+  "url": "http://192.168.1.69:8080/",
+  "scope": "Real four-GPU eager startup and LAN UI/chat smoke tests, one model at a time; not a general quality, vision, long-context, sustained-load, or SC117 qualification claim.",
+  "effective_startup": {
+    "bind": "0.0.0.0:8080",
+    "lazy_load": false,
+    "idle_unload_s": 0,
+    "ready_requires_loaded": true,
+    "runtime": "0.1.44.1"
+  },
+  "test_prompt": "What is 2 + 2? Reply with only the number.",
+  "request_settings": {"temperature": 0, "reasoning_effort": "none", "max_tokens": 16},
+  "checks": [
+    {
+      "option": 3,
+      "route": "Actual root-terminal HostLLM menu",
+      "model": "qwen3.8-flash-next-orca-q4_k_s-strata",
+      "ui_http_status": 200,
+      "loaded_before_first_chat": true,
+      "chat_requests_before_probe": 0,
+      "gpu_used_mib_before_chat": [22656, 19946, 19308, 20868],
+      "reply": "4",
+      "first_chat_elapsed_s": 0.258,
+      "ctrl_c_shutdown_and_lease_release": true
+    },
+    {
+      "option": 4,
+      "route": "Actual root-terminal HostLLM menu",
+      "model": "qwen3.8-flash-next-sc117-abliterated-iq3_s",
+      "ui_http_status": 200,
+      "loaded_before_first_chat": true,
+      "chat_requests_before_probe": 0,
+      "gpu_used_mib_before_chat": [18502, 15578, 18228, 20058],
+      "reply": "4",
+      "first_chat_elapsed_s": 0.222,
+      "ctrl_c_shutdown_and_lease_release": true
+    },
+    {
+      "option": 14,
+      "route": "Select Hive Orca profile, then real miner start",
+      "model": "qwen3.8-flash-next-orca-q4_k_s-strata",
+      "ui_http_status": 200,
+      "loaded_before_first_chat": true,
+      "chat_requests_before_probe": 0,
+      "gpu_used_mib_before_chat": [22656, 19946, 19308, 20868],
+      "reply": "4",
+      "first_chat_elapsed_s": 0.239,
+      "miner_stop_cleanup": true
+    },
+    {
+      "option": 15,
+      "route": "Real Hive start with selected SC117 profile",
+      "model": "qwen3.8-flash-next-sc117-abliterated-iq3_s",
+      "ui_http_status": 200,
+      "loaded_before_first_chat": true,
+      "chat_requests_before_probe": 0,
+      "gpu_used_mib_before_chat": [18502, 15578, 18228, 20058],
+      "reply": "4",
+      "first_chat_elapsed_s": 0.227,
+      "miner_stop_cleanup": true
+    }
+  ],
+  "notes": [
+    "All four routes were reached through the LAN IP, not localhost. The web UI returned HTML with HTTP 200.",
+    "The loaded state and per-GPU memory were recorded before sending any generation request. These are not lazy-load tests.",
+    "Only private effective run-config startup policy changes; pinned weights, native engine arguments, context, KV, MTP and runtime assets remain unchanged.",
+    "First-chat times exclude model loading, which now happens automatically during startup.",
+    "Full responses, pre-chat status, GPU readings, and terminal transcripts are under /tmp/localllm-eager-lan-20261017 on the tested host."
+  ]
+}

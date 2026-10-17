@@ -97,7 +97,7 @@ run_strata_as_operator() {
         "QWEN38_OWNER_USER=$owner_user" "HOSTLLM_STATE_ROOT=${HOSTLLM_STATE_ROOT:-$owner_home/.local/state/hostllm}" \
         "QWEN38_STATE_ROOT=$owner_home/.local/state/locallm-qwen38" \
         "STRATA_DATA_ROOT=$owner_home/.local/share/localllm-strata" "STRATA_STATE_ROOT=$state_root" \
-        "STRATA_HOST=${STRATA_HOST:-127.0.0.1}" "STRATA_PORT=${STRATA_PORT:-8080}" \
+        "STRATA_HOST=${STRATA_HOST:-0.0.0.0}" "STRATA_PORT=${STRATA_PORT:-8080}" \
         "STRATA_SC117_IQ3S_TRIAL=${STRATA_SC117_IQ3S_TRIAL:-0}" \
         "$SCRIPT_DIR/HostLLM.sh" --run-strata "$@"
 }
@@ -533,8 +533,9 @@ main() {
         echo ''
         printf '  Strata slots: %s (STRATA_PARALLEL; default 1), batch groups: %s. Runtime override: %s.\n' "${STRATA_PARALLEL:-1}" "${STRATA_BATCH_GROUPS:-1}" "${STRATA_RUNTIME:-selected default}"
         echo '  Starting hosting pauses the miner and OctaSpace automatically (never an active rental).'
-        echo '  Orca API defaults to 127.0.0.1:8080. SC117 .44.1 is an unqualified trial on trusted-LAN 0.0.0.0:8080 with dedicated state; it cannot use normal Hive/production hosting.'
-        echo '  SC117 binds the LAN without API authentication: use only on a trusted, firewalled network; Orca key entry remains optional.'
+        echo '  Orca and SC117 serve trusted-LAN 0.0.0.0:8080. Set STRATA_HOST=127.0.0.1 for local-only Orca.'
+        echo '  SC117 .44.1 is an unqualified trial with dedicated state; it cannot use normal Hive/production hosting.'
+        echo '  LAN access is unauthenticated unless an Orca key is entered: use only on a trusted, firewalled network.'
         echo '  [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit'
         echo '  [12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
         echo '  [13] Set next Hive miner - Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
@@ -568,7 +569,7 @@ main() {
                 elif [[ "$active" != none ]] && ! hosting managed-qwen; then
                     echo 'Another/unmanaged LLM is running. Stop it in its own verified lifecycle first.'
                 elif [[ "$choice" == 3 ]]; then
-                    STRATA_HOST="${STRATA_HOST:-127.0.0.1}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.44.1 --parallel 1 --batch-groups 1
+                    STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.44.1 --parallel 1 --batch-groups 1
                 else
                     STRATA_SC117_IQ3S_TRIAL=1 STRATA_RUNTIME=0.1.44.1 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 \
                         STRATA_HOST=0.0.0.0 STRATA_PORT=8080 \

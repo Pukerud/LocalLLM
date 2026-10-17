@@ -51,7 +51,8 @@ For the standard Hive Orca `.44.1` trusted-LAN profile (unauthenticated; use onl
 - **Web UI:** <http://192.168.1.69:8080/>
 - **OpenAI API:** `http://192.168.1.69:8080/v1` (`/chat/completions`, `/models`)
 - **Anthropic API:** `http://192.168.1.69:8080/v1/messages`
-- **Orca .44.1:** HostLLM [3], Q4 `--runtime auto`, and the matching Hive profile use the standard machine-specific profile. Preflight defaults to loopback; explicit LAN exposure remains a separate operator choice and is not part of SC117.
+- **Orca .44.1:** HostLLM [3] and Hive [14] bind the trusted LAN on `0.0.0.0:8080` by default. Set `STRATA_HOST=127.0.0.1` before opening HostLLM for local-only Orca. The lower-level Q4 CLI still defaults to loopback.
+- **Immediate loading:** [3]/[4] and the Hive profiles selected by [14]/[15] load the model and vision encoder during startup, before opening the API. They do not wait for a chat request, and automatic idle unloading is disabled. “Model loaded and API ready” requires `loaded=true` and the expected native runtime. Loading typically takes a minute or two; keep the launcher open. [Real eager-start/LAN checks for all four routes](results/strata-eager-lan-20261017.json) recorded loaded GPUs before the first chat.
 
 Orca `.44.1` is the standard Strata route; generic Orca `.39` and `.41` remain explicit rollback profiles. SC117 is **fixed** to trusted-LAN `0.0.0.0:8080`, uses its dedicated trial state, and does not permit other binds. Its API is unauthenticated: use only on a trusted, firewalled LAN (for `.69`, `http://192.168.1.69:8080/`). SC117 and Orca are mutually exclusive on port 8080. SC117 remains unqualified and must not be selected for normal hosting; the legacy SC117 `.39` launch path is retired. The original IQ3_S model ID is `qwen3.8-flash-next-iq3_s-strata`; SC117 has its own profile/model ID. Swift/Hauhau retain their existing llama.cpp web UI/API behavior.
 

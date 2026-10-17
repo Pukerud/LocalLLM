@@ -1,6 +1,6 @@
 # HiveOS LocalLLM custom miner
 
-This package installs one Hive custom miner with an atomic next-start profile selector. The standard Strata selection is Orca Q4_K_S Strata 0.1.44.1 with auto prefill and trimmed `14,24,36` split; the windows-2 override is omitted. Orca .39 is rollback-only. Hive's standard Orca profile deliberately binds `0.0.0.0:8080` for trusted-LAN serving and is unauthenticated; do not expose it to an untrusted network. HostLLM's Orca route defaults to loopback. The unqualified SC117 `.44.1` trial also binds trusted-LAN `0.0.0.0:8080` without authentication and shares the port exclusively with Orca. The other user-facing actions are Swift, Hauhau, and that SC117 trial. The old SC117 .39 selector route is retired; shared model/native-pack assets are preserved.
+This package installs one Hive custom miner with an atomic next-start profile selector. The standard Strata selection is Orca Q4_K_S Strata 0.1.44.1 with auto prefill and trimmed `14,24,36` split; the windows-2 override is omitted. Orca .39 is rollback-only. Hive's standard Orca profile deliberately binds `0.0.0.0:8080` for trusted-LAN serving and is unauthenticated; do not expose it to an untrusted network. HostLLM's Orca route also defaults to trusted-LAN serving (explicit `STRATA_HOST=127.0.0.1` retains local-only access). The unqualified SC117 `.44.1` trial also binds trusted-LAN `0.0.0.0:8080` without authentication and shares the port exclusively with Orca. The other user-facing actions are Swift, Hauhau, and that SC117 trial. The old SC117 .39 selector route is retired; shared model/native-pack assets are preserved.
 
 ## Interactive selector
 
@@ -33,6 +33,8 @@ sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile hauhau-q8-fastmtp
 sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile orca-q4_k_s-v01441
 sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile iq3_s-sc117-abliterated
 ```
+
+Both Orca and SC117 load their weights and vision encoder immediately during startup, before the API opens. The launcher requires the model to be loaded before reporting ready; a blank HTTP frontend is not a successful start. Idle unloading is disabled. Loading can take a minute or two on the four RTX 3090s.
 
 ## SC117 trial isolation
 

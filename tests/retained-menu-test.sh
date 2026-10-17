@@ -201,7 +201,7 @@ grep -q '\[15\] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Stra
 ! grep -qE '^ *echo .*\[(5|6|7)\] Orca Q4_K_S — Strata 0\.1\.(41|44\.1)' "$root/HostLLM.sh"
 ! grep -q '\[3\] SC117.*0.1.39' "$root/HostLLM.sh"
 ! grep -q '\[17\].*SC117' "$root/HostLLM.sh"
-grep -q 'STRATA_HOST="${STRATA_HOST:-127.0.0.1}" run_selected .*--runtime 0.1.44.1' "$root/HostLLM.sh"
+grep -q 'STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected .*--runtime 0.1.44.1' "$root/HostLLM.sh"
 grep -q 'SC117.*0.0.0.0:8080' "$root/HostLLM.sh"
 grep -q 'windows-2 override omitted' "$root/HostLLM.sh"
 grep -q -- '--prepare-q4ks141' "$root/HostLLM.sh"
@@ -233,7 +233,7 @@ grep -qx 'v1qwen38.sh --quickstart --profile swift15u-q8' "$trace"
 grep -qx 'v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q4kv-xhigh' "$trace"
 grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$trace"
 grep -qx 'v1strata.sh --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$trace"
-grep -qx 'unset|127.0.0.1|unset' "$trace.env"
+grep -qx 'unset|0.0.0.0|unset' "$trace.env"
 grep -qx '1|0.0.0.0|8080' "$trace.env"
 [[ "$(wc -l < "$trace")" -eq 4 ]]
 # Hive selections 14/15 refresh stale installed profiles, map to exact targets, and

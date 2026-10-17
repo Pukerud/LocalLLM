@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class StrataOperatorHandoff(unittest.TestCase):
-    def run_handoff(self, *, trial=False, owner='user', through_selection=False):
+    def run_handoff(self, *, trial=False, owner='user', through_selection=False, default_host=False):
         with tempfile.TemporaryDirectory() as directory:
             scratch = Path(directory)
             log = scratch / 'runuser.json'
@@ -20,8 +20,9 @@ class StrataOperatorHandoff(unittest.TestCase):
             stub.chmod(0o755)
             profile = 'iq3_s-sc117-abliterated' if trial else 'orca-q4_k_s'
             function = 'run_selected v1strata.sh' if through_selection else 'run_strata_as_operator'
+            host_assignment = '' if default_host else 'STRATA_HOST=' + ('0.0.0.0' if trial else '127.0.0.1')
             command = f'''source "$1/HostLLM.sh"
-STRATA_SC117_IQ3S_TRIAL={int(trial)} STRATA_HOST={'0.0.0.0' if trial else '127.0.0.1'} \\
+STRATA_SC117_IQ3S_TRIAL={int(trial)} {host_assignment} \\
     {function} --quickstart --profile {profile} --runtime 0.1.44.1 --parallel 1 --batch-groups 1
 '''
             env = {'PATH': f'{scratch}:/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/root',
@@ -47,6 +48,14 @@ STRATA_SC117_IQ3S_TRIAL={int(trial)} STRATA_HOST={'0.0.0.0' if trial else '127.0
                                                   '--runtime', '0.1.44.1', '--parallel', '1', '--batch-groups', '1'])
                 self.assertNotIn('PYTHONPATH=/hostile', arguments)
                 self.assertNotIn('STRATA_PREFILL_CPU_SHARE=hostile', arguments)
+
+    def test_orca_defaults_to_lan_without_overriding_explicit_loopback(self):
+        result, arguments = self.run_handoff(default_host=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('STRATA_HOST=0.0.0.0', arguments)
+        result, arguments = self.run_handoff()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('STRATA_HOST=127.0.0.1', arguments)
 
     def test_root_is_not_accepted_as_the_operator(self):
         result, arguments = self.run_handoff(owner='root')

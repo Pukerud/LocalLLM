@@ -417,7 +417,7 @@ class ForegroundIntegration(unittest.TestCase):
             (source / 'serve').mkdir()
             (source / 'serve/__init__.py').write_text('')
             status_version = '0.1.44.1' if profile == 'orca-q4_k_s' else '0.1.39'
-            server_script = '''import argparse,json\nfrom http.server import HTTPServer,BaseHTTPRequestHandler\np=argparse.ArgumentParser();p.add_argument('--port',type=int);a,_=p.parse_known_args()\nclass H(BaseHTTPRequestHandler):\n def do_GET(self):\n  self.send_response(200);self.end_headers();self.wfile.write(b'{"engine":"__ENGINE_VERSION__","concurrency":{"serving":1},"status":"ok"}' if self.path == '/v1/status' else b'{"status":"ok"}')\n def do_POST(self):\n  self.rfile.read(int(self.headers.get('Content-Length','0')));self.send_response(200);self.end_headers();self.wfile.write(b'{"choices":[{"message":{"content":"ANSWER=42"}}]}')\nHTTPServer(('127.0.0.1',a.port),H).serve_forever()\n'''
+            server_script = '''import argparse,json\nfrom http.server import HTTPServer,BaseHTTPRequestHandler\np=argparse.ArgumentParser();p.add_argument('--port',type=int);a,_=p.parse_known_args()\nclass H(BaseHTTPRequestHandler):\n def do_GET(self):\n  self.send_response(200);self.end_headers();self.wfile.write(b'{"engine":"__ENGINE_VERSION__","loaded":true,"concurrency":{"serving":1},"status":"ok"}' if self.path == '/v1/status' else b'{"status":"ok"}')\n def do_POST(self):\n  self.rfile.read(int(self.headers.get('Content-Length','0')));self.send_response(200);self.end_headers();self.wfile.write(b'{"choices":[{"message":{"content":"ANSWER=42"}}]}')\nHTTPServer(('127.0.0.1',a.port),H).serve_forever()\n'''
             (source / 'serve/server.py').write_text(server_script.replace('__ENGINE_VERSION__', status_version))
             with socket.socket() as sock:
                 sock.bind(('127.0.0.1', 0))
@@ -531,6 +531,8 @@ s.main()
                                   'orca-q4_k_s': 'qwen3.8-flash-next-orca-q4_k_s-strata'}
                 self.assertEqual(effective['model_name'], expected_model.get(profile, 'qwen3.8-flash-next-iq3_s-strata'))
                 if profile == 'orca-q4_k_s':
+                    self.assertIs(effective['lazy_load'], False)
+                    self.assertEqual(effective['idle_unload_s'], 0)
                     self.assertNotIn('--vision', effective['args'])
                     self.assertNotIn('vision', effective)
                 wrong = {'orca-iq3_xxs': 'iq3_s', 'orca-q4_k_s': 'orca-iq3_xxs'}.get(profile, 'orca-iq3_xxs')

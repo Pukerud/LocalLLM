@@ -182,11 +182,11 @@ class Runtime(unittest.TestCase):
     def test_effective_slots_use_requested_count_when_candidate_config_omits_parallel(self):
         import strata_launcher as s
         candidate=s.q4ks_v01441.RUNTIME_VERSION
-        response=io.BytesIO(json.dumps({'engine':None,'loaded':False,
+        response=io.BytesIO(json.dumps({'engine':candidate,'loaded':True,
                                         'concurrency':{'serving':1,'requested':1}}).encode())
         with mock.patch.object(s,'open_local_api',return_value=response):
             self.assertEqual(s.verify_serving({'parallel':None},candidate,18080,requested_parallel=1),1)
-        response=io.BytesIO(json.dumps({'engine':None,'loaded':False,
+        response=io.BytesIO(json.dumps({'engine':candidate,'loaded':True,
                                         'concurrency':{'serving':1,'requested':1}}).encode())
         with mock.patch.object(s,'open_local_api',return_value=response):
             with self.assertRaisesRegex(SafetyError,'silent single-slot'):
@@ -205,7 +205,7 @@ class Runtime(unittest.TestCase):
         valid={'engine':None,'loaded':False,'concurrency':{'serving':1,'requested':1}}
         response=io.BytesIO(json.dumps(valid).encode())
         with mock.patch.object(s,'open_local_api',return_value=response):
-            self.assertEqual(s.verify_serving({'parallel':1},candidate,18080),1)
+            self.assertEqual(s.verify_serving({'parallel':1,'lazy_load':True},candidate,18080),1)
         invalid=[
             {'engine':None,'loaded':False,'concurrency':{'serving':2}},
             {'engine':None,'loaded':True,'concurrency':{'serving':1}},
@@ -217,11 +217,39 @@ class Runtime(unittest.TestCase):
                 response=io.BytesIO(json.dumps(status).encode())
                 with mock.patch.object(s,'open_local_api',return_value=response):
                     with self.assertRaisesRegex(SafetyError,'silent single-slot'):
-                        s.verify_serving({'parallel':1},candidate,18080)
+                        s.verify_serving({'parallel':1,'lazy_load':True},candidate,18080)
         response=io.BytesIO(json.dumps(valid).encode())
         with mock.patch.object(s,'open_local_api',return_value=response):
             with self.assertRaisesRegex(SafetyError,'silent single-slot'):
                 s.verify_serving({'parallel':1},r.VERSION,18080)
+
+    def test_eager_startup_never_reports_an_unloaded_engine_ready(self):
+        import strata_launcher as s
+        version=s.q4ks_v01441.RUNTIME_VERSION
+        cfg=s.startup_config({'parallel':1,'lazy_load':True,'idle_unload_s':30},version)
+        self.assertIs(cfg['lazy_load'],False)
+        self.assertEqual(cfg['idle_unload_s'],0)
+        for loaded,engine in [(False,None),(False,version),(None,version)]:
+            response=io.BytesIO(json.dumps({'engine':engine,'loaded':loaded,'concurrency':{'serving':1}}).encode())
+            with mock.patch.object(s,'open_local_api',return_value=response):
+                with self.assertRaisesRegex(SafetyError,'silent single-slot'):
+                    s.verify_serving(cfg,version,18080)
+        response=io.BytesIO(json.dumps({'engine':version,'loaded':True,'concurrency':{'serving':1}}).encode())
+        with mock.patch.object(s,'open_local_api',return_value=response):
+            self.assertEqual(s.verify_serving(cfg,version,18080),1)
+
+    def test_startup_config_keeps_pinned_engine_settings_and_rollback_profiles(self):
+        import strata_launcher as s
+        original={'lazy_load':True,'idle_unload_s':30,'args':['--max-context','262144'],'host':'0.0.0.0'}
+        for profile in ('orca-q4_k_s','iq3_s-sc117-abliterated'):
+            with self.subTest(profile=profile):
+                effective=s.startup_config(dict(original,model_name=profile),s.q4ks_v01441.RUNTIME_VERSION)
+                self.assertIs(effective['lazy_load'],False)
+                self.assertEqual(effective['idle_unload_s'],0)
+                self.assertEqual(effective['args'],original['args'])
+                self.assertEqual(effective['host'],original['host'])
+        self.assertIs(original['lazy_load'],True)
+        self.assertEqual(s.startup_config(original,r.VERSION),original)
 
     def test_native_explicit_groups_identity_checked(self):
         import strata_launcher as s

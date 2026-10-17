@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -258,6 +259,9 @@ class Q4Profile(unittest.TestCase):
         path = self.paths[0]
         saved = self.manifest['assets'][0]
         old_mtime = path.stat().st_mtime_ns
+        # VFS ctime can use a coarse clock tick; ensure the mutation has a new
+        # ctime rather than depending on test-suite speed within one tick.
+        time.sleep(0.02)
         path.chmod(0o644)
         path.write_bytes(b'changed data')
         os.utime(path, ns=(old_mtime, old_mtime))
