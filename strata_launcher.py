@@ -42,9 +42,9 @@ MODEL_REVISION = 'ed59f92082b1e93c0e96d60a8b11aab089b52f09'
 MODEL = 'Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S'
 SC117_V01441_TRIAL_READY_CONFIG = (
     'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); '
-    'native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; '
-    'prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; '
-    'pipeline-windows omitted. This is not qualification.'
+    'native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; '
+    'one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; '
+    'conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.'
 )
 HIVE_CUR_MINER = Path('/run/hive/cur_miner')
 
@@ -229,6 +229,13 @@ def sc117_trial_readiness_line(profile, version, parallel, batch_groups, cfg):
     vision = cfg.get('vision')
     if not isinstance(vision, dict) or vision.get('gpu') is not False:
         raise SafetyError('SC117 .44.1 trial preflight requires CPU vision')
+    args = cfg.get('args')
+    if (not isinstance(args, list) or args.count('--spec') != 1 or
+            args[args.index('--spec') + 1:args.index('--spec') + 2] != [sc117_profile.TRIAL_DEFAULT_SPEC] or
+            args.count('--pipeline-windows') != 1 or
+            args[args.index('--pipeline-windows') + 1:args.index('--pipeline-windows') + 2] !=
+            [sc117_profile.TRIAL_DEFAULT_PIPELINE_WINDOWS]):
+        raise SafetyError('SC117 .44.1 trial preflight requires --spec 3 and --pipeline-windows 2')
     settings = sc117_profile.settings_for_start(allow_trial_env=True)
     authorization = sc117_profile.authorize_start(
         data_root(), settings, host=sc117_profile.TRIAL_BIND_HOST,
@@ -941,10 +948,10 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         if sc117_authorization == 'trial':
             print('UNQUALIFIED SC117 IQ3_S TRIAL: isolated trusted-LAN test only; no readiness or quality claim.')
             if version == sc117_profile.TRIAL_RUNTIME_VERSION:
-                print('PROVISIONAL CONFIG: SC117 IQ3_S; Strata=0.1.44.1; context=262144; INT8 KV '
-                      '(32768 resident); MTP=4 from the stock/non-abliterated head; CPU vision; one serving slot/group; '
+                print('TRIAL DEFAULTS: SC117 IQ3_S; Strata=0.1.44.1; context=262144; INT8 KV '
+                      '(32768 resident); stock/non-abliterated MTP head; --spec 3; CPU vision; one serving slot/group; '
                       'prefill auto; split 14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; '
-                      'pipeline-windows omitted.')
+                      'pipeline-windows 2. Performance screen only; not qualification.')
             else:
                 print(sc117_profile.default_readiness_line())
         else:
@@ -952,7 +959,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         print(sc117_assets.MTP_SOURCE_NOTE)
     else:
         print('EXPERIMENTAL Strata IQ3_S | BF16 GPU vision | native 262144 | INT8 KV | MTP | high reasoning')
-    if version == q4ks_v01441.RUNTIME_VERSION:
+    if profile == ORCA_Q4KS_PROFILE and version == q4ks_v01441.RUNTIME_VERSION:
         print('Strata .44.1 note: pipeline-windows is omitted from this serving baseline.', flush=True)
     print(f'Strata {version}; four-GPU layer split {cfg.get("layer_split", "auto")}; requested slots={parallel}, batch groups={batch_groups}. Log: {log}', flush=True)
     if parallel > 1:

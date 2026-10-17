@@ -6,7 +6,7 @@ Local HostLLM menu definition for `.69` (4× RTX 3090, 128 GB RAM). The standard
   [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots
   [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots
   [3] Orca Q4_K_S — Strata 0.1.44.1 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted
-  [4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot
+  [4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot
 
   [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit
   [12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots
@@ -65,7 +65,7 @@ Other Strata profiles remain unauthenticated by default: **do not expose them pu
 | [1] Swift | `swift15u-q8` | Q8_K_XL weights, shared BF16 vision, embedded native MTP depth 3, Q8 K/V, xhigh, two 262144-token slots |
 | [2] Hauhau | `hauhau-q8-fastmtp-q4kv-xhigh` | Q8_K_P weights, BF16 vision, matching FastMTP sidecar depth 4, Q4_0 K/V, xhigh, three 262144-token slots |
 | [3] Orca .44.1 | `orca-q4_k_s` / runtime `0.1.44.1` | Standard machine-specific profile; native 262K, CPU vision, 8 GiB/four-slot cache, auto prefill, trimmed split 14,24,36, one serving slot. Pipeline-windows-2 override omitted. See [ORCA_Q4KS_V01441.md](ORCA_Q4KS_V01441.md) |
-| [4] SC117 trial | `iq3_s-sc117-abliterated` | Unqualified Strata .44.1 trial, CPU vision, native 262144, MTP=4, INT8 KV, one slot/group, trusted-LAN `0.0.0.0:8080` (unauthenticated), dedicated state; no qualification or production authorization |
+| [4] SC117 trial | `iq3_s-sc117-abliterated` | Unqualified Strata .44.1 trial, CPU vision, native 262144, `--spec 3` + pipeline-windows 2, INT8 KV, one slot/group, trusted-LAN `0.0.0.0:8080` (unauthenticated), dedicated state; no qualification or production authorization |
 | Strata standard | `orca-q4_k_s-v01441` | Q4_K_S .44.1, native 262K, CPU vision, auto prefill, trimmed split 14,24,36, one slot |
 | Rollback | `orca-q4_k_s` | Generic Q4 .39 profile, native 262K, CPU vision, one serving slot |
 | Rollback files | Orca runtime `0.1.41` | Separate one-slot and experimental 2-slot/2-group profiles remain available by explicit profile name. See [ORCA_Q4KS_V0141.md](ORCA_Q4KS_V0141.md) |
@@ -128,7 +128,7 @@ metadata. Reload Pi/reselect the model after installing it. No global model/sett
 
 ## Strata preparation and validation
 
-See [HOWTOTUNE.md](HOWTOTUNE.md) for the reusable Strata measurement/safety protocol and the SC117 `.44.1` trial results. Its `--pipeline-windows 2 --spec 3` decode candidate is evidence for this one host/model/runtime only; it does not change the baseline Hive/HostLLM profile or SC117's unqualified status.
+See [HOWTOTUNE.md](HOWTOTUNE.md) for the reusable Strata measurement/safety protocol and SC117 `.44.1` trial results. The measured `--pipeline-windows 2 --spec 3` settings are enabled for SC117 HostLLM [4]/Hive [15] only; they remain unqualified and do not affect other profiles.
 
 See [STRATA_IQ3S.md](STRATA_IQ3S.md) for the original profile's source/model pins, full-file checksums, installed paths and validation scope, and [STRATA_SC117_IQ3S.md](STRATA_SC117_IQ3S.md) for the isolated abliterated model pins and hard qualification gate.
 The preserved Strata 0.1.38 baseline is pinned to `99f3dbd0b21d1401b3769e0c0d963913607f380b`; the side-by-side

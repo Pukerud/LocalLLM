@@ -9,7 +9,7 @@ UNINSTALL="$ROOT/uninstall-hive-llm-miner.sh"
 SC117_HIVE="$ROOT/hive-llm-miner/profiles/iq3_s-sc117-abliterated"
 ORCA_HIVE="$ROOT/hive-llm-miner/profiles/orca-q4_k_s-v01441"
 HAUHAU_HIVE="$ROOT/hive-llm-miner/profiles/hauhau-q8-fastmtp-q4kv-xhigh"
-TRIAL_LINE='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
+TRIAL_LINE='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.'
 
 for script in "$MENU" "$HOST_MENU" "$INSTALL" "$UNINSTALL" \
     "$ORCA_HIVE/h-run.sh" \
@@ -21,12 +21,12 @@ done
 grep -Fq '[1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots' "$HOST_MENU"
 grep -Fq '[2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots' "$HOST_MENU"
 grep -Fq '[3] Orca Q4_K_S — Strata 0.1.44.1 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted' "$HOST_MENU"
-grep -Fq '[4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot | LAN 8080' "$HOST_MENU"
+grep -Fq '[4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot | LAN 8080' "$HOST_MENU"
 grep -Fq '[9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit' "$HOST_MENU"
 grep -Fq '[12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL' "$HOST_MENU"
 grep -Fq '[13] Set next Hive miner - Hauhau Q8_K_P' "$HOST_MENU"
 grep -Fq '[14] Set next Hive miner - Orca Q4_K_S .44.1' "$HOST_MENU"
-grep -Fq '[15] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot | LAN 8080' "$HOST_MENU"
+grep -Fq '[15] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot | LAN 8080' "$HOST_MENU"
 ! grep -Eq "^[[:space:]]*echo .*\\[(5|6|7|8|16|17)\\]" "$HOST_MENU"
 grep -Fq '3|4)' "$HOST_MENU"
 grep -Fq 'STRATA_SC117_IQ3S_TRIAL=1 STRATA_RUNTIME=0.1.44.1' "$HOST_MENU"

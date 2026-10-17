@@ -129,7 +129,7 @@ sc117_trial_readiness="$(runuser -u user -- env -i \
     "$LLM_ROOT/v1strata.sh" --check-ready --profile iq3_s-sc117-abliterated \
     --runtime 0.1.44.1 --parallel 1 --batch-groups 1)" || \
     fail 'SC117 unqualified .44.1 trial preflight failed; Hive configuration was not changed'
-sc117_trial_expected='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
+sc117_trial_expected='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.'
 sc117_trial_actual="$(grep '^TRIAL CONFIG:' <<< "$sc117_trial_readiness" || true)"
 [[ "$sc117_trial_actual" == "$sc117_trial_expected" && "$sc117_trial_readiness" != *'READY CONFIG:'* ]] || \
     fail 'SC117 .44.1 CPU-vision preflight is not the exact unqualified trial; Hive configuration was not changed'

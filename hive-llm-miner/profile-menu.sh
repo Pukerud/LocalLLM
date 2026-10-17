@@ -62,7 +62,7 @@ profile_label() {
         orca-q4_k_s-v01441) printf '%s' 'Orca Q4_K_S — Strata 0.1.44.1 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted' ;;
         swift15u-q8) printf '%s' 'Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots' ;;
         hauhau-q8-fastmtp-q4kv-xhigh) printf '%s' 'Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots' ;;
-        iq3_s-sc117-abliterated) printf '%s' 'SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot; unqualified trusted-LAN trial on 8080 (no auth)' ;;
+        iq3_s-sc117-abliterated) printf '%s' 'SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot; unqualified trusted-LAN trial on 8080 (no auth)' ;;
         *) return 1 ;;
     esac
 }
@@ -151,7 +151,7 @@ check_selected_profile_ready() {
                 "$LLM_ROOT/v1strata.sh" --check-ready --profile iq3_s-sc117-abliterated \
                 --runtime 0.1.44.1 --parallel 1 --batch-groups 1)" || \
                 fail 'SC117 .44.1 isolated trial readiness failed; profile unchanged'
-            expected_readiness='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
+            expected_readiness='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.'
             actual_readiness="$(grep '^TRIAL CONFIG:' <<< "$readiness" || true)"
             [[ "$actual_readiness" == "$expected_readiness" && "$readiness" != *'READY CONFIG:'* ]] || \
                 fail 'SC117 exact unqualified CPU-vision trial preflight is incomplete; profile unchanged'

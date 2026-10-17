@@ -56,7 +56,8 @@ class LauncherModule:
                 'iq3_s_sc117_abliterated_profile', PROFILE='iq3_s-sc117-abliterated',
                 RUNTIME_VERSION='0.1.39', TRIAL_RUNTIME_VERSION='0.1.44.1',
                 TRIAL_STATE_ROOT_NAME='sc117-iq3s-trial', TRIAL_BIND_HOST='0.0.0.0', TRIAL_PORT=8080,
-                TRIAL_ENV='STRATA_SC117_IQ3S_TRIAL',
+                TRIAL_ENV='STRATA_SC117_IQ3S_TRIAL', TRIAL_DEFAULT_SPEC='3',
+                TRIAL_DEFAULT_PIPELINE_WINDOWS='2',
                 TRIAL_OVERRIDE_ENV={'STRATA_SC117_IQ3S_TRIAL_PREFILL': 'prefill'},
                 TRIAL_EXPERIMENT_ENV={'STRATA_SC117_IQ3S_TRIAL_GPU_ORDER'},
                 settings_for_start=lambda **_: {}, authorize_start=lambda *_a, **_k: 'trial',
@@ -149,7 +150,7 @@ class SC117LauncherSecretTests(unittest.TestCase):
                 'PYTHONPYCACHEPREFIX': str(state / 'pycache'),
                 'PYTHONDONTWRITEBYTECODE': '1', 'SETUPTOOLS_USE_DISTUTILS': 'stdlib',
             }
-            cfg = {'vision': {'gpu': False}}
+            cfg = {'vision': {'gpu': False}, 'args': ['--spec', '3', '--pipeline-windows', '2']}
             with mock.patch.dict(os.environ, env, clear=True), \
                     mock.patch.object(LAUNCHER, 'data_root', return_value=Path('/data')), \
                     mock.patch.object(LAUNCHER, 'strata_state', return_value=state), \
@@ -161,6 +162,10 @@ class SC117LauncherSecretTests(unittest.TestCase):
             self.assertNotIn('READY CONFIG:', result)
             authorize.assert_called_once_with(Path('/data'), {'trial': True}, host='0.0.0.0', port=8080,
                                               state_root=state)
+            bad_cfg = {'vision': {'gpu': False}, 'args': ['--spec', '4', '--pipeline-windows', '2']}
+            with mock.patch.dict(os.environ, env, clear=True):
+                with self.assertRaisesRegex(SAFETY_ERROR, '--spec 3 and --pipeline-windows 2'):
+                    LAUNCHER.sc117_trial_readiness_line(profile.PROFILE, '0.1.44.1', 1, 1, bad_cfg)
 
             for key, value in (('STRATA_HOST', '127.0.0.1'), ('STRATA_PORT', '18080'),
                                ('STRATA_STATE_ROOT', str(home / '.local/state/locallm-strata')),

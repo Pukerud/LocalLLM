@@ -43,6 +43,8 @@ TRIAL_OVERRIDE_ENV = {
     'STRATA_SC117_IQ3S_TRIAL_CACHE_MIB': 'conversation_cache_mib',
     'STRATA_SC117_IQ3S_TRIAL_CACHE_SLOTS': 'conversation_cache_slots',
 }
+TRIAL_DEFAULT_SPEC = '3'
+TRIAL_DEFAULT_PIPELINE_WINDOWS = '2'
 TRIAL_EXPERIMENT_ENV = {
     'STRATA_SC117_IQ3S_TRIAL_PCIE_FRAC',
     'STRATA_SC117_IQ3S_TRIAL_POOL_WORKERS',
@@ -1381,17 +1383,15 @@ def _apply_v01441_trial_tunables(cfg):
     if supplied and os.environ.get(TRIAL_ENV) != '1':
         raise SafetyError('SC117 .44.1 tuning overrides require an explicit isolated trial')
     args = cfg['args']
-    spec = os.environ.get('STRATA_SC117_IQ3S_TRIAL_SPEC')
-    if spec is not None:
-        if not re.fullmatch(r'[2-6]', spec) or args.count('--spec') != 1:
-            raise SafetyError('SC117 trial --spec must be one integer from 2 through 6')
-        args[args.index('--spec') + 1] = spec
-    pipeline = os.environ.get('STRATA_SC117_IQ3S_TRIAL_PIPELINE_WINDOWS')
-    if pipeline is not None:
-        if pipeline not in ('0', '2') or '--pipeline-windows' in args or any(
-                item.startswith('--pipeline-windows=') for item in args):
-            raise SafetyError('SC117 trial --pipeline-windows must be 0 or 2; this engine supports at most 2')
-        args.extend(['--pipeline-windows', pipeline])
+    spec = os.environ.get('STRATA_SC117_IQ3S_TRIAL_SPEC', TRIAL_DEFAULT_SPEC)
+    if not re.fullmatch(r'[2-6]', spec) or args.count('--spec') != 1:
+        raise SafetyError('SC117 trial --spec must be one integer from 2 through 6')
+    args[args.index('--spec') + 1] = spec
+    pipeline = os.environ.get('STRATA_SC117_IQ3S_TRIAL_PIPELINE_WINDOWS', TRIAL_DEFAULT_PIPELINE_WINDOWS)
+    if pipeline not in ('0', '2') or '--pipeline-windows' in args or any(
+            item.startswith('--pipeline-windows=') for item in args):
+        raise SafetyError('SC117 trial --pipeline-windows must be 0 or 2; this engine supports at most 2')
+    args.extend(['--pipeline-windows', pipeline])
     pcie = os.environ.get('STRATA_SC117_IQ3S_TRIAL_PCIE_FRAC')
     if pcie is not None:
         if (not re.fullmatch(r'(?:0(?:[.][0-9]+)?|1(?:[.]0+)?)', pcie) or

@@ -5,7 +5,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 PROFILE_DIR="$ROOT/hive-llm-miner/profiles/iq3_s-sc117-abliterated"
 MENU="$ROOT/hive-llm-miner/profile-menu.sh"
 INSTALL="$ROOT/install-hive-llm-miner.sh"
-EXPECTED='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
+EXPECTED='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.'
 
 for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
     [[ -f "$PROFILE_DIR/$file" && ! -L "$PROFILE_DIR/$file" ]]

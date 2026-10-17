@@ -60,7 +60,7 @@ The decode fixture for each `i` used prefix `decode_probe_sc117_{i:02d}\n`, foll
 
 The exact **Pipeline 2 + Spec 3** candidate repeated at **178.4 tok/s** median-of-run-medians, about **19.5% above** the two-baseline median (149.2 tok/s). Its prefill median across the two runs was about 1,805 tok/s (roughly 1% below baseline), so this is a **decode-throughput** result, not a universal speedup. Pipeline 2 alone repeated around 168 tok/s (+12.6%), while Spec 3 alone was slower than baseline. The combined result demonstrates an interaction; the split override did not help Pipeline 2 in its isolated screen. Changing PCIe fraction or pool workers alone did not produce a convincing improvement. Trimming stage weights off reduced free VRAM and did not materially improve throughput; GPU reordering and the alternate split were also unhelpful in the single-variable screens.
 
-**Interpretation:** on this host/runtime/model and these short, single-request probes, `--pipeline-windows 2 --spec 3` is the best simple *trial candidate measured so far*. Keep the existing split, PCIe fraction, pool-worker count, trimming, context, cache, KV, vision, and serving-slot settings unchanged. Do not persist these overrides in HostLLM/Hive: normal menu startup continues to use baseline defaults and intentionally rejects experimental variables. These measurements are not SC117 qualification, do not change its unqualified status, and do not establish quality, full-context throughput, multi-user capacity, or a result transferable to another host/model/runtime.
+**Interpretation:** on this host/runtime/model and these short, single-request probes, `--pipeline-windows 2 --spec 3` is the best simple setting measured so far. It is now enabled as the SC117 default for HostLLM [4] and Hive [15] only. Keep the existing split, PCIe fraction, pool-worker count, trimming, context, cache, KV, vision, and serving-slot settings unchanged. Other trial override variables remain rejected by normal menu preflight. These measurements are not SC117 qualification, do not change its unqualified status, and do not establish quality, full-context throughput, multi-user capacity, or a result transferable to another host/model/runtime.
 
 After all trial arms, the restored default Hive profile was loaded and passed a separate `2 + 2 → 4` request; the response, timing, and final loaded status are recorded in the main report. This smoke check verifies recovery/availability, not general answer quality.
 
@@ -72,7 +72,7 @@ Raw machine-readable evidence:
 
 ## Reusing the SC117 trial knobs safely
 
-The variables below are explicit, bounded **trial-only** controls implemented by `iq3_s_sc117_abliterated_profile.py`; they are not normal Hive or HostLLM settings. The normal menu preflight rejects these experimental environment variables. A new comparison must use a reviewed maintenance controller as described above, not a hand-edited Hive profile or a direct unaudited launcher command.
+The variables below are explicit, bounded **trial-only** controls implemented by `iq3_s_sc117_abliterated_profile.py`; they are not generic production settings. `--pipeline-windows 2` and `--spec 3` are fixed defaults only for the SC117 HostLLM [4]/Hive [15] trial route. Normal menu preflight still rejects arbitrary experimental environment overrides. A new comparison must use a reviewed maintenance controller as described above, not a hand-edited Hive profile or a direct unaudited launcher command.
 
 | Variable | Purpose | Tested / accepted example |
 |---|---|---|

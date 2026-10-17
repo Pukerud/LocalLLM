@@ -276,14 +276,14 @@ if (( available_mib < 12288 )); then
 fi
 abort_if_stopping
 
-say 'checking unqualified SC117 IQ3_S trusted-LAN trial (native context 262144, CPU vision, MTP=4, one slot, Strata 0.1.44.1, unauthenticated port 8080)'
+say 'checking unqualified SC117 IQ3_S trusted-LAN trial (native context 262144, --spec 3, pipeline-windows 2, CPU vision, one slot, Strata 0.1.44.1, unauthenticated port 8080)'
 readiness="$(run_strata_user "$STRATA_LAUNCHER" --check-ready --profile "$PROFILE" \
         --runtime "$RUNTIME" --parallel 1 --batch-groups 1)" || {
     say 'SC117 trial preflight failed; no existing service was stopped'
     request_hive_stop
     exit 1
 }
-expected_readiness='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
+expected_readiness='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.'
 actual_readiness="$(grep '^TRIAL CONFIG:' <<< "$readiness" || true)"
 if [[ "$actual_readiness" != "$expected_readiness" || "$readiness" == *'READY CONFIG:'* ]]; then
     say 'SC117 isolated trial preflight line is missing or mismatched; refusing start'
