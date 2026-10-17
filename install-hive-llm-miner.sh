@@ -58,7 +58,11 @@ sc117_profile_for_runtime() {
 # GPU/Docker workload. Recheck after readiness immediately before installation.
 assert_idle() {
     local listeners containers gpu_apps port lease_path
-    [[ ! -e /run/hive/MINER_RUN ]] || fail 'Hive reports a miner running; refusing package update'
+    # Hive can leave MINER_RUN behind for its registered custom-miner slot while
+    # idle. Treat it as a hint and fail closed on the workload checks below.
+    if [[ -e /run/hive/MINER_RUN ]]; then
+        echo 'Hive MINER_RUN marker is present; verifying actual workloads before package update.'
+    fi
     command -v pgrep >/dev/null 2>&1 || fail 'cannot inspect LLM launcher processes; refusing package update'
     if pgrep -f 'strata_launcher[.]py|serve[.]server|llama_cpp[.]server|v1qwen38[.]sh|llama-server|/engine/strata[[:space:]]|/strata-vision[[:space:]]|/hive/miners/custom/llm-hosting/h-run[.]sh' >/dev/null 2>&1; then
         fail 'an LLM launcher/server process is present; refusing package update'

@@ -55,6 +55,8 @@ grep -Fq 'mv -Tf -- "$temporary" "$link_path"' "$MENU"
 grep -Fq 'legacy install starts with regular Hive files' "$MENU"
 grep -Fq 'secure_root_dir' "$MENU"
 grep -Fq 'assert_idle' "$MENU"
+grep -Fq 'Hive MINER_RUN marker is present; verifying actual workloads before package update.' "$INSTALL"
+! grep -Fq 'Hive reports a miner running; refusing package update' "$INSTALL"
 grep -Fq 'assert_secure_layout' "$MENU"
 # The pinned SC117 screen monitor mentions engine paths in its shell text, but is not itself an engine.
 idle_process_pattern='strata_launcher[.]py|serve[.]server|llama_cpp[.]server|v1qwen38[.]sh|llama-server|/engine/strata[[:space:]]|/strata-vision[[:space:]]|/hive/miners/custom/llm-hosting/h-run[.]sh'
