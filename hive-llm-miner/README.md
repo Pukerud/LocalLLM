@@ -20,8 +20,16 @@ sudo /hive/miners/custom/llm-hosting/profile-menu.sh
 The selector changes only the `current` symlink; it never starts or stops Hive,
 Strata, Docker, or `osn.service`. It checks both API ports (8080 and 18080),
 processes, Docker, GPU compute, and the HostLLM lease before changing the next
-profile. HostLLM's [12]–[15] actions compare the selected installed profile/menu
-with this checkout and run the guarded installer first if either is stale. Orca
+profile. HostLLM's [12]–[15] actions are a higher-level safe switch: they pause
+OctaSpace before stopping an identity/ancestry-verified Hive LLM, hold it stopped
+through readiness and any guarded package refresh, select the target, and restore
+the previous miner/OctaSpace running state. **Do not run `miner stop` first**: its
+stop marker is temporary and OctaSpace can immediately restart the old model.
+Selecting an already-current, unchanged profile is a fast no-op without reloading.
+Manual hosting sessions, rentals, and unrelated GPU work are never stopped.
+An interrupted/blocked restoration retains `~user/.local/state/hostllm/hive-profile-switch.json`;
+run `sudo python3 /home/user/LocalLLM/hive_profile_switch.py --recover` after the
+conflicting workload is safely gone. Orca
 `.44.1` is the standard Strata default. `.39` is rollback-only, and `.41`
 rollback profiles remain available by explicit profile name rather than visible menu rows.
 

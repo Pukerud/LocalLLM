@@ -49,6 +49,15 @@ hive_profile_package_is_current() {
     done
 }
 set_next_hive_profile() {
+    local profile="$1" helper="$SCRIPT_DIR/hive_profile_switch.py"
+    if [[ ! -f "$helper" || -L "$helper" ]]; then
+        echo 'Hive profile-switch helper is missing or unsafe; no miner was stopped.' >&2
+        return 1
+    fi
+    run_as_root /usr/bin/python3 "$helper" --profile "$profile"
+}
+
+apply_next_hive_profile() {
     local profile="$1"
     if [[ ! -x "$HIVE_PROFILE_MENU" ]]; then
         echo 'Hive profile menu is not installed. Install the Hive custom miner package first.'
@@ -541,7 +550,8 @@ main() {
         echo '  [13] Set next Hive miner - Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
         echo '  [14] Set next Hive miner - Orca Q4_K_S .44.1 (auto prefill, trimmed split; windows-2 override omitted)'
         echo '  [15] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot | LAN 8080'
-        echo '  Hive profile changes are idle-only; they never start/stop a miner or osn.service.'
+        echo '  Hive selections safely pause OctaSpace, switch the owned Hive LLM, then restore its running state.'
+        echo '  No manual miner stop is needed; rentals and manual hosting sessions are never stopped.'
         read -r -p '  Select: ' choice || return 0
         choice="${choice//[[:space:]]/}"
         case "$choice" in
@@ -596,6 +606,15 @@ main() {
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     trap 'release_menu_lease_on_exit || true' EXIT
+    if [[ "${1:-}" == --apply-hive-profile ]]; then
+        [[ "$EUID" -eq 0 && "$#" -eq 2 ]] || { echo '--apply-hive-profile requires root and one profile' >&2; exit 2; }
+        case "$2" in
+            swift15u-q8|hauhau-q8-fastmtp-q4kv-xhigh|orca-q4_k_s-v01441|iq3_s-sc117-abliterated|orca-q4_k_s|orca-q4_k_s-v0141|orca-q4_k_s-v0141-2slot) ;;
+            *) echo 'Unknown Hive profile; no files changed.' >&2; exit 2 ;;
+        esac
+        apply_next_hive_profile "$2"
+        exit "$?"
+    fi
     if [[ "${1:-}" == --run-strata ]]; then
         shift
         run_selected v1strata.sh "$@"

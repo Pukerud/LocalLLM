@@ -236,8 +236,8 @@ grep -qx 'v1strata.sh --quickstart --profile iq3_s-sc117-abliterated --runtime 0
 grep -qx 'unset|0.0.0.0|unset' "$trace.env"
 grep -qx '1|0.0.0.0|8080' "$trace.env"
 [[ "$(wc -l < "$trace")" -eq 4 ]]
-# Hive selections 14/15 refresh stale installed profiles, map to exact targets, and
-# invoke privileged commands directly as root or through sudo as an operator.
+# Exercise the inner package/pointer stage with inert installed files. The
+# transaction's owned-stop/OctaSpace ordering has dedicated Python tests.
 hive_menu_trace="$scratch/hive-menu.trace"
 hive_sudo_trace="$scratch/hive-sudo.trace"
 hive_install_trace="$scratch/hive-install.trace"
@@ -276,6 +276,7 @@ done
   HIVE_PROFILE_ROOT="$hive_pkg_root/profiles" HIVE_PROFILE_INSTALLER="$hive_fake_bin/install-hive-package"
   PATH="$hive_fake_bin:$PATH"
   export HIVE_PROFILE_SOURCE HIVE_PROFILE_MENU HIVE_PROFILE_ROOT HIVE_PROFILE_INSTALLER PATH
+  set_next_hive_profile() { apply_next_hive_profile "$@"; }
   detect_engine() { echo none; }
   show_workload_status() { :; }
   host_gpu_summary() { :; }

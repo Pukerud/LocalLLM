@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-17",
+  "host": "OctaSpace-WorkerFifteen",
+  "scope": "Bounded live automatic Hive profile switching and LAN chat checks, not general model qualification.",
+  "steps": [
+    {
+      "from": "running Orca Hive miner",
+      "menu_option": 15,
+      "to": "iq3_s-sc117-abliterated",
+      "manual_miner_stop_used": false,
+      "octaspace_paused_before_stop": true,
+      "old_miner_held_stopped_during_readiness": true,
+      "selected_miner_restarted_automatically": true,
+      "octaspace_restored": true,
+      "lan_ui_http_status": 200,
+      "loaded_before_first_chat": true,
+      "gpu_used_mib": [18502, 15578, 18228, 20058],
+      "prompt": "What is 2 + 2? Reply with only the number.",
+      "reply": "4",
+      "chat_elapsed_s": 0.228
+    },
+    {
+      "action": "Select the already-current SC117 profile again",
+      "elapsed_s": 0.123,
+      "same_server_process_identity": true,
+      "stop_or_reload": false
+    },
+    {
+      "from": "running SC117 Hive miner",
+      "menu_option": 14,
+      "to": "orca-q4_k_s-v01441",
+      "manual_miner_stop_used": false,
+      "octaspace_paused_before_stop": true,
+      "old_miner_held_stopped_during_readiness": true,
+      "selected_miner_restarted_automatically": true,
+      "octaspace_restored": true,
+      "recovery_journal_cleared": true,
+      "lan_ui_http_status": 200,
+      "loaded_before_first_chat": true,
+      "gpu_used_mib": [22656, 19946, 19308, 20868],
+      "prompt": "What is 2 + 2? Reply with only the number.",
+      "reply": "4",
+      "chat_elapsed_s": 0.240
+    }
+  ],
+  "notes": [
+    "The real first attempt exposed that pausing OctaSpace can itself stop Hive before miner stop runs. The controller now rechecks and accepts a raced stop only after verified idle; both cases have regression tests.",
+    "Switch commands were sent through the actual root HostLLM menu, with no ad-hoc service pause between the two successful switch tests.",
+    "An existing unchanged profile skips asset readiness and does not stop the running model.",
+    "Logs: /tmp/localllm-hive-switch-20261017. Full LAN responses and GPU/status captures: /tmp/localllm-eager-lan-20261017/switch14-* and switch15-*.",
+    "Final state: Orca Hive miner selected/running, OctaSpace active, switch journal removed."
+  ]
+}

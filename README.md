@@ -21,7 +21,7 @@ Local HostLLM menu definition for `.69` (4× RTX 3090, 128 GB RAM). The standard
 cd /home/user/LocalLLM
 ./HostLLM.sh
 # Select 1–4. [3] starts the Orca .44.1 candidate; [4] starts only the isolated SC117 .44.1 CPU-vision trial.
-# Hive actions [12]–[15] set the next profile and never start a miner or alter Hive markers.
+# Hive actions [12]–[15] safely switch an owned Hive LLM; no manual miner stop is needed.
 # No manual miner stop is needed when no live Qwen listener is present and readiness passes.
 ```
 
@@ -171,7 +171,7 @@ Archived comparison profiles remain explicit CLI-only and can re-download remove
 off, not normal native-context performance. Legacy `v1llama_cpp.sh`/`v1glm53.sh` are not shared-host menu choices;
 their old stop/benchmark paths are not covered by the maintained identity-bound guards.
 
-The optional [Hive custom LLM miner](hive-llm-miner/README.md) is separate from the HostLLM engine picker. HostLLM actions [12]–[15] select Swift, Hauhau, Orca `.44.1`, and the isolated SC117 `.44.1` CPU-vision trial. Orca `.44.1` is the standard Hive Strata selection; `.39` and `.41` are rollback-only. If the old SC117 `.39` or generic `.39` pointer exists, installation migrates it to standard `.44.1` before replacing the SC117 profile directory. SC117 remains unqualified and uses trusted-LAN `0.0.0.0:8080` without authentication, with dedicated state; it shares port 8080 exclusively with Orca. The root-only profile menu changes one atomic pointer after idle/readiness checks; it refuses while the API, Docker/GPU work, an LLM process, or a HostLLM lease is active and never starts/stops miners or services. HostLLM refreshes the Hive package through the guarded installer first when the selected profile/menu differs from this checkout. Do not run it during a rental.
+The optional [Hive custom LLM miner](hive-llm-miner/README.md) is separate from the HostLLM engine picker. HostLLM actions [12]–[15] select Swift, Hauhau, Orca `.44.1`, and the isolated SC117 `.44.1` CPU-vision trial. Orca `.44.1` is the standard Hive Strata selection; `.39` and `.41` are rollback-only. If the old SC117 `.39` or generic `.39` pointer exists, installation migrates it to standard `.44.1` before replacing the SC117 profile directory. SC117 remains unqualified and uses trusted-LAN `0.0.0.0:8080` without authentication, with dedicated state; it shares port 8080 exclusively with Orca. The low-level root-only profile menu changes one atomic pointer after idle/readiness checks and never manages services itself. HostLLM wraps [12]–[15] in a serialized switch: verify that all LLM/GPU processes belong to the installed Hive wrapper, pause OctaSpace before stopping Hive, hold `MINER_STOP` during readiness/package refresh, change the pointer, then restore the prior miner/OctaSpace running state. A current unchanged profile returns immediately without stopping or reloading. Rentals, unrelated GPU jobs, and manual HostLLM sessions are refused before any stop. A private `hive-profile-switch.json` recovery journal is retained if safe restoration cannot complete; recover with `sudo python3 hive_profile_switch.py --recover`. Do not run a switch during a rental.
 
 ## Checks and references
 
