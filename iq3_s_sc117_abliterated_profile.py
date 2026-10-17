@@ -48,6 +48,8 @@ TRIAL_EXPERIMENT_ENV = {
     'STRATA_SC117_IQ3S_TRIAL_POOL_WORKERS',
     'STRATA_SC117_IQ3S_TRIAL_TRIM_STAGE_WEIGHTS',
     'STRATA_SC117_IQ3S_TRIAL_GPU_ORDER',
+    'STRATA_SC117_IQ3S_TRIAL_PIPELINE_WINDOWS',
+    'STRATA_SC117_IQ3S_TRIAL_SPEC',
 }
 TRIAL_ENV_PREFIX = 'STRATA_SC117_IQ3S_TRIAL_'
 DEFAULT_SETTINGS = {
@@ -1344,6 +1346,27 @@ def build_v01441_trial_config(root, candidate_config):
         if args.count(flag) != 1:
             raise SafetyError(f'SC117 .44.1 candidate must contain exactly one {flag}')
         args[args.index(flag) + 1] = str(destination)
+    settings = settings_for_start(allow_trial_env=True)
+    if 'STRATA_SC117_IQ3S_TRIAL_PREFILL' in os.environ:
+        _flag_value(args, '--prefill')
+        args[args.index('--prefill') + 1] = settings['prefill']
+    if 'STRATA_SC117_IQ3S_TRIAL_SPLIT' in os.environ:
+        cfg['layer_split'] = settings['layer_split']
+    if ('STRATA_SC117_IQ3S_TRIAL_CACHE_MIB' in os.environ or
+            'STRATA_SC117_IQ3S_TRIAL_CACHE_SLOTS' in os.environ):
+        cache_mib = settings['conversation_cache_mib']
+        cache_slots = settings['conversation_cache_slots']
+        for flag in ('--conversation-cache-mib', '--conversation-cache-slots'):
+            if args.count(flag) != 1:
+                raise SafetyError(f'SC117 candidate must contain exactly one {flag}')
+        cache_index = args.index('--conversation-cache-mib')
+        slots_index = args.index('--conversation-cache-slots')
+        if cache_mib == 0:
+            for index in sorted((cache_index, slots_index), reverse=True):
+                del args[index:index + 2]
+        else:
+            args[cache_index + 1] = str(cache_mib)
+            args[slots_index + 1] = str(cache_slots)
     cfg['tokenizer'] = str(assets.pack_root(root) / 'tokenizer')
     cfg['model_name'] = MODEL_ID
     cfg['aliases'] = ['qwen38-iq3s-sc117-abliterated', PROFILE]
@@ -1358,6 +1381,17 @@ def _apply_v01441_trial_tunables(cfg):
     if supplied and os.environ.get(TRIAL_ENV) != '1':
         raise SafetyError('SC117 .44.1 tuning overrides require an explicit isolated trial')
     args = cfg['args']
+    spec = os.environ.get('STRATA_SC117_IQ3S_TRIAL_SPEC')
+    if spec is not None:
+        if not re.fullmatch(r'[2-6]', spec) or args.count('--spec') != 1:
+            raise SafetyError('SC117 trial --spec must be one integer from 2 through 6')
+        args[args.index('--spec') + 1] = spec
+    pipeline = os.environ.get('STRATA_SC117_IQ3S_TRIAL_PIPELINE_WINDOWS')
+    if pipeline is not None:
+        if pipeline not in ('0', '2') or '--pipeline-windows' in args or any(
+                item.startswith('--pipeline-windows=') for item in args):
+            raise SafetyError('SC117 trial --pipeline-windows must be 0 or 2; this engine supports at most 2')
+        args.extend(['--pipeline-windows', pipeline])
     pcie = os.environ.get('STRATA_SC117_IQ3S_TRIAL_PCIE_FRAC')
     if pcie is not None:
         if (not re.fullmatch(r'(?:0(?:[.][0-9]+)?|1(?:[.]0+)?)', pcie) or

@@ -128,6 +128,8 @@ metadata. Reload Pi/reselect the model after installing it. No global model/sett
 
 ## Strata preparation and validation
 
+See [HOWTOTUNE.md](HOWTOTUNE.md) for the reusable Strata measurement/safety protocol and the SC117 `.44.1` trial results. Its `--pipeline-windows 2 --spec 3` decode candidate is evidence for this one host/model/runtime only; it does not change the baseline Hive/HostLLM profile or SC117's unqualified status.
+
 See [STRATA_IQ3S.md](STRATA_IQ3S.md) for the original profile's source/model pins, full-file checksums, installed paths and validation scope, and [STRATA_SC117_IQ3S.md](STRATA_SC117_IQ3S.md) for the isolated abliterated model pins and hard qualification gate.
 The preserved Strata 0.1.38 baseline is pinned to `99f3dbd0b21d1401b3769e0c0d963913607f380b`; the side-by-side
 0.1.39 runtime is pinned to `6f32ec070f23ced9f50e704d854d775da52591ab` (see [upgrade/benchmark report](STRATA_V0139.md)).

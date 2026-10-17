@@ -155,6 +155,12 @@ class SC117ProfileTests(unittest.TestCase):
             'STRATA_SC117_IQ3S_TRIAL_PCIE_FRAC': '0.2',
             'STRATA_SC117_IQ3S_TRIAL_POOL_WORKERS': '6',
             'STRATA_SC117_IQ3S_TRIAL_GPU_ORDER': '0,2,3,1',
+            'STRATA_SC117_IQ3S_TRIAL_PREFILL': '4096',
+            'STRATA_SC117_IQ3S_TRIAL_SPLIT': '12,24,36',
+            'STRATA_SC117_IQ3S_TRIAL_CACHE_MIB': '4096',
+            'STRATA_SC117_IQ3S_TRIAL_CACHE_SLOTS': '2',
+            'STRATA_SC117_IQ3S_TRIAL_PIPELINE_WINDOWS': '2',
+            'STRATA_SC117_IQ3S_TRIAL_SPEC': '3',
         }
         with patch.dict(os.environ, trial_env, clear=True), \
                 patch.dict(sys.modules, {'orca_q4ks_v01441_assets': q4_assets}):
@@ -162,11 +168,26 @@ class SC117ProfileTests(unittest.TestCase):
         tuned_args = tuned['args']
         self.assertEqual(tuned_args[tuned_args.index('--pcie-frac') + 1], '0.2')
         self.assertEqual(tuned_args[tuned_args.index('--pool-workers') + 1], '6')
+        self.assertEqual(tuned_args[tuned_args.index('--spec') + 1], '3')
+        self.assertEqual(tuned_args[tuned_args.index('--pipeline-windows') + 1], '2')
+        self.assertEqual(tuned_args[tuned_args.index('--prefill') + 1], '4096')
+        self.assertEqual(tuned_args[tuned_args.index('--conversation-cache-mib') + 1], '4096')
+        self.assertEqual(tuned_args[tuned_args.index('--conversation-cache-slots') + 1], '2')
+        self.assertEqual(tuned['layer_split'], '12,24,36')
         self.assertEqual(tuned['gpu'], [0, 2, 3, 1])
         candidate['args'].extend(['--pipeline-windows', '2'])
         with patch.dict(sys.modules, {'orca_q4ks_v01441_assets': q4_assets}):
             with self.assertRaisesRegex(SafetyError, 'pipeline-windows'):
                 profile.build_v01441_trial_config(self.root, candidate)
+        invalid_candidate = copy.deepcopy(candidate)
+        invalid_candidate['args'] = invalid_candidate['args'][:-2]
+        for name, value, expected in (
+                ('STRATA_SC117_IQ3S_TRIAL_PIPELINE_WINDOWS', '6', '0 or 2'),
+                ('STRATA_SC117_IQ3S_TRIAL_SPEC', '7', '2 through 6')):
+            with patch.dict(os.environ, {'STRATA_SC117_IQ3S_TRIAL': '1', name: value}, clear=True), \
+                    patch.dict(sys.modules, {'orca_q4ks_v01441_assets': q4_assets}):
+                with self.assertRaisesRegex(SafetyError, expected):
+                    profile.build_v01441_trial_config(self.root, invalid_candidate)
 
     def test_default_settings_are_strict_and_trial_overrides_are_explicit(self):
         self.assertEqual(profile.PROFILE, 'iq3_s-sc117-abliterated')
@@ -493,8 +514,19 @@ class SC117ProfileTests(unittest.TestCase):
             self.assertFalse(passed)
             self.assertIn('trusted runner unavailable', message)
 
+            original_stable_read = profile._stable_file_read
+
+            def read_report_as_root(file_path, *args, **kwargs):
+                result = original_stable_read(file_path, *args, **kwargs)
+                if Path(file_path) == path:
+                    metadata = list(result[2])
+                    metadata[5] = 0  # Simulate the root-owned attestation in this unprivileged fixture.
+                    return result[0], result[1], tuple(metadata)
+                return result
+
             with patch.object(profile, 'trusted_qualification_runner_sha256', return_value='r' * 64), \
-                    patch.object(profile, 'trusted_qualification_pin_policy_sha256', return_value='p' * 64):
+                    patch.object(profile, 'trusted_qualification_pin_policy_sha256', return_value='p' * 64), \
+                    patch.object(profile, '_stable_file_read', side_effect=read_report_as_root):
                 passed, message = profile.qualification_status(self.root, profile.DEFAULT_SETTINGS)
                 self.assertTrue(passed, message)
                 report = json.loads(path.read_text())

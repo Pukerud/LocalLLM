@@ -1,0 +1,1548 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-17",
+  "host": "OctaSpace-WorkerFifteen",
+  "scope": "Unqualified SC117 IQ3_S Strata 0.1.44.1 controlled single-user trial tuning; not model qualification.",
+  "model": "qwen3.8-flash-next-sc117-abliterated-iq3_s",
+  "runtime": "0.1.44.1",
+  "gpu": [],
+  "arms": [
+    {
+      "name": "pipeline2-spec3-confirm-B",
+      "overrides": {
+        "STRATA_SC117_IQ3S_TRIAL_PIPELINE_WINDOWS": "2",
+        "STRATA_SC117_IQ3S_TRIAL_SPEC": "3"
+      },
+      "status": "passed",
+      "started_epoch": 1792213206.4304202,
+      "requests": [
+        {
+          "name": "prefill_00",
+          "prompt_sha256": "d262d36d0b3607d2b8956fa8d7fd443d1988b986d16129850adbf67877cc9b07",
+          "elapsed_s": 3.2575,
+          "ttft_s": 3.1717,
+          "usage": {
+            "prompt_tokens": 5299,
+            "completion_tokens": 16,
+            "total_tokens": 5315,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 5299,
+            "prompt_ms": 3151.5,
+            "prompt_per_token_ms": 0.595,
+            "prompt_per_second": 1681.4,
+            "predicted_n": 16,
+            "predicted_ms": 97.7,
+            "predicted_per_token_ms": 6.106,
+            "predicted_per_second": 163.8,
+            "draft_n": 12,
+            "draft_n_accepted": 10
+          },
+          "finish_reason": "length",
+          "answer_chars": 0,
+          "reasoning_chars": 67,
+          "sse_events": 18,
+          "fixture_id": "prefill_00"
+        },
+        {
+          "name": "prefill_01",
+          "prompt_sha256": "6b1de6413b7a447a418b7a847c69e20099960fd95d395179d9e14f2d0f554d59",
+          "elapsed_s": 3.0318,
+          "ttft_s": 2.9633,
+          "usage": {
+            "prompt_tokens": 5299,
+            "completion_tokens": 16,
+            "total_tokens": 5315,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 5299,
+            "prompt_ms": 2944.9,
+            "prompt_per_token_ms": 0.556,
+            "prompt_per_second": 1799.4,
+            "predicted_n": 16,
+            "predicted_ms": 80.4,
+            "predicted_per_token_ms": 5.025,
+            "predicted_per_second": 199.0,
+            "draft_n": 10,
+            "draft_n_accepted": 10
+          },
+          "finish_reason": "length",
+          "answer_chars": 0,
+          "reasoning_chars": 71,
+          "sse_events": 18,
+          "fixture_id": "prefill_01"
+        },
+        {
+          "name": "prefill_02",
+          "prompt_sha256": "b1a29b0c90503fb19892dba12a35ce3c29b01b02a4474627262cb461f087cc21",
+          "elapsed_s": 3.0385,
+          "ttft_s": 2.9526,
+          "usage": {
+            "prompt_tokens": 5299,
+            "completion_tokens": 16,
+            "total_tokens": 5315,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 5299,
+            "prompt_ms": 2933.8,
+            "prompt_per_token_ms": 0.554,
+            "prompt_per_second": 1806.2,
+            "predicted_n": 16,
+            "predicted_ms": 97.9,
+            "predicted_per_token_ms": 6.119,
+            "predicted_per_second": 163.4,
+            "draft_n": 12,
+            "draft_n_accepted": 10
+          },
+          "finish_reason": "length",
+          "answer_chars": 0,
+          "reasoning_chars": 68,
+          "sse_events": 18,
+          "fixture_id": "prefill_02"
+        },
+        {
+          "name": "decode_00",
+          "prompt_sha256": "1ff2a5838ed5a2152bb20d6d2d626b93ab485a5de01e95a5b5ad40d6a6b95347",
+          "elapsed_s": 2.6982,
+          "ttft_s": 0.458,
+          "usage": {
+            "prompt_tokens": 135,
+            "completion_tokens": 384,
+            "total_tokens": 519,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 135,
+            "prompt_ms": 442.7,
+            "prompt_per_token_ms": 3.279,
+            "prompt_per_second": 304.9,
+            "predicted_n": 384,
+            "predicted_ms": 2251.4,
+            "predicted_per_token_ms": 5.863,
+            "predicted_per_second": 170.6,
+            "draft_n": 327,
+            "draft_n_accepted": 225
+          },
+          "finish_reason": "length",
+          "answer_chars": 0,
+          "reasoning_chars": 1022,
+          "sse_events": 386,
+          "fixture_id": "decode_00"
+        },
+        {
+          "name": "decode_01",
+          "prompt_sha256": "8d3017ef10e6da47b70aeff7649ad7af09358072851dbf4226f5441379f36065",
+          "elapsed_s": 2.5798,
+          "ttft_s": 0.4326,
+          "usage": {
+            "prompt_tokens": 135,
+            "completion_tokens": 384,
+            "total_tokens": 519,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 135,
+            "prompt_ms": 417.2,
+            "prompt_per_token_ms": 3.09,
+            "prompt_per_second": 323.6,
+            "predicted_n": 384,
+            "predicted_ms": 2158.5,
+            "predicted_per_token_ms": 5.621,
+            "predicted_per_second": 177.9,
+            "draft_n": 328,
+            "draft_n_accepted": 230
+          },
+          "finish_reason": "length",
+          "answer_chars": 0,
+          "reasoning_chars": 959,
+          "sse_events": 384,
+          "fixture_id": "decode_01"
+        },
+        {
+          "name": "decode_02",
+          "prompt_sha256": "43b80fcb3f499193ba314f28614a2642f9109ee288b0e8f25d16cc3bc4f98f9a",
+          "elapsed_s": 2.4571,
+          "ttft_s": 0.4135,
+          "usage": {
+            "prompt_tokens": 135,
+            "completion_tokens": 384,
+            "total_tokens": 519,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 135,
+            "prompt_ms": 398.3,
+            "prompt_per_token_ms": 2.95,
+            "prompt_per_second": 338.9,
+            "predicted_n": 384,
+            "predicted_ms": 2055.2,
+            "predicted_per_token_ms": 5.352,
+            "predicted_per_second": 186.8,
+            "draft_n": 318,
+            "draft_n_accepted": 234
+          },
+          "finish_reason": "length",
+          "answer_chars": 0,
+          "reasoning_chars": 1000,
+          "sse_events": 385,
+          "fixture_id": "decode_02"
+        }
+      ],
+      "telemetry": [
+        {
+          "at_monotonic": 1414124.364854209,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 20,
+              "sm_clock_mhz": 1860,
+              "temperature_c": 58,
+              "power_w": 148.51,
+              "memory_used_mib": 18680
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 8,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 56,
+              "power_w": 115.09,
+              "memory_used_mib": 15728
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 54,
+              "power_w": 122.26,
+              "memory_used_mib": 18394
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 56,
+              "power_w": 114.18,
+              "memory_used_mib": 20176
+            }
+          ],
+          "mem_available_kib": 65412828
+        },
+        {
+          "at_monotonic": 1414125.421405023,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 100,
+              "sm_clock_mhz": 1950,
+              "temperature_c": 67,
+              "power_w": 232.18,
+              "memory_used_mib": 18718
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 56,
+              "power_w": 113.51,
+              "memory_used_mib": 15762
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 54,
+              "power_w": 123.95,
+              "memory_used_mib": 18428
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 56,
+              "power_w": 123.25,
+              "memory_used_mib": 20210
+            }
+          ],
+          "mem_available_kib": 65234732
+        },
+        {
+          "at_monotonic": 1414126.478307385,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1995,
+              "temperature_c": 60,
+              "power_w": 183.93,
+              "memory_used_mib": 18718
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1935,
+              "temperature_c": 60,
+              "power_w": 198.96,
+              "memory_used_mib": 15772
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 100,
+              "sm_clock_mhz": 1650,
+              "temperature_c": 62,
+              "power_w": 177.37,
+              "memory_used_mib": 18438
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 56,
+              "power_w": 113.67,
+              "memory_used_mib": 20210
+            }
+          ],
+          "mem_available_kib": 65220360
+        },
+        {
+          "at_monotonic": 1414127.533536883,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1860,
+              "temperature_c": 60,
+              "power_w": 171.29,
+              "memory_used_mib": 18718
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1935,
+              "temperature_c": 59,
+              "power_w": 152.81,
+              "memory_used_mib": 15772
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1950,
+              "temperature_c": 58,
+              "power_w": 190.02,
+              "memory_used_mib": 18438
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 100,
+              "sm_clock_mhz": 1920,
+              "temperature_c": 70,
+              "power_w": 181.85,
+              "memory_used_mib": 20222
+            }
+          ],
+          "mem_available_kib": 65069392
+        },
+        {
+          "at_monotonic": 1414128.601152628,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 100,
+              "sm_clock_mhz": 1980,
+              "temperature_c": 67,
+              "power_w": 200.31,
+              "memory_used_mib": 18724
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 57,
+              "power_w": 132.8,
+              "memory_used_mib": 15772
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 57,
+              "power_w": 158.67,
+              "memory_used_mib": 18438
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1935,
+              "temperature_c": 61,
+              "power_w": 178.79,
+              "memory_used_mib": 20222
+            }
+          ],
+          "mem_available_kib": 64754940
+        },
+        {
+          "at_monotonic": 1414129.655899836,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1995,
+              "temperature_c": 60,
+              "power_w": 191.46,
+              "memory_used_mib": 18724
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1935,
+              "temperature_c": 61,
+              "power_w": 197.95,
+              "memory_used_mib": 15772
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 99,
+              "sm_clock_mhz": 1680,
+              "temperature_c": 62,
+              "power_w": 173.93,
+              "memory_used_mib": 18438
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1935,
+              "temperature_c": 60,
+              "power_w": 147.59,
+              "memory_used_mib": 20222
+            }
+          ],
+          "mem_available_kib": 64741348
+        },
+        {
+          "at_monotonic": 1414130.710200376,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1860,
+              "temperature_c": 60,
+              "power_w": 179.25,
+              "memory_used_mib": 18724
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1935,
+              "temperature_c": 60,
+              "power_w": 148.38,
+              "memory_used_mib": 15772
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1950,
+              "temperature_c": 58,
+              "power_w": 198.23,
+              "memory_used_mib": 18438
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 100,
+              "sm_clock_mhz": 1920,
+              "temperature_c": 70,
+              "power_w": 185.12,
+              "memory_used_mib": 20222
+            }
+          ],
+          "mem_available_kib": 64464212
+        },
+        {
+          "at_monotonic": 1414131.767219749,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 100,
+              "sm_clock_mhz": 1980,
+              "temperature_c": 66,
+              "power_w": 199.28,
+              "memory_used_mib": 18724
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1665,
+              "temperature_c": 58,
+              "power_w": 136.01,
+              "memory_used_mib": 15772
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 57,
+              "power_w": 156.99,
+              "memory_used_mib": 18438
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1935,
+              "temperature_c": 62,
+              "power_w": 186.14,
+              "memory_used_mib": 20222
+            }
+          ],
+          "mem_available_kib": 64467928
+        },
+        {
+          "at_monotonic": 1414132.822896836,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1995,
+              "temperature_c": 60,
+              "power_w": 169.48,
+              "memory_used_mib": 18724
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1935,
+              "temperature_c": 62,
+              "power_w": 197.17,
+              "memory_used_mib": 15772
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 100,
+              "sm_clock_mhz": 1935,
+              "temperature_c": 61,
+              "power_w": 170.69,
+              "memory_used_mib": 18438
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 61,
+              "power_w": 144.08,
+              "memory_used_mib": 20222
+            }
+          ],
+          "mem_available_kib": 64477764
+        },
+        {
+          "at_monotonic": 1414133.878701517,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 16,
+              "sm_clock_mhz": 1770,
+              "temperature_c": 59,
+              "power_w": 165.51,
+              "memory_used_mib": 18724
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 5,
+              "sm_clock_mhz": 1935,
+              "temperature_c": 61,
+              "power_w": 147.46,
+              "memory_used_mib": 15772
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 0,
+              "sm_clock_mhz": 1950,
+              "temperature_c": 58,
+              "power_w": 201.42,
+              "memory_used_mib": 18438
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 100,
+              "sm_clock_mhz": 1920,
+              "temperature_c": 70,
+              "power_w": 190.35,
+              "memory_used_mib": 20222
+            }
+          ],
+          "mem_available_kib": 64163256
+        },
+        {
+          "at_monotonic": 1414134.934602113,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 35,
+              "sm_clock_mhz": 1965,
+              "temperature_c": 65,
+              "power_w": 221.11,
+              "memory_used_mib": 18724
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 32,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 61,
+              "power_w": 163.71,
+              "memory_used_mib": 15772
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 35,
+              "sm_clock_mhz": 1725,
+              "temperature_c": 61,
+              "power_w": 212.8,
+              "memory_used_mib": 18438
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 56,
+              "sm_clock_mhz": 1890,
+              "temperature_c": 72,
+              "power_w": 257.33,
+              "memory_used_mib": 20222
+            }
+          ],
+          "mem_available_kib": 64153024
+        },
+        {
+          "at_monotonic": 1414135.99232408,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 39,
+              "sm_clock_mhz": 1950,
+              "temperature_c": 68,
+              "power_w": 274.45,
+              "memory_used_mib": 18724
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 38,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 62,
+              "power_w": 168.58,
+              "memory_used_mib": 15772
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 37,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 60,
+              "power_w": 190.69,
+              "memory_used_mib": 18438
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 55,
+              "sm_clock_mhz": 1800,
+              "temperature_c": 73,
+              "power_w": 292.74,
+              "memory_used_mib": 20222
+            }
+          ],
+          "mem_available_kib": 64142220
+        },
+        {
+          "at_monotonic": 1414137.048564111,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 11,
+              "sm_clock_mhz": 1905,
+              "temperature_c": 63,
+              "power_w": 249.97,
+              "memory_used_mib": 18724
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 20,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 60,
+              "power_w": 157.86,
+              "memory_used_mib": 15772
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 40,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 58,
+              "power_w": 175.13,
+              "memory_used_mib": 18438
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 45,
+              "sm_clock_mhz": 1560,
+              "temperature_c": 70,
+              "power_w": 250.48,
+              "memory_used_mib": 20222
+            }
+          ],
+          "mem_available_kib": 64115616
+        },
+        {
+          "at_monotonic": 1414138.106690935,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 40,
+              "sm_clock_mhz": 1950,
+              "temperature_c": 66,
+              "power_w": 254.47,
+              "memory_used_mib": 18724
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 25,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 61,
+              "power_w": 161.66,
+              "memory_used_mib": 15772
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 38,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 59,
+              "power_w": 184.68,
+              "memory_used_mib": 18438
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 58,
+              "sm_clock_mhz": 1860,
+              "temperature_c": 73,
+              "power_w": 284.87,
+              "memory_used_mib": 20222
+            }
+          ],
+          "mem_available_kib": 64109688
+        },
+        {
+          "at_monotonic": 1414139.165952407,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 39,
+              "sm_clock_mhz": 1950,
+              "temperature_c": 68,
+              "power_w": 282.4,
+              "memory_used_mib": 18724
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 26,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 62,
+              "power_w": 170.64,
+              "memory_used_mib": 15772
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 37,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 59,
+              "power_w": 191.33,
+              "memory_used_mib": 18438
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 56,
+              "sm_clock_mhz": 1905,
+              "temperature_c": 74,
+              "power_w": 291.41,
+              "memory_used_mib": 20222
+            }
+          ],
+          "mem_available_kib": 64216288
+        },
+        {
+          "at_monotonic": 1414140.221579843,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 41,
+              "sm_clock_mhz": 1965,
+              "temperature_c": 67,
+              "power_w": 251.72,
+              "memory_used_mib": 18724
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 35,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 62,
+              "power_w": 159.7,
+              "memory_used_mib": 15772
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 41,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 59,
+              "power_w": 178.01,
+              "memory_used_mib": 18438
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 57,
+              "sm_clock_mhz": 1845,
+              "temperature_c": 73,
+              "power_w": 250.08,
+              "memory_used_mib": 20222
+            }
+          ],
+          "mem_available_kib": 64167224
+        },
+        {
+          "at_monotonic": 1414141.276609856,
+          "gpus": [
+            {
+              "index": 0,
+              "pci_bus_id": "00000000:01:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 47,
+              "sm_clock_mhz": 1965,
+              "temperature_c": 67,
+              "power_w": 275.35,
+              "memory_used_mib": 18724
+            },
+            {
+              "index": 1,
+              "pci_bus_id": "00000000:04:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 32,
+              "sm_clock_mhz": 1695,
+              "temperature_c": 62,
+              "power_w": 170.09,
+              "memory_used_mib": 15772
+            },
+            {
+              "index": 2,
+              "pci_bus_id": "00000000:07:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 34,
+              "sm_clock_mhz": 1905,
+              "temperature_c": 61,
+              "power_w": 195.92,
+              "memory_used_mib": 18438
+            },
+            {
+              "index": 3,
+              "pci_bus_id": "00000000:08:00.0",
+              "pcie_gen": 3,
+              "link_width": 4,
+              "utilization_pct": 69,
+              "sm_clock_mhz": 1860,
+              "temperature_c": 74,
+              "power_w": 295.13,
+              "memory_used_mib": 20222
+            }
+          ],
+          "mem_available_kib": 64168520
+        }
+      ],
+      "startup_seconds": 119.246,
+      "startup_status": {
+        "service": "strata",
+        "model": "qwen3.8-flash-next-sc117-abliterated-iq3_s",
+        "loaded": true,
+        "auto_load": true,
+        "structured_output": {
+          "formats": [
+            "json_object",
+            "json_schema"
+          ],
+          "method": "prompt_and_validate",
+          "constrained_decoding": false,
+          "stream_buffered": true
+        },
+        "engine": "0.1.44.1",
+        "started": 1792213324,
+        "uptime_s": 0,
+        "cache_max_tokens": 262144,
+        "context": {
+          "native": 262144,
+          "max_positions": 262144
+        },
+        "concurrency": {
+          "serving": 1,
+          "requested": 1
+        },
+        "dialects": [
+          "/v1/chat/completions",
+          "/v1/messages",
+          "/v1/responses"
+        ],
+        "vision": {
+          "enabled": true,
+          "available": true,
+          "error": null
+        },
+        "image_generation": {
+          "enabled": false
+        },
+        "activity": {
+          "requests": 0,
+          "in_flight": 0,
+          "last_request_at": null
+        },
+        "last_timings": null,
+        "vram": {
+          "elastic": false
+        },
+        "machine": {
+          "at": 1792213325,
+          "gpu": {
+            "name": "NVIDIA GeForce RTX 3090 + NVIDIA GeForce RTX 3090 + NVIDIA GeForce RTX 3090 + NVIDIA GeForce RTX 3090",
+            "used_mib": 74604.0,
+            "total_mib": 98304.0,
+            "util_pct": 3.25,
+            "temp_c": 57,
+            "power_w": 489.582
+          },
+          "ram": {
+            "used_gib": 62.8,
+            "total_gib": 125.6
+          }
+        }
+      },
+      "server_identity": {
+        "pid": 2679108,
+        "start_ticks": 141407133,
+        "exe": "/usr/bin/python3.10",
+        "ppid": 2675511,
+        "pgid": 2679108,
+        "sid": 2679108,
+        "uid": 1000,
+        "cmd": [
+          "/home/user/.local/share/localllm-strata/runtimes/orca-q4_k_s-v0141/source/.venv/bin/python",
+          "-m",
+          "serve.server",
+          "--engine",
+          "strata",
+          "--config",
+          "/home/user/.local/state/locallm-strata/sc117-iq3s-trial/run-config.json",
+          "--host",
+          "0.0.0.0",
+          "--port",
+          "8080"
+        ]
+      },
+      "server_log": "/home/user/.local/share/localllm-strata/logs/server-20261017-070112.log",
+      "launcher_log": "/tmp/sc117-tune-20261017/pipeline2-spec3-confirm-B.launcher.log",
+      "effective_args": [
+        "--pack",
+        "/home/user/.local/share/localllm-strata/data/packs/iq3_s-sc117-abliterated",
+        "--native",
+        "/home/user/.local/share/localllm-strata/data/models/iq3_s-sc117-abliterated/IQ3_S/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-IQ3_S-00001-of-00002.gguf",
+        "--ple-gguf",
+        "/home/user/.local/share/localllm-strata/data/models/iq3_s-sc117-abliterated/IQ3_S/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-IQ3_S-00002-of-00002.gguf",
+        "--ple-io",
+        "mmap",
+        "--expert-profile",
+        "/home/user/.local/share/localllm-strata/source-99f3dbd0b21d/data/expert-profile.bin",
+        "--expert-cache",
+        "auto",
+        "--prefill",
+        "auto",
+        "--spec",
+        "3",
+        "--mtp",
+        "/home/user/.local/share/localllm-strata/data/mtp/iq3_s-sc117-abliterated/rt",
+        "--max-context",
+        "262144",
+        "--kv",
+        "int8",
+        "--kv-resident",
+        "32768",
+        "--vision",
+        "--conversation-cache-mib",
+        "8192",
+        "--conversation-cache-slots",
+        "4",
+        "--trim-stage-weights",
+        "--pipeline-windows",
+        "2"
+      ],
+      "effective_gpu_order": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "effective_layer_split": "14,24,36",
+      "effective_gpu_order_policy": "as_given",
+      "engine_metrics_before": {
+        "model": "qwen3.8-flash-next-sc117-abliterated-iq3_s",
+        "max_context": 262144,
+        "images": true,
+        "version": "0.1.44.1",
+        "logit_bias": 1,
+        "context": 262144,
+        "kv": "int8",
+        "kv_resident": 32768,
+        "expert_slots": 24576,
+        "expert_cache_mib": 47962,
+        "expert_slots_primary": 7168,
+        "expert_cache_primary_mib": 12650,
+        "spec": 5,
+        "mtp_max": 3,
+        "lookup": 3,
+        "vram_free_mib": 5487,
+        "cvec": 0,
+        "arena_mib": 47962,
+        "pool_workers": 5,
+        "pcie_frac": "0.09",
+        "spec_min_p": "0.00",
+        "conversation_cache_mib": 8192,
+        "conversation_cache_slots": 4,
+        "conversation_cache_min_free_mib": 2560,
+        "conversation_cache_min_tokens": 0,
+        "tail_role_token": -1,
+        "vram_elastic": 0,
+        "engine": "0.1.44.1"
+      },
+      "warmup": {
+        "reply": "4",
+        "elapsed_s": 0.081,
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 26,
+          "prompt_ms": 188.0,
+          "prompt_per_token_ms": 7.231,
+          "prompt_per_second": 138.3,
+          "predicted_n": 2,
+          "predicted_ms": 81.0,
+          "predicted_per_token_ms": 40.5,
+          "predicted_per_second": 24.7,
+          "draft_n": 2,
+          "draft_n_accepted": 2
+        },
+        "usage": {
+          "prompt_tokens": 26,
+          "completion_tokens": 2,
+          "total_tokens": 28,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        }
+      },
+      "engine_metrics_after": {
+        "model": "qwen3.8-flash-next-sc117-abliterated-iq3_s",
+        "max_context": 262144,
+        "images": true,
+        "version": "0.1.44.1",
+        "logit_bias": 1,
+        "context": 262144,
+        "kv": "int8",
+        "kv_resident": 32768,
+        "expert_slots": 24576,
+        "expert_cache_mib": 47962,
+        "expert_slots_primary": 7168,
+        "expert_cache_primary_mib": 12650,
+        "spec": 5,
+        "mtp_max": 3,
+        "lookup": 3,
+        "vram_free_mib": 5487,
+        "cvec": 0,
+        "arena_mib": 47962,
+        "pool_workers": 5,
+        "pcie_frac": "0.09",
+        "spec_min_p": "0.00",
+        "conversation_cache_mib": 8192,
+        "conversation_cache_slots": 4,
+        "conversation_cache_min_free_mib": 2560,
+        "conversation_cache_min_tokens": 0,
+        "tail_role_token": -1,
+        "vram_elastic": 0,
+        "engine": "0.1.44.1"
+      },
+      "summary": {
+        "prefill_median_tps": 1799.4,
+        "prefill_samples": 3,
+        "decode_median_tps": 177.9,
+        "decode_samples": 3,
+        "decode_tokens_median": 384,
+        "mtp_drafted_tokens": 1007,
+        "mtp_accepted_tokens": 719,
+        "mtp_acceptance_ratio": 0.714
+      },
+      "shutdown_clean": true,
+      "finished_epoch": 1792213348.9925768
+    }
+  ],
+  "status": "benchmarks-complete",
+  "method": {
+    "prefill_samples_per_arm": 3,
+    "prefill_target_tokens": 5299,
+    "decode_samples_per_arm": 3,
+    "decode_max_tokens": 384,
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "reasoning_effort": "high",
+    "fresh_prompt_cache_required": true,
+    "summary_statistic": "median",
+    "gpu_telemetry_interval_s": 1.0,
+    "prefill_max_tokens": 16,
+    "prefill_seed_start": 8100,
+    "decode_seed_start": 9100,
+    "prefill_fixture": {
+      "entries": 200,
+      "line_template": "entry {n:03}: batch {n % 13} stores {n * 7 + 19} units with a checksum of {n * 11 + 31}.",
+      "prefix_template": "fixture_sc117_tune_prefill_{i:02d}",
+      "instruction": "Write a detailed 500-word technical explanation of how to process this ledger safely. Cover validation, reproducibility, indexing, concurrency and error handling; do not merely repeat the entries."
+    },
+    "decode_fixture": {
+      "prefix_template": "decode_probe_sc117_{i:02d}",
+      "body": "Explain how binary search locates a value in a sorted list. Give a worked, numbered example using the values 3, 7, 11, 18, 24, 31, 42, 56, 73, and 91, searching for 42. Continue with useful detail."
+    },
+    "warmup": {
+      "prompt": "What is 2 + 2? Reply with only the number.",
+      "temperature": 0,
+      "reasoning_effort": "none",
+      "max_tokens": 16,
+      "expected_reply": "4",
+      "included_in_medians": false
+    }
+  },
+  "initial": {
+    "service_state": true,
+    "hive_wrapper_pids": [
+      2656708,
+      2660982
+    ],
+    "llm_process_pids": [
+      2660988,
+      2664930,
+      2664971,
+      2664983
+    ],
+    "gpu_process_pids": [
+      2664983
+    ],
+    "selected_profile": "profiles/iq3_s-sc117-abliterated",
+    "server_status": {
+      "service": "strata",
+      "model": "qwen3.8-flash-next-sc117-abliterated-iq3_s",
+      "loaded": true,
+      "auto_load": true,
+      "structured_output": {
+        "formats": [
+          "json_object",
+          "json_schema"
+        ],
+        "method": "prompt_and_validate",
+        "constrained_decoding": false,
+        "stream_buffered": true
+      },
+      "engine": "0.1.44.1",
+      "started": 1792213130,
+      "uptime_s": 66,
+      "cache_max_tokens": 262144,
+      "context": {
+        "native": 262144,
+        "max_positions": 262144
+      },
+      "concurrency": {
+        "serving": 1,
+        "requested": 1
+      },
+      "dialects": [
+        "/v1/chat/completions",
+        "/v1/messages",
+        "/v1/responses"
+      ],
+      "vision": {
+        "enabled": true,
+        "available": true,
+        "error": null
+      },
+      "image_generation": {
+        "enabled": false
+      },
+      "activity": {
+        "requests": 0,
+        "in_flight": 0,
+        "last_request_at": null
+      },
+      "last_timings": null,
+      "vram": {
+        "elastic": false
+      },
+      "machine": {
+        "at": 1792213196,
+        "gpu": {
+          "name": "NVIDIA GeForce RTX 3090 + NVIDIA GeForce RTX 3090 + NVIDIA GeForce RTX 3090 + NVIDIA GeForce RTX 3090",
+          "used_mib": 74164.0,
+          "total_mib": 98304.0,
+          "util_pct": 0.0,
+          "temp_c": 46,
+          "power_w": 117.541
+        },
+        "ram": {
+          "used_gib": 63.1,
+          "total_gib": 125.6
+        }
+      }
+    },
+    "gpu": [
+      {
+        "index": 0,
+        "pci_bus_id": "00000000:01:00.0",
+        "pcie_gen": 1,
+        "link_width": 4,
+        "utilization_pct": 0,
+        "sm_clock_mhz": 210,
+        "temperature_c": 46,
+        "power_w": 39.79,
+        "memory_used_mib": 18502
+      },
+      {
+        "index": 1,
+        "pci_bus_id": "00000000:04:00.0",
+        "pcie_gen": 1,
+        "link_width": 4,
+        "utilization_pct": 0,
+        "sm_clock_mhz": 210,
+        "temperature_c": 41,
+        "power_w": 20.17,
+        "memory_used_mib": 15578
+      },
+      {
+        "index": 2,
+        "pci_bus_id": "00000000:07:00.0",
+        "pcie_gen": 1,
+        "link_width": 4,
+        "utilization_pct": 0,
+        "sm_clock_mhz": 210,
+        "temperature_c": 44,
+        "power_w": 33.87,
+        "memory_used_mib": 18228
+      },
+      {
+        "index": 3,
+        "pci_bus_id": "00000000:08:00.0",
+        "pcie_gen": 1,
+        "link_width": 4,
+        "utilization_pct": 0,
+        "sm_clock_mhz": 210,
+        "temperature_c": 42,
+        "power_w": 23.71,
+        "memory_used_mib": 20058
+      }
+    ]
+  },
+  "restored": {
+    "osn_state": "active",
+    "selected_profile": "profiles/iq3_s-sc117-abliterated",
+    "api_status": {
+      "service": "strata",
+      "model": "qwen3.8-flash-next-sc117-abliterated-iq3_s",
+      "loaded": true,
+      "auto_load": true,
+      "structured_output": {
+        "formats": [
+          "json_object",
+          "json_schema"
+        ],
+        "method": "prompt_and_validate",
+        "constrained_decoding": false,
+        "stream_buffered": true
+      },
+      "engine": "0.1.44.1",
+      "started": 1792213527,
+      "uptime_s": 2,
+      "cache_max_tokens": 262144,
+      "context": {
+        "native": 262144,
+        "max_positions": 262144
+      },
+      "concurrency": {
+        "serving": 1,
+        "requested": 1
+      },
+      "dialects": [
+        "/v1/chat/completions",
+        "/v1/messages",
+        "/v1/responses"
+      ],
+      "vision": {
+        "enabled": true,
+        "available": true,
+        "error": null
+      },
+      "image_generation": {
+        "enabled": false
+      },
+      "activity": {
+        "requests": 0,
+        "in_flight": 0,
+        "last_request_at": null
+      },
+      "last_timings": null,
+      "vram": {
+        "elastic": false
+      },
+      "machine": {
+        "at": 1792213529,
+        "gpu": {
+          "name": "NVIDIA GeForce RTX 3090 + NVIDIA GeForce RTX 3090 + NVIDIA GeForce RTX 3090 + NVIDIA GeForce RTX 3090",
+          "used_mib": 74164.0,
+          "total_mib": 98304.0,
+          "util_pct": 0.0,
+          "temp_c": 57,
+          "power_w": 487.44800000000004
+        },
+        "ram": {
+          "used_gib": 63.0,
+          "total_gib": 125.6
+        }
+      }
+    }
+  },
+  "model_repository": "SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF",
+  "model_revision": "eec4e10a2c29b440a2ae85591fa11569ce752963",
+  "model_weight_pins": {
+    "model_shard_1": {
+      "sha256": "40f369eca301ec6ea318dbb671b3132c26a2f0b89aa5458a7051b33215ee296c",
+      "bytes": 55063448064
+    },
+    "model_shard_2": {
+      "sha256": "316b46f3a2dbd68c900f43136ab9449f9dcc3725dfd8c794847c204bc161e113",
+      "bytes": 28800138432
+    },
+    "vision_projector": {
+      "sha256": "2e788f8c511d8093c7b43cb87b2fd7e14228340318057f8fb20c86df2efe2355",
+      "bytes": 907542944
+    }
+  },
+  "runtime_commit": "296b59d2f73c8f04a805df29c2fa97655adace78",
+  "host_details": {
+    "gpu_model": "NVIDIA GeForce RTX 3090",
+    "gpu_count": 4,
+    "driver_version": "595.91.07",
+    "linux": "Linux-6.10.0-hiveos-x86_64-with-glibc2.35",
+    "kernel": "6.10.0-hiveos"
+  }
+}

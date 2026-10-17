@@ -130,3 +130,5 @@ The `.39` source/runtime pins remain relevant to SC117 asset packing and any fut
 ## Current disposition
 
 **Unqualified and blocked from normal hosting.** The `.44.1` SC117 profile is a trial-only route; no qualification report can unlock normal starts. The active-probe runner remains uninstalled/unpinned and report issuance disabled. Preserve model/native-pack assets and the `.39` source/runtime provenance; preserve Orca Q4 `.44.1` as the separate standard route with `.39`/`.41` as its explicit rollback profiles.
+
+A separate single-host `.44.1` performance screen found `--pipeline-windows 2 --spec 3` to be a decode-throughput candidate (+19.5% versus repeated baseline medians across two exact candidate runs). This is **not qualification evidence** and is not enabled in the normal HostLLM/Hive profile. Protocol, scope, and raw measurements are in [HOWTOTUNE.md](HOWTOTUNE.md) and its linked JSON results.
