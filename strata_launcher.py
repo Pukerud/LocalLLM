@@ -41,7 +41,7 @@ SOURCE_COMMIT = '99f3dbd0b21d1401b3769e0c0d963913607f380b'
 MODEL_REVISION = 'ed59f92082b1e93c0e96d60a8b11aab089b52f09'
 MODEL = 'Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S'
 SC117_V01441_TRIAL_READY_CONFIG = (
-    'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; '
+    'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); '
     'native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; '
     'prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; '
     'pipeline-windows omitted. This is not qualification.'
@@ -166,9 +166,9 @@ def _effective_host(profile, version, configured_host):
             raise SafetyError(f'Q4 {version} STRATA_HOST may only be 127.0.0.1 or 0.0.0.0')
         return requested or '127.0.0.1'
     if profile == sc117_profile.PROFILE:
-        if requested not in (None, '127.0.0.1'):
-            raise SafetyError('SC117 is restricted to loopback 127.0.0.1; LAN binding is never permitted')
-        return '127.0.0.1'
+        if requested not in (None, sc117_profile.TRIAL_BIND_HOST):
+            raise SafetyError(f'SC117 trial binding is fixed to trusted-LAN {sc117_profile.TRIAL_BIND_HOST}')
+        return sc117_profile.TRIAL_BIND_HOST
     return requested or configured_host
 
 
@@ -177,9 +177,9 @@ def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
         if (parallel, batch_groups) != (1, 1):
             raise SafetyError('SC117 abliterated IQ3_S is restricted to one serving slot and one batch group')
         if runtime != sc117_profile.TRIAL_RUNTIME_VERSION:
-            raise SafetyError('SC117 is unqualified: only its explicit loopback .44.1 trial is allowed; .39 hosting is retired')
+            raise SafetyError('SC117 is unqualified: only its explicit trusted-LAN .44.1 trial is allowed; .39 hosting is retired')
         if os.environ.get(sc117_profile.TRIAL_ENV) != '1':
-            raise SafetyError('SC117 Strata .44.1 is available only through its explicit unqualified loopback trial')
+            raise SafetyError('SC117 Strata .44.1 is available only through its explicit unqualified trusted-LAN trial')
         root = data_root()
         prepare_sc117.verify_readiness(root, full_hash=False)
         source, path, cfg = q4ks_v01441.ready_q4ks_v01441(root)
@@ -216,13 +216,13 @@ def sc117_trial_readiness_line(profile, version, parallel, batch_groups, cfg):
             (parallel, batch_groups) != (1, 1) or
             os.environ.get(sc117_profile.TRIAL_ENV) != '1' or
             os.environ.get('STRATA_RUNTIME') != sc117_profile.TRIAL_RUNTIME_VERSION or
-            os.environ.get('STRATA_HOST') != '127.0.0.1' or
-            os.environ.get('STRATA_PORT') != '18080' or
+            os.environ.get('STRATA_HOST') != sc117_profile.TRIAL_BIND_HOST or
+            os.environ.get('STRATA_PORT') != str(sc117_profile.TRIAL_PORT) or
             Path(os.environ.get('STRATA_STATE_ROOT', '')) != expected_state or
             os.environ.get('PYTHONPYCACHEPREFIX') != str(expected_cache) or
             os.environ.get('PYTHONDONTWRITEBYTECODE') != '1' or
             os.environ.get('SETUPTOOLS_USE_DISTUTILS') != 'stdlib'):
-        raise SafetyError('SC117 .44.1 trial preflight requires its exact loopback, port, state, and Python-cache environment')
+        raise SafetyError('SC117 .44.1 trial preflight requires its exact trusted-LAN bind, port, state, and Python-cache environment')
     if any(name in os.environ for name in sc117_profile.TRIAL_OVERRIDE_ENV) or any(
             name in os.environ for name in sc117_profile.TRIAL_EXPERIMENT_ENV):
         raise SafetyError('SC117 menu trial preflight does not accept experimental tuning overrides')
@@ -231,7 +231,8 @@ def sc117_trial_readiness_line(profile, version, parallel, batch_groups, cfg):
         raise SafetyError('SC117 .44.1 trial preflight requires CPU vision')
     settings = sc117_profile.settings_for_start(allow_trial_env=True)
     authorization = sc117_profile.authorize_start(
-        data_root(), settings, host='127.0.0.1', port=18080, state_root=strata_state())
+        data_root(), settings, host=sc117_profile.TRIAL_BIND_HOST,
+        port=sc117_profile.TRIAL_PORT, state_root=strata_state())
     if authorization != 'trial':
         raise SafetyError('SC117 .44.1 preflight did not authorize the isolated trial')
     return SC117_V01441_TRIAL_READY_CONFIG
@@ -826,12 +827,12 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     active = host_lifecycle.active_engine()
     if active != 'none':
         raise SafetyError(f'Another LLM session is active ({active}); start refused')
-    default_port = 18080 if profile == sc117_profile.PROFILE else cfg.get('port', 8080)
+    default_port = sc117_profile.TRIAL_PORT if profile == sc117_profile.PROFILE else cfg.get('port', 8080)
     port = int(os.environ.get('STRATA_PORT', default_port))
     effective_host = _effective_host(profile, version, cfg.get('host', '0.0.0.0'))
     sc117_authorization = None
     if profile == sc117_profile.PROFILE:
-        sc117_profile.require_loopback_binding(effective_host)
+        sc117_profile.require_trial_binding(effective_host)
         settings = sc117_profile.settings_for_start(allow_trial_env=True)
         sc117_authorization = sc117_profile.authorize_start(
             data_root(), settings, host=effective_host, port=port, state_root=strata_state())

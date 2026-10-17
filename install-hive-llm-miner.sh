@@ -121,11 +121,11 @@ sc117_trial_readiness="$(runuser -u user -- env -i \
     SETUPTOOLS_USE_DISTUTILS=stdlib STRATA_SC117_IQ3S_TRIAL=1 \
     STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata STRATA_STATE_ROOT="$sc117_trial_state" \
     STRATA_RUNTIME=0.1.44.1 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 \
-    STRATA_PORT=18080 STRATA_HOST=127.0.0.1 \
+    STRATA_PORT=8080 STRATA_HOST=0.0.0.0 \
     "$LLM_ROOT/v1strata.sh" --check-ready --profile iq3_s-sc117-abliterated \
     --runtime 0.1.44.1 --parallel 1 --batch-groups 1)" || \
     fail 'SC117 unqualified .44.1 trial preflight failed; Hive configuration was not changed'
-sc117_trial_expected='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
+sc117_trial_expected='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
 sc117_trial_actual="$(grep '^TRIAL CONFIG:' <<< "$sc117_trial_readiness" || true)"
 [[ "$sc117_trial_actual" == "$sc117_trial_expected" && "$sc117_trial_readiness" != *'READY CONFIG:'* ]] || \
     fail 'SC117 .44.1 CPU-vision preflight is not the exact unqualified trial; Hive configuration was not changed'
@@ -325,6 +325,6 @@ printf '  Profile: %s%s\n' "$initial_profile" "$([[ "$initial_profile" == orca-q
 printf '  Switch menu: %s/profile-menu.sh\n' "$CUSTOM_DIR"
 printf '  Standard Strata: Orca .44.1; Orca .39 and .41 remain available only as explicit rollback profiles\n'
 printf '  Menu routes: Swift, Hauhau, Orca .44.1, and SC117 .44.1 CPU-vision trial\n'
-printf '  SC117 remains unqualified, loopback-only on 127.0.0.1:18080, and uses dedicated trial state\n'
+printf '  SC117 remains unqualified, unauthenticated on trusted-LAN 0.0.0.0:8080; use only on a trusted, firewalled LAN; dedicated trial state\n'
 printf '  No miner start/stop command was run; osn.service was not modified.\n'
 printf '\nThe profile menu refuses changes while Hive, the API, Docker, or GPU compute is active.\n'

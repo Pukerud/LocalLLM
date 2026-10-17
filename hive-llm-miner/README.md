@@ -1,6 +1,6 @@
 # HiveOS LocalLLM custom miner
 
-This package installs one Hive custom miner with an atomic next-start profile selector. The standard Strata selection is Orca Q4_K_S Strata 0.1.44.1 with auto prefill and trimmed `14,24,36` split; the windows-2 override is omitted. Orca .39 is rollback-only. Hive's standard Orca profile deliberately binds `0.0.0.0:8080` for trusted-LAN serving and is unauthenticated; do not expose it to an untrusted network. HostLLM's Orca route defaults to loopback, and the isolated SC117 `.44.1` trial is fixed to `127.0.0.1:18080`. The other user-facing actions are Swift, Hauhau, and that SC117 trial. The old SC117 .39 selector route is retired; shared model/native-pack assets are preserved.
+This package installs one Hive custom miner with an atomic next-start profile selector. The standard Strata selection is Orca Q4_K_S Strata 0.1.44.1 with auto prefill and trimmed `14,24,36` split; the windows-2 override is omitted. Orca .39 is rollback-only. Hive's standard Orca profile deliberately binds `0.0.0.0:8080` for trusted-LAN serving and is unauthenticated; do not expose it to an untrusted network. HostLLM's Orca route defaults to loopback. The unqualified SC117 `.44.1` trial also binds trusted-LAN `0.0.0.0:8080` without authentication and shares the port exclusively with Orca. The other user-facing actions are Swift, Hauhau, and that SC117 trial. The old SC117 .39 selector route is retired; shared model/native-pack assets are preserved.
 
 ## Interactive selector
 
@@ -14,7 +14,7 @@ sudo /hive/miners/custom/llm-hosting/profile-menu.sh
 [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots
 [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots
 [3] Orca Q4_K_S — Strata 0.1.44.1 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted
-[4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot
+[4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot; unqualified trusted-LAN trial on 8080 (no auth)
 ```
 
 The selector changes only the `current` symlink; it never starts or stops Hive,
@@ -38,8 +38,8 @@ SC117 is **unqualified and trial-only**. Its Hive wrapper uses Strata 0.1.44.1,
 CPU vision, exactly one serving slot/group, and a dedicated state root:
 
 ```text
-Host:       127.0.0.1
-Port:       18080
+Host:       0.0.0.0 (trusted LAN; unauthenticated)
+Port:       8080
 State:      /home/user/.local/state/locallm-strata/sc117-iq3s-trial
 Runtime:    Strata 0.1.44.1
 Vision:     CPU
@@ -51,10 +51,14 @@ Split:      14,24,36 with trimmed stage weights
 Cache:      8192 MiB / four cache slots
 ```
 
-The route rejects LAN/production binding, uses a private isolated Python cache,
-and cannot write or claim a normal qualification report. The selector and
-HostLLM require the exact `TRIAL CONFIG` preflight line; this is readiness for
-starting the isolated experiment, **not** quality evidence or qualification.
+The route intentionally exposes its unauthenticated API on the trusted LAN;
+firewall it and never expose it to an untrusted network. For `.69`, open
+`http://192.168.1.69:8080/`. Orca also uses port 8080, so it cannot run
+concurrently with SC117. The trial uses a private isolated Python cache and
+cannot write or claim a normal qualification report.
+The selector and HostLLM require the exact `TRIAL CONFIG` preflight line; this
+is readiness for starting the isolated experiment, **not** quality evidence or
+qualification.
 Do not select SC117 for normal/production hosting. No model or native-pack
 assets are deleted by the menu cleanup.
 

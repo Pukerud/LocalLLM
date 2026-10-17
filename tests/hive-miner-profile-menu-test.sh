@@ -9,7 +9,7 @@ UNINSTALL="$ROOT/uninstall-hive-llm-miner.sh"
 SC117_HIVE="$ROOT/hive-llm-miner/profiles/iq3_s-sc117-abliterated"
 ORCA_HIVE="$ROOT/hive-llm-miner/profiles/orca-q4_k_s-v01441"
 HAUHAU_HIVE="$ROOT/hive-llm-miner/profiles/hauhau-q8-fastmtp-q4kv-xhigh"
-TRIAL_LINE='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
+TRIAL_LINE='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
 
 for script in "$MENU" "$HOST_MENU" "$INSTALL" "$UNINSTALL" \
     "$ORCA_HIVE/h-run.sh" \
@@ -21,16 +21,16 @@ done
 grep -Fq '[1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots' "$HOST_MENU"
 grep -Fq '[2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots' "$HOST_MENU"
 grep -Fq '[3] Orca Q4_K_S — Strata 0.1.44.1 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted' "$HOST_MENU"
-grep -Fq '[4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot' "$HOST_MENU"
+grep -Fq '[4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot | LAN 8080' "$HOST_MENU"
 grep -Fq '[9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit' "$HOST_MENU"
 grep -Fq '[12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL' "$HOST_MENU"
 grep -Fq '[13] Set next Hive miner - Hauhau Q8_K_P' "$HOST_MENU"
 grep -Fq '[14] Set next Hive miner - Orca Q4_K_S .44.1' "$HOST_MENU"
-grep -Fq '[15] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot' "$HOST_MENU"
+grep -Fq '[15] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot | LAN 8080' "$HOST_MENU"
 ! grep -Eq "^[[:space:]]*echo .*\\[(5|6|7|8|16|17)\\]" "$HOST_MENU"
 grep -Fq '3|4)' "$HOST_MENU"
 grep -Fq 'STRATA_SC117_IQ3S_TRIAL=1 STRATA_RUNTIME=0.1.44.1' "$HOST_MENU"
-grep -Fq 'STRATA_HOST=127.0.0.1 STRATA_PORT=18080' "$HOST_MENU"
+grep -Fq 'STRATA_HOST=0.0.0.0 STRATA_PORT=8080' "$HOST_MENU"
 grep -Fq 'sc117_trial_command --stop' "$HOST_MENU"
 grep -Fq 'sc117_trial_command --status' "$HOST_MENU"
 grep -Fq 'profile-menu.sh --profile "$hive_profile"' "$HOST_MENU"
@@ -79,8 +79,8 @@ done
 grep -Fq "actual_readiness=\"\$(grep '^TRIAL CONFIG:' <<< \"\$readiness\" || true)\"" "$SC117_HIVE/h-run.sh"
 grep -Fq "STRATA_STATE_ROOT='/home/user/.local/state/locallm-strata/sc117-iq3s-trial'" "$SC117_HIVE/h-run.sh"
 grep -Fq "RUNTIME='0.1.44.1'" "$SC117_HIVE/h-run.sh"
-grep -Fq "PORT='18080'" "$SC117_HIVE/h-run.sh"
-grep -Fq "STRATA_HOST='127.0.0.1'" "$SC117_HIVE/h-run.sh"
+grep -Fq "PORT='8080'" "$SC117_HIVE/h-run.sh"
+grep -Fq "STRATA_HOST='0.0.0.0'" "$SC117_HIVE/h-run.sh"
 grep -Fq 'PYTHONPYCACHEPREFIX=$STRATA_STATE_ROOT/pycache' "$SC117_HIVE/h-run.sh"
 grep -Fq 'SETUPTOOLS_USE_DISTUTILS=stdlib' "$SC117_HIVE/h-run.sh"
 grep -Fq 'STRATA_SC117_IQ3S_TRIAL=1' "$SC117_HIVE/h-run.sh"
@@ -91,13 +91,13 @@ for script in "$INSTALL" "$UNINSTALL"; do
     grep -Fq "PROFILE_LOCK_FILE='/run/llm-hosting-profile-menu.lock'" "$script"
     grep -Fq 'flock -n 9' "$script"
 done
-! grep -Fq 'STRATA_HOST=0.0.0.0' "$SC117_HIVE/h-run.sh"
+grep -Fq 'STRATA_HOST=$STRATA_HOST' "$SC117_HIVE/h-run.sh"
 ! grep -Fq -- '--qualify' "$SC117_HIVE/h-run.sh"
 ! grep -Fq 'READY CONFIG:' "$SC117_HIVE/h-run.sh"
 grep -Fq 'QUALIFIED=0' "$SC117_HIVE/llm-hosting.conf"
 grep -Fq 'VISION=cpu' "$SC117_HIVE/llm-hosting.conf"
-grep -Fq 'HOST=127.0.0.1' "$SC117_HIVE/llm-hosting.conf"
-grep -Fq 'PORT=18080' "$SC117_HIVE/llm-hosting.conf"
+grep -Fq 'HOST=0.0.0.0' "$SC117_HIVE/llm-hosting.conf"
+grep -Fq 'PORT=8080' "$SC117_HIVE/llm-hosting.conf"
 grep -Fq 'RUNTIME=0.1.44.1' "$SC117_HIVE/llm-hosting.conf"
 
 # Missing Hauhau Hive profile is supplied; exact labels and dispatch exist for all four routes.
@@ -158,7 +158,7 @@ rm -rf -- "$migration_tmp"
 trap - EXIT
 grep -Fq "ln -s -- 'profiles/orca-q4_k_s-v01441'" "$INSTALL"
 grep -Fq 'STRATA_STATE_ROOT="$sc117_trial_state"' "$INSTALL"
-grep -Fq 'STRATA_PORT=18080 STRATA_HOST=127.0.0.1' "$INSTALL"
+grep -Fq 'STRATA_PORT=8080 STRATA_HOST=0.0.0.0' "$INSTALL"
 grep -Fq 'PYTHONPYCACHEPREFIX="$sc117_trial_state/pycache"' "$INSTALL"
 grep -Fq 'for port in 8080 18080' "$INSTALL"
 # Rollback runtimes remain selectable but do not lengthen the standard-profile install gate.

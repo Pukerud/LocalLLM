@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HiveOS custom miner: unqualified SC117 IQ3_S .44.1 isolated loopback trial.
+# HiveOS custom miner: unqualified SC117 IQ3_S .44.1 trusted-LAN trial.
 # Hive supervises this wrapper; the model launcher runs as unprivileged user.
 # Keep osn.service running as the prior Qwen Hive miner does.
 set -Eeuo pipefail
@@ -15,8 +15,8 @@ STRATA_DATA_ROOT='/home/user/.local/share/localllm-strata'
 STRATA_STATE_ROOT='/home/user/.local/state/locallm-strata/sc117-iq3s-trial'
 PROFILE='iq3_s-sc117-abliterated'
 RUNTIME='0.1.44.1'
-PORT='18080'
-STRATA_HOST='127.0.0.1'
+PORT='8080'
+STRATA_HOST='0.0.0.0'
 STOP_FILE="${MINER_STOP:-/run/hive/MINER_STOP}"
 STATE_FILE="${STRATA_STATE_ROOT}/server.json"
 STRATA_LAUNCH_TOKEN=''
@@ -44,8 +44,8 @@ request_hive_stop() {
     printf '1\n' > "$STOP_FILE"
 }
 
-if [[ "$STRATA_HOST" != 127.0.0.1 || "$PORT" != 18080 || "$RUNTIME" != 0.1.44.1 ]]; then
-    say 'SC117 trial is fixed to Strata 0.1.44.1 on 127.0.0.1:18080'
+if [[ "$STRATA_HOST" != 0.0.0.0 || "$PORT" != 8080 || "$RUNTIME" != 0.1.44.1 ]]; then
+    say 'SC117 trial is fixed to Strata 0.1.44.1 on trusted-LAN 0.0.0.0:8080 (unauthenticated)'
     request_hive_stop
     exit 1
 fi
@@ -275,14 +275,14 @@ if (( available_mib < 12288 )); then
 fi
 abort_if_stopping
 
-say 'checking unqualified SC117 IQ3_S isolated trial (native context 262144, CPU vision, MTP=4, one slot, Strata 0.1.44.1, loopback port 18080)'
+say 'checking unqualified SC117 IQ3_S trusted-LAN trial (native context 262144, CPU vision, MTP=4, one slot, Strata 0.1.44.1, unauthenticated port 8080)'
 readiness="$(run_strata_user "$STRATA_LAUNCHER" --check-ready --profile "$PROFILE" \
         --runtime "$RUNTIME" --parallel 1 --batch-groups 1)" || {
     say 'SC117 trial preflight failed; no existing service was stopped'
     request_hive_stop
     exit 1
 }
-expected_readiness='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
+expected_readiness='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
 actual_readiness="$(grep '^TRIAL CONFIG:' <<< "$readiness" || true)"
 if [[ "$actual_readiness" != "$expected_readiness" || "$readiness" == *'READY CONFIG:'* ]]; then
     say 'SC117 isolated trial preflight line is missing or mismatched; refusing start'
@@ -314,7 +314,7 @@ fi
 abort_if_stopping
 
 STRATA_LAUNCH_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(24))')"
-say 'starting UNQUALIFIED SC117 IQ3_S .44.1 loopback trial on port 18080 through Hive (dedicated state; no qualification evidence; osn.service remains running)'
+say 'starting UNQUALIFIED SC117 IQ3_S .44.1 trusted-LAN trial on unauthenticated port 8080 through Hive (dedicated state; no qualification evidence; osn.service remains running)'
 run_strata_user "$STRATA_LAUNCHER" --quickstart --profile "$PROFILE" \
     --runtime "$RUNTIME" --parallel 1 --batch-groups 1 &
 LAUNCH_JOB_PID=$!

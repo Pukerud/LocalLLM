@@ -34,6 +34,8 @@ TRIAL_DISTUTILS_PTH_CONTENTS = (b"import os; var = 'SETUPTOOLS_USE_DISTUTILS'; e
                                b"__import__('_distutils_hack').add_shim(); \n")
 BASELINE_CONFIG_RELATIVE = Path('source-99f3dbd0b21d') / 'strata-iq3_s.json'
 TRIAL_STATE_ROOT_NAME = 'sc117-iq3s-trial'
+TRIAL_BIND_HOST = '0.0.0.0'
+TRIAL_PORT = 8080
 TRIAL_ENV = 'STRATA_SC117_IQ3S_TRIAL'
 TRIAL_OVERRIDE_ENV = {
     'STRATA_SC117_IQ3S_TRIAL_PREFILL': 'prefill',
@@ -1260,8 +1262,9 @@ def require_qualification(root, settings):
 
 
 def allow_trial_start(root, *, host, port, state_root):
-    """Permit an unqualified trial only on loopback with the dedicated isolated state path."""
-    if os.environ.get(TRIAL_ENV) != '1' or host != '127.0.0.1' or type(port) is not int or port != 18080:
+    """Permit the explicit unauthenticated trusted-LAN trial with dedicated isolated state."""
+    if (os.environ.get(TRIAL_ENV) != '1' or host != TRIAL_BIND_HOST or
+            type(port) is not int or port != TRIAL_PORT):
         return False
     expected = Path.home() / '.local/state/locallm-strata' / TRIAL_STATE_ROOT_NAME
     candidate = Path(state_root)
@@ -1276,10 +1279,10 @@ def allow_trial_start(root, *, host, port, state_root):
     return True
 
 
-def require_loopback_binding(host):
-    """SC117 never supports LAN binding, regardless of authentication."""
-    if host != '127.0.0.1':
-        raise SafetyError('SC117 is restricted to loopback 127.0.0.1; LAN binding is never permitted')
+def require_trial_binding(host):
+    """SC117's unqualified trial is deliberately restricted to its trusted-LAN bind."""
+    if host != TRIAL_BIND_HOST:
+        raise SafetyError(f'SC117 trial binding is fixed to trusted-LAN {TRIAL_BIND_HOST}; other hosts are not permitted')
 
 
 def _verify_trial_environment(state_root):
@@ -1393,7 +1396,7 @@ def authorize_start(root, settings, *, host, port, state_root):
     validate_settings(settings)
     if (settings != trial_settings or os.environ.get('STRATA_RUNTIME') != TRIAL_RUNTIME_VERSION or
             not allow_trial_start(root, host=host, port=port, state_root=state_root)):
-        raise SafetyError('Unqualified SC117 trials require Strata .44.1, loopback 127.0.0.1:18080, and isolated sc117-iq3s-trial state')
+        raise SafetyError('Unqualified SC117 trials require Strata .44.1, trusted-LAN 0.0.0.0:8080, and isolated sc117-iq3s-trial state')
     # Trials are explicitly not qualification evidence. The isolated cache prefix makes these
     # existing __pycache__ entries inactive; no normal/qualified start path is enabled.
     _verify_v01441_trial_artifacts(root, state_root)

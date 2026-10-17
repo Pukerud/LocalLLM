@@ -52,7 +52,7 @@ sc117_trial_command() {
         'PYTHONDONTWRITEBYTECODE=1' "PYTHONPYCACHEPREFIX=$trial_state/pycache" 'SETUPTOOLS_USE_DISTUTILS=stdlib'
         "QWEN38_OWNER_USER=$owner_user" "STRATA_DATA_ROOT=$owner_home/.local/share/localllm-strata"
         "STRATA_STATE_ROOT=$trial_state" 'STRATA_RUNTIME=0.1.44.1' 'STRATA_PARALLEL=1'
-        'STRATA_BATCH_GROUPS=1' 'STRATA_PORT=18080' 'STRATA_HOST=127.0.0.1'
+        'STRATA_BATCH_GROUPS=1' 'STRATA_PORT=8080' 'STRATA_HOST=0.0.0.0'
         'STRATA_SC117_IQ3S_TRIAL=1'
     )
     if [[ "$EUID" -eq 0 ]]; then
@@ -188,13 +188,13 @@ run_selected() {
                   "$requested_runtime_count" -ne 1 || "$requested_runtime" != 0.1.44.1 || "$candidate_0441" -ne 1 || \
                   "$requested_parallel_count" -ne 1 || "$requested_groups_count" -ne 1 || \
                   "$candidate_041" -ne 0 || "$requested_parallel" != 1 || "$requested_groups" != 1 ]]; then
-                echo 'SC117 is unqualified and trial-only: require explicit Strata .44.1, one slot/group, and its isolated loopback trial environment; .39 hosting is retired.' >&2
+                echo 'SC117 is unqualified and trial-only: require explicit Strata .44.1, one slot/group, and its isolated trusted-LAN trial environment; .39 hosting is retired.' >&2
                 return 1
             fi
         fi
         if [[ "$candidate_sc117_iq3s" -eq 1 && "$requested_runtime" == 0.1.44.1 ]]; then
-            if [[ "$candidate_0441" -ne 1 || "${STRATA_SC117_IQ3S_TRIAL:-0}" != 1 || "${STRATA_HOST:-}" != 127.0.0.1 || "${STRATA_PORT:-}" != 18080 ]]; then
-                echo 'SC117 .44.1 is trial-only and requires explicit loopback 127.0.0.1:18080 with its trial marker; refusing before service pause.' >&2
+            if [[ "$candidate_0441" -ne 1 || "${STRATA_SC117_IQ3S_TRIAL:-0}" != 1 || "${STRATA_HOST:-}" != 0.0.0.0 || "${STRATA_PORT:-}" != 8080 ]]; then
+                echo 'SC117 .44.1 is trial-only and requires explicit trusted-LAN 0.0.0.0:8080 with its trial marker; refusing before service pause.' >&2
                 return 1
             fi
             candidate_sc117_trial=1
@@ -209,12 +209,12 @@ run_selected() {
                 "QWEN38_OWNER_USER=${QWEN38_OWNER_USER:-${USER:-user}}"
                 "STRATA_DATA_ROOT=$trial_home/.local/share/localllm-strata" "STRATA_STATE_ROOT=$trial_state"
                 'STRATA_RUNTIME=0.1.44.1' 'STRATA_PARALLEL=1' 'STRATA_BATCH_GROUPS=1'
-                'STRATA_PORT=18080' 'STRATA_HOST=127.0.0.1' 'STRATA_SC117_IQ3S_TRIAL=1'
+                'STRATA_PORT=8080' 'STRATA_HOST=0.0.0.0' 'STRATA_SC117_IQ3S_TRIAL=1'
             )
             [[ -z "${HOSTLLM_STATE_ROOT:-}" ]] || candidate_env+=("HOSTLLM_STATE_ROOT=$HOSTLLM_STATE_ROOT")
             readiness="$(/usr/bin/env -i "${candidate_env[@]}" "$SCRIPT_DIR/$launcher" "${check_args[@]}")" || return 1
             printf '%s\n' "$readiness"
-            expected_readiness='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; loopback=127.0.0.1:18080; native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
+            expected_readiness='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); MTP=4; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows omitted. This is not qualification.'
             actual_readiness="$(grep '^TRIAL CONFIG:' <<< "$readiness" || true)"
             [[ "$actual_readiness" == "$expected_readiness" ]] || {
                 echo 'SC117 .44.1 trial preflight is incomplete or mismatched; no service pause was started.' >&2
@@ -459,17 +459,17 @@ main() {
         echo '  [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
         echo '  [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
         echo '  [3] Orca Q4_K_S — Strata 0.1.44.1 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted'
-        echo '  [4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot'
+        echo '  [4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot | LAN 8080'
         echo ''
         printf '  Strata slots: %s (STRATA_PARALLEL; default 1), batch groups: %s. Runtime override: %s.\n' "${STRATA_PARALLEL:-1}" "${STRATA_BATCH_GROUPS:-1}" "${STRATA_RUNTIME:-selected default}"
         echo '  Starting hosting pauses the miner and OctaSpace automatically (never an active rental).'
-        echo '  Orca API defaults to 127.0.0.1:8080. SC117 .44.1 is an unqualified trial on 127.0.0.1:18080 with dedicated state; it cannot use normal Hive/production hosting.'
-        echo '  Strata API keys are entered at a secure prompt and forwarded through stdin; SC117 trial is loopback-only and requires no LAN binding.'
+        echo '  Orca API defaults to 127.0.0.1:8080. SC117 .44.1 is an unqualified trial on trusted-LAN 0.0.0.0:8080 with dedicated state; it cannot use normal Hive/production hosting.'
+        echo '  SC117 binds the LAN without API authentication: use only on a trusted, firewalled network; Orca key entry remains optional.'
         echo '  [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit'
         echo '  [12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
         echo '  [13] Set next Hive miner - Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
         echo '  [14] Set next Hive miner - Orca Q4_K_S .44.1 (auto prefill, trimmed split; windows-2 override omitted)'
-        echo '  [15] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot'
+        echo '  [15] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | CPU vision | MTP-4 | one serving slot | LAN 8080'
         echo '  Hive profile changes are idle-only; they never start/stop a miner or osn.service.'
         read -r -p '  Select: ' choice || return 0
         choice="${choice//[[:space:]]/}"
@@ -501,7 +501,7 @@ main() {
                     STRATA_HOST="${STRATA_HOST:-127.0.0.1}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.44.1 --parallel 1 --batch-groups 1
                 else
                     STRATA_SC117_IQ3S_TRIAL=1 STRATA_RUNTIME=0.1.44.1 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 \
-                        STRATA_HOST=127.0.0.1 STRATA_PORT=18080 \
+                        STRATA_HOST=0.0.0.0 STRATA_PORT=8080 \
                         run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.44.1 --parallel 1 --batch-groups 1
                 fi
                 ;;

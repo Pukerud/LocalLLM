@@ -2,7 +2,7 @@
 
 # Isolated unqualified inference trial: report telemetry without a hash-rate result.
 khs=0
-version='SC117 IQ3_S Strata 0.1.44.1 CPU-vision loopback trial (UNQUALIFIED)'
+version='SC117 IQ3_S Strata 0.1.44.1 CPU-vision trusted-LAN trial (UNQUALIFIED)'
 
 if [[ -n "${gpu_stats:-}" ]] && command -v jq >/dev/null 2>&1 \
     && jq -e . >/dev/null 2>&1 <<< "$gpu_stats"; then

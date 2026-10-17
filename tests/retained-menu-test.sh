@@ -202,7 +202,7 @@ grep -q '\[15\] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Stra
 ! grep -q '\[3\] SC117.*0.1.39' "$root/HostLLM.sh"
 ! grep -q '\[17\].*SC117' "$root/HostLLM.sh"
 grep -q 'STRATA_HOST="${STRATA_HOST:-127.0.0.1}" run_selected .*--runtime 0.1.44.1' "$root/HostLLM.sh"
-grep -q 'SC117.*127.0.0.1:18080' "$root/HostLLM.sh"
+grep -q 'SC117.*0.0.0.0:8080' "$root/HostLLM.sh"
 grep -q 'windows-2 override omitted' "$root/HostLLM.sh"
 grep -q -- '--prepare-q4ks141' "$root/HostLLM.sh"
 grep -q -- '--run-q4ks141-32k-validation' "$root/HostLLM.sh"
@@ -234,7 +234,7 @@ grep -qx 'v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q4kv-xhigh' "$tra
 grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$trace"
 grep -qx 'v1strata.sh --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$trace"
 grep -qx 'unset|127.0.0.1|unset' "$trace.env"
-grep -qx '1|127.0.0.1|18080' "$trace.env"
+grep -qx '1|0.0.0.0|8080' "$trace.env"
 [[ "$(wc -l < "$trace")" -eq 4 ]]
 # Root-side lifecycle identity can prove a Qwen session managed even if user-side /proc reports unmanaged.
 (
@@ -421,4 +421,4 @@ grep -qx -- '--check-ready --profile iq3_s --runtime 0.1.39 --parallel 2 --batch
 )
 grep -qx -- '--check-ready --profile orca-iq3_xxs' "$ready_trace"
 [[ "$(wc -l < "$ready_trace")" -eq 5 ]]
-echo 'HostLLM [1]–[4]/[12]–[15] menu dispatch, SC117 loopback trial gate, preflight-before-hosting, and running-Strata preservation: PASS'
+echo 'HostLLM [1]–[4]/[12]–[15] menu dispatch, SC117 trusted-LAN trial gate, preflight-before-hosting, and running-Strata preservation: PASS'
