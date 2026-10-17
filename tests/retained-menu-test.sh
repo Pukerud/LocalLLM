@@ -209,7 +209,7 @@ grep -q -- '--run-q4ks141-32k-validation' "$root/HostLLM.sh"
 grep -q 'Q4KS_V0141_VALIDATION_ONLY=1 STRATA_HOST=127.0.0.1' "$root/HostLLM.sh"
 grep -q 'future profile context=32768; text-only; single-slot; conversation cache=8192 MiB / 4 cache slots.' "$root/HostLLM.sh"
 grep -q -- '--prepare-orca-q4ks-141' "$root/v1strata.sh"
-grep -q 'its profiles refuse root-owned servers' "$root/HostLLM.sh"
+grep -q 'the server will not run as root' "$root/HostLLM.sh"
 grep -q -- '--verify-orca-q4ks-141-parity' "$root/v1strata.sh"
 grep -q -- '--validate-orca-q4ks-141-32k' "$root/v1strata.sh"
 grep -q -- '--validate-orca-q4ks-141-native' "$root/v1strata.sh"
@@ -236,6 +236,61 @@ grep -qx 'v1strata.sh --quickstart --profile iq3_s-sc117-abliterated --runtime 0
 grep -qx 'unset|127.0.0.1|unset' "$trace.env"
 grep -qx '1|0.0.0.0|8080' "$trace.env"
 [[ "$(wc -l < "$trace")" -eq 4 ]]
+# Hive selections 14/15 refresh stale installed profiles, map to exact targets, and
+# invoke privileged commands directly as root or through sudo as an operator.
+hive_menu_trace="$scratch/hive-menu.trace"
+hive_sudo_trace="$scratch/hive-sudo.trace"
+hive_install_trace="$scratch/hive-install.trace"
+hive_fake_bin="$scratch/fake-bin"
+hive_pkg_source="$scratch/hive-pkg-source"
+hive_pkg_root="$scratch/hive-pkg-installed"
+hive_menu_installed="$hive_pkg_root/profile-menu.sh"
+hive_profiles=(orca-q4_k_s-v01441 iq3_s-sc117-abliterated)
+mkdir -p "$hive_fake_bin" "$hive_pkg_source/profiles" "$hive_pkg_root/profiles"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "%s"\n' "$hive_menu_trace" > "$hive_pkg_source/profile-menu.sh"
+chmod +x "$hive_pkg_source/profile-menu.sh"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "%s"\n[[ "${1:-}" == -- ]] && shift\nexec "$@"\n' "$hive_sudo_trace" > "$hive_fake_bin/sudo"
+{
+  printf '#!/usr/bin/env bash\nset -e\nprintf "updated\\n" >> "%s"\n' "$hive_install_trace"
+  printf 'cp -- "%s/profile-menu.sh" "%s"\n' "$hive_pkg_source" "$hive_menu_installed"
+  for hive_profile in "${hive_profiles[@]}"; do
+    printf 'mkdir -p -- "%s/profiles/%s"\n' "$hive_pkg_root" "$hive_profile"
+    for hive_file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
+      printf 'cp -- "%s/profiles/%s/%s" "%s/profiles/%s/%s"\n' \
+        "$hive_pkg_source" "$hive_profile" "$hive_file" "$hive_pkg_root" "$hive_profile" "$hive_file"
+    done
+  done
+} > "$hive_fake_bin/install-hive-package"
+chmod +x "$hive_fake_bin/sudo" "$hive_fake_bin/install-hive-package"
+printf '#!/usr/bin/env bash\nprintf old\n' > "$hive_menu_installed"
+chmod +x "$hive_menu_installed"
+for hive_profile in "${hive_profiles[@]}"; do
+  mkdir -p "$hive_pkg_source/profiles/$hive_profile" "$hive_pkg_root/profiles/$hive_profile"
+  for hive_file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
+    printf '%s\n' "$hive_profile/$hive_file source" > "$hive_pkg_source/profiles/$hive_profile/$hive_file"
+    printf '%s\n' "$hive_profile/$hive_file stale" > "$hive_pkg_root/profiles/$hive_profile/$hive_file"
+  done
+done
+(
+  HIVE_PROFILE_SOURCE="$hive_pkg_source" HIVE_PROFILE_MENU="$hive_menu_installed"
+  HIVE_PROFILE_ROOT="$hive_pkg_root/profiles" HIVE_PROFILE_INSTALLER="$hive_fake_bin/install-hive-package"
+  PATH="$hive_fake_bin:$PATH"
+  export HIVE_PROFILE_SOURCE HIVE_PROFILE_MENU HIVE_PROFILE_ROOT HIVE_PROFILE_INSTALLER PATH
+  detect_engine() { echo none; }
+  show_workload_status() { :; }
+  host_gpu_summary() { :; }
+  main < <(printf '%s\n' 14 15 11) > /dev/null
+)
+grep -qx -- '--profile orca-q4_k_s-v01441' "$hive_menu_trace"
+grep -qx -- '--profile iq3_s-sc117-abliterated' "$hive_menu_trace"
+[[ "$(wc -l < "$hive_menu_trace")" -eq 2 ]]
+[[ "$(wc -l < "$hive_install_trace")" -eq 1 ]]
+if [[ "$EUID" -eq 0 ]]; then
+  [[ ! -e "$hive_sudo_trace" ]]
+else
+  [[ "$(wc -l < "$hive_sudo_trace")" -eq 3 ]]
+  grep -Fq -- '-- ' "$hive_sudo_trace"
+fi
 # Root-side lifecycle identity can prove a Qwen session managed even if user-side /proc reports unmanaged.
 (
   detect_engine() { echo unmanaged; }

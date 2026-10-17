@@ -20,8 +20,10 @@ sudo /hive/miners/custom/llm-hosting/profile-menu.sh
 The selector changes only the `current` symlink; it never starts or stops Hive,
 Strata, Docker, or `osn.service`. It checks both API ports (8080 and 18080),
 processes, Docker, GPU compute, and the HostLLM lease before changing the next
-profile. Orca `.44.1` is the standard Strata default. `.39` is rollback-only, and
-`.41` rollback profiles remain available by explicit profile name rather than visible menu rows.
+profile. HostLLM's [12]–[15] actions compare the selected installed profile/menu
+with this checkout and run the guarded installer first if either is stale. Orca
+`.44.1` is the standard Strata default. `.39` is rollback-only, and `.41`
+rollback profiles remain available by explicit profile name rather than visible menu rows.
 
 Noninteractive selections include:
 

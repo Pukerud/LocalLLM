@@ -33,7 +33,9 @@ grep -Fq 'STRATA_SC117_IQ3S_TRIAL=1 STRATA_RUNTIME=0.1.44.1' "$HOST_MENU"
 grep -Fq 'STRATA_HOST=0.0.0.0 STRATA_PORT=8080' "$HOST_MENU"
 grep -Fq 'sc117_trial_command --stop' "$HOST_MENU"
 grep -Fq 'sc117_trial_command --status' "$HOST_MENU"
-grep -Fq 'profile-menu.sh --profile "$hive_profile"' "$HOST_MENU"
+grep -Fq 'set_next_hive_profile "$hive_profile"' "$HOST_MENU"
+grep -Fq 'hive_profile_package_is_current "$profile"' "$HOST_MENU"
+grep -Fq 'run_as_root "$HIVE_PROFILE_INSTALLER"' "$HOST_MENU"
 
 # Hive's interactive menu mirrors the requested four next-start routes; .39/.41 are explicit rollback-only profiles.
 grep -Fq '  [1] %s' "$MENU"

@@ -404,7 +404,10 @@ class ForegroundIntegration(unittest.TestCase):
     def test_cpu_q4ks_text_only_profile_request_external_stop_and_reap(self):
         self.run_case('orca-q4_k_s')
 
-    def run_case(self, profile):
+    def test_cpu_q4ks_start_replaces_dead_hive_state_before_reply(self):
+        self.run_case('orca-q4_k_s', stale_hive_state=True)
+
+    def run_case(self, profile, *, stale_hive_state=False):
         """Fake CPU frontend exercises the real launcher lifecycle, not model inference."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -420,6 +423,16 @@ class ForegroundIntegration(unittest.TestCase):
                 sock.bind(('127.0.0.1', 0))
                 port = sock.getsockname()[1]
             state_root = root / 'state'
+            if stale_hive_state:
+                state_root.mkdir()
+                dead_pid = int(Path('/proc/sys/kernel/pid_max').read_text()) + 1
+                (state_root / 'server.json').write_text(json.dumps({
+                    'identity': {'pid': dead_pid, 'start_ticks': 1, 'exe': sys.executable,
+                                 'uid': os.getuid(), 'cmd': ['python3'], 'pgid': dead_pid,
+                                 'sid': dead_pid, 'ppid': dead_pid},
+                    'allowed_executables': [], 'children': [], 'profile': profile,
+                    'hive_launch_id_sha256': '0' * 64,
+                }))
             cfg = {'args': ['--max-context', '32768'] if profile == 'orca-q4_k_s' else [],
                    'exe': '/bin/sleep', 'host': '127.0.0.1', 'port': port}
             if profile != 'orca-q4_k_s':
@@ -463,6 +476,7 @@ s.require_q4ks_candidate_lease=lambda *args,**kwargs:'a'*64
 s.q4ks_v01441.candidate_evidence_summary=lambda root: []
 s.launch_gate=lambda port: None
 s.runtime_gate=lambda state: None
+s.host_lifecycle.active_engine=lambda: 'none'
 original=s.host_lifecycle.launch_reservation
 @contextlib.contextmanager
 def observed_reservation():

@@ -208,11 +208,12 @@ trap 'if [[ "$STOPPER_ARMED" -eq 1 ]]; then stop_llm || true; fi; close_hive_scr
 [[ -f "$STOP_FILE" ]] && { say 'Hive stop marker is present; not starting Strata'; exit 0; }
 command -v runuser >/dev/null 2>&1 || { say 'runuser is unavailable'; request_hive_stop; exit 1; }
 
-# Refuse stale sessions/listeners instead of letting cleanup touch them.
+# A leftover server.json is not a live server. The launcher validates its whole
+# recorded process family under lifecycle.lock before replacing stale state.
 abort_if_stopping
 active="$(active_engine)"
-if [[ "$active" != none || -e "$STATE_FILE" ]]; then
-    say "refusing to start: existing or unmanaged LLM state ($active)"
+if [[ "$active" != none ]]; then
+    say "refusing to start: existing or unmanaged LLM ($active)"
     request_hive_stop
     exit 1
 fi
@@ -292,8 +293,8 @@ fi
 # Recheck after readiness; Strata repeats the Docker/GPU/port gate at launch.
 abort_if_stopping
 active="$(active_engine)"
-if [[ "$active" != none || -e "$STATE_FILE" ]]; then
-    say 'refusing to start: an LLM/state appeared during readiness'
+if [[ "$active" != none ]]; then
+    say 'refusing to start: an LLM appeared during readiness'
     request_hive_stop
     exit 1
 fi

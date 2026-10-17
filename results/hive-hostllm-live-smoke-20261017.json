@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-17",
+  "host": "OctaSpace-WorkerFifteen",
+  "hardware": "4 x NVIDIA GeForce RTX 3090",
+  "runtime": "Strata 0.1.44.1",
+  "scope": "Bounded real-GPU startup, short text reply, and shutdown smoke checks; not general quality, vision, long-context, throughput, or SC117 qualification.",
+  "request": {
+    "path": "/v1/chat/completions",
+    "messages": [{"role": "user", "content": "What is 2 + 2? Reply with only the number."}],
+    "max_tokens": 16,
+    "temperature": 0,
+    "reasoning_effort": "none",
+    "stream": false
+  },
+  "checks": [
+    {
+      "menu_option": 14,
+      "route": "Root HostLLM selector, then real miner start",
+      "model": "qwen3.8-flash-next-orca-q4_k_s-strata",
+      "base_url": "http://192.168.1.69:8080",
+      "reply": "4",
+      "prompt_tokens": 26,
+      "completion_tokens": 2,
+      "request_elapsed_s_including_lazy_load": 73.082,
+      "stale_server_json_present_before_start": true,
+      "server_uid": 1000,
+      "result": "pass"
+    },
+    {
+      "menu_option": 15,
+      "route": "Root HostLLM selector, then real miner start",
+      "model": "qwen3.8-flash-next-sc117-abliterated-iq3_s",
+      "base_url": "http://192.168.1.69:8080",
+      "reply": "4",
+      "prompt_tokens": 26,
+      "completion_tokens": 2,
+      "request_elapsed_s_including_lazy_load": 53.927,
+      "miner_stop_and_state_cleanup": true,
+      "server_uid": 1000,
+      "result": "pass"
+    },
+    {
+      "menu_option": 3,
+      "route": "Actual root PTY: select 3, accept empty optional key, request reply, Ctrl+C, return to menu and exit",
+      "model": "qwen3.8-flash-next-orca-q4_k_s-strata",
+      "base_url": "http://127.0.0.1:8080",
+      "reply": "4",
+      "prompt_tokens": 26,
+      "completion_tokens": 2,
+      "request_elapsed_s_including_lazy_load": 69.475,
+      "ctrl_c_shutdown_and_lease_release": true,
+      "server_uid": 1000,
+      "result": "pass"
+    },
+    {
+      "menu_option": 4,
+      "route": "Actual root PTY: select 4, request reply, Ctrl+C, return to menu and exit",
+      "model": "qwen3.8-flash-next-sc117-abliterated-iq3_s",
+      "base_url": "http://192.168.1.69:8080",
+      "reply": "4",
+      "prompt_tokens": 26,
+      "completion_tokens": 2,
+      "request_elapsed_s_including_lazy_load": 51.397,
+      "ctrl_c_shutdown_and_lease_release": true,
+      "server_uid": 1000,
+      "result": "pass"
+    }
+  ],
+  "notes": [
+    "Hive installed files were refreshed and byte-compared against the tested checkout, including SC117 trusted-LAN 8080 settings.",
+    "The first Orca miner stop verified frontend/engine/listener shutdown, but OctaSpace restarted Hive during miner stop. OctaSpace was temporarily paused to serialize the subsequent tests.",
+    "The wrappers no longer reject server.json by existence alone; the launcher still validates the recorded process family under its lifecycle lock before startup.",
+    "Root-menu tests retain the normal lifecycle pause/restore logic and keep inference unprivileged; the low-level launcher still rejects root inference.",
+    "Transcript and full response artifacts: /tmp/localllm-hive-e2e-20261017 on the tested host.",
+    "Cold first-request timings include lazy model loading and are not steady-state generation benchmarks."
+  ]
+}

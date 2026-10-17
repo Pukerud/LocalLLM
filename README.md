@@ -34,8 +34,9 @@ A persistent pause lease in `~/.local/state/hostllm/pause.json` remembers the pr
 `miner stop/start` consumes `MINER_STOP`, so the controller reasserts that marker after stop while hosting is active.
 No driver, clock, watchdog, flight-sheet or Hive configuration changes are made. A live Hive-managed Qwen listener is identified by its process, command-line port, listener PID, and private state; HostLLM checks the actual port for current clients but deliberately refuses to stop it, because it cannot prevent a new client arriving during shutdown. Stop Qwen through its owning launcher/Hive workflow, confirm it is gone, then retry. A manually launched or unverifiable LLM is never stopped as a miner.
 
-- **Strata:** stays in the foreground. Ctrl+C stops its identity-verified frontend/engine/vision helper, then restores
-  the previous miner/OctaSpace state once the GPUs have actually cleared.
+- **Strata:** stays in the foreground. Root menus automatically hand options **[3]/[4]** to the unprivileged
+  operator (`user` by default); the inference server never runs as root. Ctrl+C stops its identity-verified
+  frontend/engine/vision helper, then restores the previous miner/OctaSpace state once the GPUs have actually cleared.
 - **Swift/Hauhau:** the dashboard can leave the server running. Leaving the menu keeps mining/OctaSpace paused while
   that server is active. Use **[9]** to stop it and restore the previous state. Stop before switching models.
 - The pause survives closing/reopening the menu; **[9]** also performs safe recovery after a failed/interrupted start.
@@ -169,7 +170,7 @@ Archived comparison profiles remain explicit CLI-only and can re-download remove
 off, not normal native-context performance. Legacy `v1llama_cpp.sh`/`v1glm53.sh` are not shared-host menu choices;
 their old stop/benchmark paths are not covered by the maintained identity-bound guards.
 
-The optional [Hive custom LLM miner](hive-llm-miner/README.md) is separate from the HostLLM engine picker. HostLLM actions [12]–[15] select Swift, Hauhau, Orca `.44.1`, and the isolated SC117 `.44.1` CPU-vision trial. Orca `.44.1` is the standard Hive Strata selection; `.39` and `.41` are rollback-only. If the old SC117 `.39` or generic `.39` pointer exists, installation migrates it to standard `.44.1` before replacing the SC117 profile directory. SC117 remains unqualified and uses trusted-LAN `0.0.0.0:8080` without authentication, with dedicated state; it shares port 8080 exclusively with Orca. The root-only profile menu changes one atomic pointer after idle/readiness checks; it refuses while the API, Docker/GPU work, an LLM process, or a HostLLM lease is active and never starts/stops miners or services. Do not run it during a rental.
+The optional [Hive custom LLM miner](hive-llm-miner/README.md) is separate from the HostLLM engine picker. HostLLM actions [12]–[15] select Swift, Hauhau, Orca `.44.1`, and the isolated SC117 `.44.1` CPU-vision trial. Orca `.44.1` is the standard Hive Strata selection; `.39` and `.41` are rollback-only. If the old SC117 `.39` or generic `.39` pointer exists, installation migrates it to standard `.44.1` before replacing the SC117 profile directory. SC117 remains unqualified and uses trusted-LAN `0.0.0.0:8080` without authentication, with dedicated state; it shares port 8080 exclusively with Orca. The root-only profile menu changes one atomic pointer after idle/readiness checks; it refuses while the API, Docker/GPU work, an LLM process, or a HostLLM lease is active and never starts/stops miners or services. HostLLM refreshes the Hive package through the guarded installer first when the selected profile/menu differs from this checkout. Do not run it during a rental.
 
 ## Checks and references
 
@@ -184,6 +185,7 @@ python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
 Linux tests use CPU-only fixtures and mocked system/miner boundaries; live GPU/API/LAN checks are documented
-separately. Historical tuning: [Swift two-slot](SWIFT15U_2SLOT_2026-09-26.md), [Swift source/MTP](SWIFT15.md),
+separately. [Hive and root-menu smoke results](results/hive-hostllm-live-smoke-20261017.json) record real short
+prompt/reply tests for [3], [4], [14], and [15], not only readiness or `/health` checks. Historical tuning: [Swift two-slot](SWIFT15U_2SLOT_2026-09-26.md), [Swift source/MTP](SWIFT15.md),
 [retired GSQ Q2](GSQ_TUNING_RESULTS.md), [September speed research](SPEED_REPORT_2026-09-24.md).
 Strata is MIT-licensed; model weights retain their publisher licenses, including Swift Open License terms.

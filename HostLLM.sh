@@ -6,6 +6,10 @@ set -uo pipefail
 # Never let inherited bash xtrace print credentials during the interactive handoff.
 set +x
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+HIVE_PROFILE_SOURCE="$SCRIPT_DIR/hive-llm-miner"
+HIVE_PROFILE_MENU='/hive/miners/custom/llm-hosting/profile-menu.sh'
+HIVE_PROFILE_ROOT='/hive/miners/custom/llm-hosting/profiles'
+HIVE_PROFILE_INSTALLER="$SCRIPT_DIR/install-hive-llm-miner.sh"
 HOSTLLM_ACTIVE_LEASE_ID=''
 unset HOSTLLM_STRATA_API_KEY
 if [[ -n "${STRATA_API_KEY:-}" ]]; then
@@ -30,7 +34,73 @@ release_menu_lease_on_exit() {
 owned_stop() {
     if [[ "$EUID" -eq 0 ]]; then "$@"; else sudo -n "$@"; fi
 }
+run_as_root() {
+    if [[ "$EUID" -eq 0 ]]; then "$@"; else sudo -- "$@"; fi
+}
+hive_profile_package_is_current() {
+    local profile="$1" file source_file installed_file
+    [[ -f "$HIVE_PROFILE_SOURCE/profile-menu.sh" && -x "$HIVE_PROFILE_MENU" ]] || return 1
+    cmp -s "$HIVE_PROFILE_SOURCE/profile-menu.sh" "$HIVE_PROFILE_MENU" || return 1
+    for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
+        source_file="$HIVE_PROFILE_SOURCE/profiles/$profile/$file"
+        installed_file="$HIVE_PROFILE_ROOT/$profile/$file"
+        [[ -f "$source_file" && -f "$installed_file" && ! -L "$installed_file" ]] || return 1
+        cmp -s "$source_file" "$installed_file" || return 1
+    done
+}
+set_next_hive_profile() {
+    local profile="$1"
+    if [[ ! -x "$HIVE_PROFILE_MENU" ]]; then
+        echo 'Hive profile menu is not installed. Install the Hive custom miner package first.'
+    elif [[ "$EUID" -ne 0 ]] && ! command -v sudo >/dev/null 2>&1; then
+        echo 'sudo is unavailable; run the Hive profile menu as root when the miner is idle.'
+    else
+        if ! hive_profile_package_is_current "$profile"; then
+            if [[ ! -x "$HIVE_PROFILE_INSTALLER" ]]; then
+                echo 'Installed Hive profile is outdated; the LocalLLM installer is missing.'
+                return 1
+            fi
+            echo 'Refreshing the outdated Hive profile package; miner and services remain untouched.'
+            if ! run_as_root "$HIVE_PROFILE_INSTALLER"; then
+                echo 'Hive profile refresh failed; no profile selection was attempted.'
+                return 1
+            fi
+            if ! hive_profile_package_is_current "$profile"; then
+                echo 'Hive profile refresh did not match this LocalLLM version; no profile selection was attempted.'
+                return 1
+            fi
+        fi
+        if ! run_as_root "$HIVE_PROFILE_MENU" --profile "$profile"; then
+            echo "Hive profile selection failed for '$profile'; see the error above."
+            return 1
+        fi
+    fi
+}
 detect_engine() { safety active 2>/dev/null || printf 'unknown\n'; }
+
+run_strata_as_operator() {
+    local owner_user owner_home owner_uid state_root
+    owner_user="${QWEN38_OWNER_USER:-${SUDO_USER:-user}}"
+    owner_uid="$(id -u "$owner_user" 2>/dev/null)" || return 1
+    owner_home="$(getent passwd "$owner_user" | cut -d: -f6)"
+    if [[ "$owner_uid" == 0 || -z "$owner_home" || "$owner_home" == /root ]]; then
+        echo 'Cannot hand Strata to an unprivileged operator; set QWEN38_OWNER_USER=user.' >&2
+        return 1
+    fi
+    command -v runuser >/dev/null 2>&1 || { echo 'runuser is unavailable; Strata was not started.' >&2; return 1; }
+    state_root="$owner_home/.local/state/locallm-strata"
+    [[ "${STRATA_SC117_IQ3S_TRIAL:-0}" != 1 ]] || state_root+='/sc117-iq3s-trial'
+    echo "Handing Strata hosting to $owner_user; the server will not run as root."
+    runuser -u "$owner_user" -- /usr/bin/env -i \
+        "HOME=$owner_home" "USER=$owner_user" "LOGNAME=$owner_user" \
+        'PATH=/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin' 'PYTHONDONTWRITEBYTECODE=1' \
+        "QWEN38_OWNER_USER=$owner_user" "HOSTLLM_STATE_ROOT=${HOSTLLM_STATE_ROOT:-$owner_home/.local/state/hostllm}" \
+        "QWEN38_STATE_ROOT=$owner_home/.local/state/locallm-qwen38" \
+        "STRATA_DATA_ROOT=$owner_home/.local/share/localllm-strata" "STRATA_STATE_ROOT=$state_root" \
+        "STRATA_HOST=${STRATA_HOST:-127.0.0.1}" "STRATA_PORT=${STRATA_PORT:-8080}" \
+        "STRATA_SC117_IQ3S_TRIAL=${STRATA_SC117_IQ3S_TRIAL:-0}" \
+        "$SCRIPT_DIR/HostLLM.sh" --run-strata "$@"
+}
 
 sc117_trial_command() {
     local owner_user owner_home trial_state
@@ -119,8 +189,8 @@ run_selected() {
     local HOSTLLM_STRATA_API_KEY=''
     shift
     if [[ "$launcher" == v1strata.sh && "$EUID" -eq 0 ]]; then
-        echo 'Run Strata as the unprivileged operator; its profiles refuse root-owned servers.'
-        return 1
+        run_strata_as_operator "$@"
+        return "$?"
     fi
     if [[ ! -x "$SCRIPT_DIR/$launcher" ]]; then
         echo "$launcher is missing or not executable."
@@ -514,13 +584,7 @@ main() {
                 [[ "$choice" == 13 ]] && hive_profile=hauhau-q8-fastmtp-q4kv-xhigh
                 [[ "$choice" == 14 ]] && hive_profile=orca-q4_k_s-v01441
                 [[ "$choice" == 15 ]] && hive_profile=iq3_s-sc117-abliterated
-                if [[ ! -x /hive/miners/custom/llm-hosting/profile-menu.sh ]]; then
-                    echo 'Hive profile menu is not installed. Install the Hive custom miner package first.'
-                elif ! command -v sudo >/dev/null 2>&1; then
-                    echo 'sudo is unavailable; run the Hive profile menu as root when the miner is idle.'
-                else
-                    sudo -- /hive/miners/custom/llm-hosting/profile-menu.sh --profile "$hive_profile"
-                fi
+                set_next_hive_profile "$hive_profile"
                 ;;
         esac
         if [[ -t 0 ]]; then
@@ -531,6 +595,11 @@ main() {
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     trap 'release_menu_lease_on_exit || true' EXIT
+    if [[ "${1:-}" == --run-strata ]]; then
+        shift
+        run_selected v1strata.sh "$@"
+        exit "$?"
+    fi
     if [[ "${1:-}" == --prepare-q4ks141 ]]; then
         [[ "$#" -eq 1 ]] || { echo '--prepare-q4ks141 takes no extra flags' >&2; exit 2; }
         run_q4ks141_prepare
