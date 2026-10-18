@@ -1,6 +1,6 @@
 # Orca Q4_K_S / Strata 0.1.41 — isolated candidate
 
-**Status: opt-in `.41` rollback path; Orca Q4 `.44.1` is the standard Strata profile, while `.39`/`.41` remain rollback-only.** The recorded Q4 .39 prefill baseline is `956.4` input tokens/s median over three uncached 5,295-token prompts, capped at 16 output tokens. No .41 speed or generalized-quality claim is made; any .41 result is a bounded operator self-attestation, not qualification.
+**Status: opt-in `.41` rollback path; Orca Q4 `.45` is the standard Strata profile, while `.39`, `.41`, and `.44.1` are explicit rollback routes.** The recorded Q4 .39 prefill baseline is `956.4` input tokens/s median over three uncached 5,295-token prompts, capped at 16 output tokens. No .41 speed or generalized-quality claim is made; any .41 result is a bounded operator self-attestation, not qualification.
 
 The candidate pins Strata `fb58e0dbc8399662c0e47c76578c6e878b14f6cf` and is independent of `strata_runtime.py`'s default-selection manager. It reuses the already prepared .39 Q4 shards/compatibility pack as read-only shared inputs, and requires the exact prepared generic .41 llama.cpp commit and vision-helper hash to pass manifest/source/hash checks. The candidate records its own full llama.cpp source-tree hash without modifying the generic .41 manifest. It has a distinct Q4 source checkout and CMake cache with CUDA, `STRATA_NATIVE_EXPERTS=ON`, `STRATA_ORCA_Q4KS_MMQ=ON`, and `STRATA_BUILD_TESTS=ON`.
 
@@ -43,7 +43,7 @@ The native/vision runner requires an already-running identity-verified HostLLM .
 
 HostLLM runs `--check-ready` before acquiring a pause lease. The candidate parity command requires a new HostLLM-owned pause lease, refuses an already-active or unmanaged server, verifies exact pinned shard hashes, and uses identity-bound child cleanup (pidfd only; no numeric-PID fallback). Direct candidate parity as root is refused. Do not launch its parity binaries directly.
 
-The `.41` rollback path does not change `runtime-selection.json`, the generic `.39` rollback profile/config/runtime, the recorded baseline result, or the separate IQ3_XXS asset-cleanup state. Current user-facing Orca Q4 selection is HostLLM [3]/Hive [14] for `.44.1`; `.39` and `.41` remain explicit rollback profiles, and no `.41` row appears in the requested menu. The normal IQ3 runtime-selection behavior is unchanged.
+The `.41` rollback path does not change `runtime-selection.json`, the generic `.39` rollback profile/config/runtime, the recorded baseline result, or the separate IQ3_XXS asset-cleanup state. Current user-facing Orca Q4 selection is HostLLM [3]/Hive [14] for `.45`; `.39`, `.41`, and `.44.1` remain explicit rollback routes, and no `.41` row appears in the requested menu. The normal IQ3 runtime-selection behavior is unchanged.
 
 ## Candidate-specific 32K gate
 

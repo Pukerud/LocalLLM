@@ -1,6 +1,6 @@
 # HiveOS LocalLLM custom miner
 
-This package installs one Hive custom miner with an atomic next-start profile selector. The standard Strata selection is Orca Q4_K_S Strata 0.1.44.1 with auto prefill and trimmed `14,24,36` split; the windows-2 override is omitted. Orca .39 is rollback-only. Hive's standard Orca profile deliberately binds `0.0.0.0:8080` for trusted-LAN serving and is unauthenticated; do not expose it to an untrusted network. HostLLM's Orca route also defaults to trusted-LAN serving (explicit `STRATA_HOST=127.0.0.1` retains local-only access). The unqualified SC117 `.44.1` trial also binds trusted-LAN `0.0.0.0:8080` without authentication and shares the port exclusively with Orca. The other user-facing actions are Swift, Hauhau, and that SC117 trial. The old SC117 .39 selector route is retired; shared model/native-pack assets are preserved.
+This package installs one Hive custom miner with an atomic next-start profile selector. The standard Strata selection is Orca Q4_K_S Strata 0.1.45 with auto prefill and trimmed `14,24,36` split; the windows-2 override is omitted. Orca .39 is rollback-only; .41 and .44.1 remain explicit rollback runtimes. Hive's standard Orca profile deliberately binds `0.0.0.0:8080` for trusted-LAN serving and is unauthenticated; do not expose it to an untrusted network. HostLLM's Orca route also defaults to trusted-LAN serving (explicit `STRATA_HOST=127.0.0.1` retains local-only access). The unqualified SC117 `.45` trial also binds trusted-LAN `0.0.0.0:8080` without authentication and shares the port exclusively with Orca. The other user-facing actions are Swift, Hauhau, and that SC117 trial. The old SC117 .39 selector route is retired; shared model/native-pack assets are preserved. Strata .45 is build/provenance checked; no Q4-specific speed, quality, or 40% improvement is claimed.
 
 ## Interactive selector
 
@@ -13,8 +13,8 @@ sudo /hive/miners/custom/llm-hosting/profile-menu.sh
 ```text
 [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots
 [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots
-[3] Orca Q4_K_S — Strata 0.1.44.1 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted
-[4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot; unqualified trusted-LAN trial on 8080 (no auth)
+[3] Orca Q4_K_S — Strata 0.1.45 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted
+[4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot; unqualified trusted-LAN trial on 8080 (no auth)
 ```
 
 The selector changes only the `current` symlink; it never starts or stops Hive,
@@ -29,9 +29,8 @@ Selecting an already-current, unchanged profile is a fast no-op without reloadin
 Manual hosting sessions, rentals, and unrelated GPU work are never stopped.
 An interrupted/blocked restoration retains `~user/.local/state/hostllm/hive-profile-switch.json`;
 run `sudo python3 /home/user/LocalLLM/hive_profile_switch.py --recover` after the
-conflicting workload is safely gone. Orca
-`.44.1` is the standard Strata default. `.39` is rollback-only, and `.41`
-rollback profiles remain available by explicit profile name rather than visible menu rows.
+conflicting workload is safely gone. Orca `.45` is the standard Strata default. `.39`, `.41`, and `.44.1`
+rollback profiles remain available by explicit runtime/profile name rather than visible menu rows.
 
 Noninteractive selections include:
 
@@ -46,14 +45,14 @@ Both Orca and SC117 load their weights and vision encoder immediately during sta
 
 ## SC117 trial isolation
 
-SC117 is **unqualified and trial-only**. Its Hive wrapper uses Strata 0.1.44.1,
+SC117 is **unqualified and trial-only**. Its Hive wrapper uses Strata 0.1.45,
 CPU vision, exactly one serving slot/group, and a dedicated state root:
 
 ```text
 Host:       0.0.0.0 (trusted LAN; unauthenticated)
 Port:       8080
 State:      /home/user/.local/state/locallm-strata/sc117-iq3s-trial
-Runtime:    Strata 0.1.44.1
+Runtime:    Strata 0.1.45
 Vision:     CPU
 MTP:        4
 Context:    262144 native
@@ -76,14 +75,14 @@ assets are deleted by the menu cleanup.
 
 ## Install and rollback
 
-The installer checks the pinned Orca .44.1 standard profile, the retained .39/.41
-rollback profiles, and the exact SC117 trial preflight before changing Hive
+The installer checks the pinned Orca .45 build/profile, retained .39/.41/.44.1
+rollback routes, and exact SC117 trial preflight before changing Hive
 configuration. If the current pointer selects generic Orca .39 or the obsolete
 SC117 .39 route, it atomically migrates the next-start pointer to standard Orca
-.44.1 before replacing the SC117 profile directory with the isolated trial
-package. Other recognized selections, including the explicit SC117 .44.1 trial,
-are preserved. The installer does not start/stop Hive or `osn.service`.
+.45 before replacing the SC117 profile directory with the isolated trial
+package. Other recognized selections, including an existing SC117 trial, are
+preserved. The installer does not start/stop Hive or `osn.service`.
 
-The menu does not expose `.41` rows, but explicit `.41` profile names remain
-available for rollback. Keep Orca `.44.1` as standard, `.39`/`.41` as rollback,
-and all shared model/native-pack assets.
+The menu does not expose rollback rows, but `.39`/`.41`/`.44.1` runtime paths
+remain available for rollback. Keep Orca `.45` as standard and preserve all
+shared model/native-pack assets.

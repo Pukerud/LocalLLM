@@ -1,6 +1,6 @@
 # Orca Uncensored Q4_K_S — bounded live validation recorded
 
-**Status:** all publisher-pinned shards and both real-shard parity tests passed. Under the HostLLM lease, Q4 passed the initial 32K text-only functional/MTP/memory gates, then a native-context/CPU-vision probe: a synthetic magenta-square image was identified correctly, and one 260,996-token prompt (99.56% of the configured 262,144 window) returned its tail marker. The future profile is configured for native 262144, INT8 KV, 32768 resident, CPU vision, and one slot. HostLLM option [4] routes to Q4 .39; IQ3_XXS weights and pack were later removed, so it is not a runnable rollback. The previously verified Swift/Qwen Q8 profile remains the explicit fallback. **These are bounded probes, not a general long-context quality, throughput, worst-case-memory, multi-user, or sustained-load qualification.**
+**Historical Q4 validation report (2026-10-09):** all publisher-pinned shards and both real-shard parity tests passed. Under the HostLLM lease, Q4 passed the initial 32K text-only functional/MTP/memory gates, then a native-context/CPU-vision probe: a synthetic magenta-square image was identified correctly, and one 260,996-token prompt (99.56% of the configured 262,144 window) returned its tail marker. The profile was configured for native 262144, INT8 KV, 32768 resident, CPU vision, and one slot. At the time, HostLLM option [4] routed to Q4 .39. That Q4 route remains a rollback; the later IQ3_XXS model/pack cleanup only prevents restoring that separate legacy model from this directory. The current Q4 standard is Strata .45 via HostLLM [3]/Hive [14]; HostLLM [4]/Hive [15] is the separate, unqualified SC117 .45 trial. The previously verified Swift/Qwen Q8 profile remains the explicit fallback. **These are bounded probes, not a general long-context quality, throughput, worst-case-memory, multi-user, or sustained-load qualification.**
 
 The 32K report records arithmetic, strict JSON, tool-call, and health passes; MTP drafted 38 tokens and accepted 36. Peak per-GPU memory was 23,340 / 21,948 / 20,494 / 23,150 MiB (sum of per-device peaks: 88,932 MiB); minimum available host RAM was 49,938 MiB. The native/vision report records the synthetic-image answer `Magenta`; the long prompt used 260,996 input tokens, returned `Q4-NATIVE-CTX-8F31`, and finished in 312.6 seconds. Minimum available RAM was 44,293 MiB. Per-GPU peaks were 23,500 / 22,416 / 20,962 / 23,310 MiB (sum: 90,188 MiB); the four cards are separate memory pools, not one shared pool. The prompt was deliberately repetitive and tests one tail retrieval only.
 
@@ -8,7 +8,7 @@ Reports are retained at `profiles/orca-q4_k_s/validation-32k.json` and `profiles
 
 `native_expert_parity` reported zero failures at selected layers 0, 5, 6, 20, and 47. `ple_q5_parity` reported 320,001,536 rows with max absolute difference `0.000e+00`. These verify the tested kernels/tables against their references; they are not end-to-end model inference or quality tests.
 
-The IQ3_XXS model and compatibility pack were removed from `.69` to reclaim disk, so the retained profile/evidence metadata is not a usable CLI rollback. The Q4 build and `.39` selection do not change that state. Do not attempt an IQ3_XXS start unless its assets are restored and readiness passes; the Swift/Qwen Q8 profile is the previous runnable fallback.
+The IQ3_XXS model and compatibility pack were removed from `.69` to reclaim disk, so the retained profile/evidence metadata is not a usable CLI rollback. At the time of this report, the Q4 build and selected `.39` path did not restore those assets. Do not attempt an IQ3_XXS start unless its assets are restored and readiness passes; the Swift/Qwen Q8 profile is the previous runnable fallback.
 
 ## Exact pins and separate storage
 
@@ -33,8 +33,9 @@ runtimes/orca-q4_k_s-0.1.39/source/      # separate CUDA/native-expert Q4-enable
 ```
 
 This runtime is deliberately **not** part of `strata_runtime.py`'s selected-runtime manager. It does not change
-`runtime-selection.json`, or replace/modify normal `.38`, `.39`, or `.41` engines. The current `iq3_s` default
-and `.39` selection are not changed; the IQ3_XXS weights/pack were separately removed from `.69`.
+`runtime-selection.json`, or replace/modify normal `.38`, `.39`, or `.41` engines. At the time of this 2026-10-09
+preparation, the generic `iq3_s` default and `.39` selection were not changed; the IQ3_XXS weights/pack were
+separately removed from `.69`. The current Q4 `.45` route is documented in `ORCA_Q4KS_V01441.md`.
 
 ## Explicit preparation and parity gates
 
@@ -61,7 +62,7 @@ packs/builds are never overwritten. HF credentials are read privately and never 
 run as the normal operator; both reject effective UID 0, so CUDA/model binaries are never launched as root. Data
 paths are resolved and constrained beneath `STRATA_DATA_ROOT`.
 
-Before readiness permits [4], both parity programs must pass against all publisher-pinned shards. Run them only through HostLLM's guarded parity command above; do not launch the CUDA binaries directly.
+Before the historical Q4 menu route could be used, both parity programs had to pass against all publisher-pinned shards. Run them only through HostLLM's guarded parity command above; do not launch the CUDA binaries directly.
 
 Run both real-shard tests only through `./HostLLM.sh --verify-q4ks-parity`: it refuses an active LLM or
 pre-existing pause lease, uses HostLLM's identity-bound miner/OctaSpace pause-and-restore lifecycle, verifies
@@ -82,10 +83,11 @@ the future profile migrated to 262144 context with INT8 KV and 32768 resident, t
 The 32K result does not stand in for native-context or image validation.
 
 HostLLM checks `--check-ready` before calling `hosting begin`; missing preparation/parity therefore cannot pause the
-miner or OctaSpace. If another Strata profile is already running, menu option [4] displays its status and leaves it
-alone. The initial stage did not enable vision, batching, or a parallel override. After the required 32K gates,
-`.69` was explicitly migrated to native context and CPU vision, then tested under HostLLM. The configured profile
-remains single-slot; readiness validates pins/configuration while stored live reports describe the limited probes.
+miner or OctaSpace. In the historical menu, Q4 option [4] displayed another running Strata profile's status and left
+it alone. The current Q4 route is HostLLM [3]/Hive [14] on `.45`; [4]/[15] is the unqualified SC117 trial. The initial
+stage did not enable vision, batching, or a parallel override. After the required 32K gates, `.69` was explicitly
+migrated to native context and CPU vision, then tested under HostLLM. The configured profile remains single-slot;
+readiness validates pins/configuration while stored live reports describe the limited probes.
 
 ## Recording the 32K live gates and later migration
 
@@ -169,7 +171,8 @@ image or full-context quality.
 The pinned 111.77 GB shards, separate 0.1.39 CUDA build, compatibility pack, preparation manifest, parity record,
 32K report and native/vision report are present under Q4-only paths on `.69`. The future profile is native 262144,
 INT8 KV / 32768 resident, CPU vision, and one slot. Q4 was stopped through its identity-bound launcher after
-validation; the previous miner and OctaSpace state were restored. IQ3_XXS model/pack assets were later removed; the
-at that time, the generic `.39` runtime and normal default remained intact; the current Orca Q4 standard is `.44.1` and `.39` is rollback-only. No renter, Docker workload, or unknown GPU job was stopped.
+validation; the previous miner and OctaSpace state were restored. IQ3_XXS model/pack assets were later removed.
+At the time, the generic `.39` runtime and normal default remained intact. The current Orca Q4 standard is `.45`;
+`.39`, `.41`, and `.44.1` are explicit rollback routes. No renter, Docker workload, or unknown GPU job was stopped.
 
 Upstream technical basis: [Strata `ORCA_Q4_K_S.md` at the pinned 0.1.39 commit](https://github.com/Niko1221/Strata/blob/6f32ec070f23ced9f50e704d854d775da52591ab/docs/ORCA_Q4_K_S.md).

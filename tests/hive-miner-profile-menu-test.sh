@@ -9,7 +9,7 @@ UNINSTALL="$ROOT/uninstall-hive-llm-miner.sh"
 SC117_HIVE="$ROOT/hive-llm-miner/profiles/iq3_s-sc117-abliterated"
 ORCA_HIVE="$ROOT/hive-llm-miner/profiles/orca-q4_k_s-v01441"
 HAUHAU_HIVE="$ROOT/hive-llm-miner/profiles/hauhau-q8-fastmtp-q4kv-xhigh"
-TRIAL_LINE='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.'
+TRIAL_LINE='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.'
 
 for script in "$MENU" "$HOST_MENU" "$INSTALL" "$UNINSTALL" \
     "$ORCA_HIVE/h-run.sh" \
@@ -20,16 +20,16 @@ done
 # HostLLM exposes only the requested four model rows and retains the reserved controls.
 grep -Fq '[1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots' "$HOST_MENU"
 grep -Fq '[2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots' "$HOST_MENU"
-grep -Fq '[3] Orca Q4_K_S — Strata 0.1.44.1 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted' "$HOST_MENU"
-grep -Fq '[4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot | LAN 8080' "$HOST_MENU"
+grep -Fq '[3] Orca Q4_K_S — Strata 0.1.45 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted' "$HOST_MENU"
+grep -Fq '[4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot | LAN 8080' "$HOST_MENU"
 grep -Fq '[9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit' "$HOST_MENU"
 grep -Fq '[12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL' "$HOST_MENU"
 grep -Fq '[13] Set next Hive miner - Hauhau Q8_K_P' "$HOST_MENU"
-grep -Fq '[14] Set next Hive miner - Orca Q4_K_S .44.1' "$HOST_MENU"
-grep -Fq '[15] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot | LAN 8080' "$HOST_MENU"
+grep -Fq '[14] Set next Hive miner - Orca Q4_K_S .45' "$HOST_MENU"
+grep -Fq '[15] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot | LAN 8080' "$HOST_MENU"
 ! grep -Eq "^[[:space:]]*echo .*\\[(5|6|7|8|16|17)\\]" "$HOST_MENU"
 grep -Fq '3|4)' "$HOST_MENU"
-grep -Fq 'STRATA_SC117_IQ3S_TRIAL=1 STRATA_RUNTIME=0.1.44.1' "$HOST_MENU"
+grep -Fq 'STRATA_SC117_IQ3S_TRIAL=1 STRATA_RUNTIME=0.1.45' "$HOST_MENU"
 grep -Fq 'STRATA_HOST=0.0.0.0 STRATA_PORT=8080' "$HOST_MENU"
 grep -Fq 'sc117_trial_command --stop' "$HOST_MENU"
 grep -Fq 'sc117_trial_command --status' "$HOST_MENU"
@@ -48,7 +48,7 @@ grep -Fq "fail 'Orca Q4_K_S readiness check failed; profile unchanged'" "$MENU"
 grep -Fq 'auto prefill + trimmed 14,24,36 split | windows-2 override omitted' "$MENU"
 grep -Fq 'STRATA_HOST=0.0.0.0' "$ORCA_HIVE/h-run.sh"
 grep -Fq 'trusted-LAN bind, unauthenticated' "$ORCA_HIVE/llm-hosting.conf"
-grep -Fq 'checking standard Q4_K_S Strata 0.1.44.1 profile' "$ORCA_HIVE/h-run.sh"
+grep -Fq 'checking standard Q4_K_S Strata 0.1.45 profile' "$ORCA_HIVE/h-run.sh"
 grep -Fq "2|hauhau-q8-fastmtp-q4kv-xhigh) target='hauhau-q8-fastmtp-q4kv-xhigh'" "$MENU"
 grep -Fq "3|orca-q4_k_s-v01441) target='orca-q4_k_s-v01441'" "$MENU"
 grep -Fq "4|iq3_s-sc117-abliterated) target='iq3_s-sc117-abliterated'" "$MENU"
@@ -82,7 +82,7 @@ for consumer in "$HOST_MENU" "$MENU" "$INSTALL" "$SC117_HIVE/h-run.sh"; do
 done
 grep -Fq "actual_readiness=\"\$(grep '^TRIAL CONFIG:' <<< \"\$readiness\" || true)\"" "$SC117_HIVE/h-run.sh"
 grep -Fq "STRATA_STATE_ROOT='/home/user/.local/state/locallm-strata/sc117-iq3s-trial'" "$SC117_HIVE/h-run.sh"
-grep -Fq "RUNTIME='0.1.44.1'" "$SC117_HIVE/h-run.sh"
+grep -Fq "RUNTIME='0.1.45'" "$SC117_HIVE/h-run.sh"
 grep -Fq "PORT='8080'" "$SC117_HIVE/h-run.sh"
 grep -Fq "STRATA_HOST='0.0.0.0'" "$SC117_HIVE/h-run.sh"
 grep -Fq 'PYTHONPYCACHEPREFIX=$STRATA_STATE_ROOT/pycache' "$SC117_HIVE/h-run.sh"
@@ -102,7 +102,7 @@ grep -Fq 'QUALIFIED=0' "$SC117_HIVE/llm-hosting.conf"
 grep -Fq 'VISION=cpu' "$SC117_HIVE/llm-hosting.conf"
 grep -Fq 'HOST=0.0.0.0' "$SC117_HIVE/llm-hosting.conf"
 grep -Fq 'PORT=8080' "$SC117_HIVE/llm-hosting.conf"
-grep -Fq 'RUNTIME=0.1.44.1' "$SC117_HIVE/llm-hosting.conf"
+grep -Fq 'RUNTIME=0.1.45' "$SC117_HIVE/llm-hosting.conf"
 
 # Missing Hauhau Hive profile is supplied; exact labels and dispatch exist for all four routes.
 for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
@@ -115,10 +115,10 @@ grep -Fq 'PARALLEL=3' "$HAUHAU_HIVE/llm-hosting.conf"
 grep -Fq 'FastMTP n4' "$HAUHAU_HIVE/llm-hosting.conf"
 grep -Fq 'PROFILE=hauhau-q8-fastmtp-q4kv-xhigh' "$HAUHAU_HIVE/llm-hosting.conf"
 
-# Installer readiness and pointer migration select .44.1 as standard; .39/.41 are rollback-only.
+# Installer readiness and pointer migration select .45 as standard; .39/.41/.44.1 are rollback routes.
 grep -Fq "initial_profile='orca-q4_k_s-v01441'" "$INSTALL"
-grep -Fq 'STRATA_RUNTIME=0.1.44.1 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 STRATA_PORT=8080' "$INSTALL"
-grep -Fq "candidate_expected_readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.44.1; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'" "$INSTALL"
+grep -Fq 'STRATA_RUNTIME=0.1.45 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 STRATA_PORT=8080' "$INSTALL"
+grep -Fq "candidate_expected_readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.45; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'" "$INSTALL"
 grep -Fq 'migrate_legacy_pointer=1' "$INSTALL"
 grep -Fq "PROFILE_LOCK_FILE='/run/llm-hosting-profile-menu.lock'" "$INSTALL"
 grep -Fq 'flock -n 9' "$INSTALL"
@@ -135,8 +135,8 @@ grep -Fq 'sc117_profile_for_runtime' "$INSTALL"
 grep -Fq 'current_legacy_runtime="$(read_profile_runtime' "$INSTALL"
 grep -Fq 'migration_runtime="$(read_profile_runtime' "$INSTALL"
 grep -Fq "0.1.39) printf 'orca-q4_k_s-v01441'" "$INSTALL"
-grep -Fq "0.1.44.1) printf 'iq3_s-sc117-abliterated'" "$INSTALL"
-grep -Fq 'Migrated the obsolete .39/SC117 .39 next-start pointer to the verified standard Orca Q4_K_S .44.1' "$INSTALL"
+grep -Fq "0.1.44.1|0.1.45) printf 'iq3_s-sc117-abliterated'" "$INSTALL"
+grep -Fq 'Migrated the obsolete .39/SC117 .39 next-start pointer to the verified standard Orca Q4_K_S .45' "$INSTALL"
 # Exercise the exact config parser/mapping used by both symlink and legacy-profile migration paths.
 migration_tmp="$(mktemp -d)"
 trap 'rm -rf -- "$migration_tmp"' EXIT
@@ -188,4 +188,4 @@ fi
 [[ "$(grep '^TRIAL CONFIG:' <<< "$TRIAL_LINE extra")" != "$TRIAL_LINE" ]]
 [[ "$(printf '%s\n%s\n' "$TRIAL_LINE" "$TRIAL_LINE" | grep '^TRIAL CONFIG:')" != "$TRIAL_LINE" ]]
 
-echo 'Hive menu/profile trial isolation, dispatch, .44.1-standard installer, and rollback static checks: PASS'
+echo 'Hive menu/profile trial isolation, dispatch, .45-standard installer, and rollback static checks: PASS'

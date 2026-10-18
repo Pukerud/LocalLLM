@@ -1,18 +1,18 @@
 # LocalLLM — Swift, Hauhau, Strata and Orca
 
-Local HostLLM menu definition for `.69` (4× RTX 3090, 128 GB RAM). The standard Strata route is Orca Q4_K_S `.44.1` with auto prefill and trimmed `14,24,36` split; the windows-2 override is omitted. Orca `.39` and `.41` remain rollback-only. SC117 is an unqualified `.44.1` trial only, exposed on trusted-LAN `0.0.0.0:8080` without API authentication; it uses CPU vision and dedicated state and is not normal or production hosting. SC117 and Orca use the same port and cannot serve concurrently.
+Local HostLLM menu definition for `.69` (4× RTX 3090, 128 GB RAM). The standard Strata route is Orca Q4_K_S `.45` with auto prefill and trimmed `14,24,36` split; the windows-2 override is omitted. Orca `.39`, `.41`, and `.44.1` remain explicit rollback routes. SC117 is an unqualified `.45` trial only, exposed on trusted-LAN `0.0.0.0:8080` without API authentication; it uses CPU vision and dedicated state and is not normal or production hosting. SC117 and Orca use the same port and cannot serve concurrently. The `.45` engine/build is pinned and artifact-checked, but no `.45`-specific Q4 speed/quality claim is made.
 
 ```text
   [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots
   [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots
-  [3] Orca Q4_K_S — Strata 0.1.44.1 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted
-  [4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot
+  [3] Orca Q4_K_S — Strata 0.1.45 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted
+  [4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot
 
   [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit
   [12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots
   [13] Set next Hive miner - Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots
-  [14] Set next Hive miner - Orca Q4_K_S .44.1 (auto prefill, trimmed split; windows-2 override omitted)
-  [15] Set next Hive miner - profile to SC117 abliterated IQ3_S (MTP)
+  [14] Set next Hive miner - Orca Q4_K_S .45 (auto prefill, trimmed split; windows-2 override omitted)
+  [15] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) .45 unqualified trial (MTP)
 ```
 
 ## Start hosting
@@ -20,7 +20,7 @@ Local HostLLM menu definition for `.69` (4× RTX 3090, 128 GB RAM). The standard
 ```bash
 cd /home/user/LocalLLM
 ./HostLLM.sh
-# Select 1–4. [3] starts the Orca .44.1 candidate; [4] starts only the isolated SC117 .44.1 CPU-vision trial.
+# Select 1–4. [3] starts the Orca .45 candidate; [4] starts only the isolated SC117 .45 CPU-vision trial.
 # Hive actions [12]–[15] safely switch an owned Hive LLM; no manual miner stop is needed.
 # No manual miner stop is needed when no live Qwen listener is present and readiness passes.
 ```
@@ -46,15 +46,15 @@ No driver, clock, watchdog, flight-sheet or Hive configuration changes are made.
 
 ## LAN web UI and APIs
 
-For the standard Hive Orca `.44.1` trusted-LAN profile (unauthenticated; use only on a trusted network), these are the `.69` endpoints:
+For the standard Hive Orca `.45` trusted-LAN profile (unauthenticated; use only on a trusted network), these are the `.69` endpoints:
 
 - **Web UI:** <http://192.168.1.69:8080/>
 - **OpenAI API:** `http://192.168.1.69:8080/v1` (`/chat/completions`, `/models`)
 - **Anthropic API:** `http://192.168.1.69:8080/v1/messages`
-- **Orca .44.1:** HostLLM [3] and Hive [14] bind the trusted LAN on `0.0.0.0:8080` by default. Set `STRATA_HOST=127.0.0.1` before opening HostLLM for local-only Orca. The lower-level Q4 CLI still defaults to loopback.
+- **Orca .45:** HostLLM [3] and Hive [14] bind the trusted LAN on `0.0.0.0:8080` by default. Set `STRATA_HOST=127.0.0.1` before opening HostLLM for local-only Orca. The lower-level Q4 CLI still defaults to loopback.
 - **Immediate loading:** [3]/[4] and the Hive profiles selected by [14]/[15] load the model and vision encoder during startup, before opening the API. They do not wait for a chat request, and automatic idle unloading is disabled. “Model loaded and API ready” requires `loaded=true` and the expected native runtime. Loading typically takes a minute or two; keep the launcher open. [Real eager-start/LAN checks for all four routes](results/strata-eager-lan-20261017.json) recorded loaded GPUs before the first chat.
 
-Orca `.44.1` is the standard Strata route; generic Orca `.39` and `.41` remain explicit rollback profiles. SC117 is **fixed** to trusted-LAN `0.0.0.0:8080`, uses its dedicated trial state, and does not permit other binds. Its API is unauthenticated: use only on a trusted, firewalled LAN (for `.69`, `http://192.168.1.69:8080/`). SC117 and Orca are mutually exclusive on port 8080. SC117 remains unqualified and must not be selected for normal hosting; the legacy SC117 `.39` launch path is retired. The original IQ3_S model ID is `qwen3.8-flash-next-iq3_s-strata`; SC117 has its own profile/model ID. Swift/Hauhau retain their existing llama.cpp web UI/API behavior.
+Orca `.45` is the standard Strata route; generic Orca `.39`, `.41`, and `.44.1` remain explicit rollback profiles. SC117 is **fixed** to trusted-LAN `0.0.0.0:8080`, uses its dedicated trial state, and does not permit other binds. Its API is unauthenticated: use only on a trusted, firewalled LAN (for `.69`, `http://192.168.1.69:8080/`). SC117 and Orca are mutually exclusive on port 8080. SC117 remains unqualified and must not be selected for normal hosting; the legacy SC117 `.39` launch path is retired. The original IQ3_S model ID is `qwen3.8-flash-next-iq3_s-strata`; SC117 has its own profile/model ID. Swift/Hauhau retain their existing llama.cpp web UI/API behavior.
 
 Other Strata profiles remain unauthenticated by default: **do not expose them publicly**. HostLLM accepts an optional key at its secure prompt for routes that support LAN binding and forwards it only through stdin; exported `STRATA_API_KEY` is refused. SC117 is an explicit exception: its isolated, unqualified trial binds the trusted LAN on `0.0.0.0:8080` without authentication. Firewall it and never expose it to an untrusted network. Its dedicated state remains isolated, and no normal/qualified SC117 hosting is enabled. No global Pi configuration is edited.
 
@@ -64,9 +64,9 @@ Other Strata profiles remain unauthenticated by default: **do not expose them pu
 | --- | --- | --- |
 | [1] Swift | `swift15u-q8` | Q8_K_XL weights, shared BF16 vision, embedded native MTP depth 3, Q8 K/V, xhigh, two 262144-token slots |
 | [2] Hauhau | `hauhau-q8-fastmtp-q4kv-xhigh` | Q8_K_P weights, BF16 vision, matching FastMTP sidecar depth 4, Q4_0 K/V, xhigh, three 262144-token slots |
-| [3] Orca .44.1 | `orca-q4_k_s` / runtime `0.1.44.1` | Standard machine-specific profile; native 262K, CPU vision, 8 GiB/four-slot cache, auto prefill, trimmed split 14,24,36, one serving slot. Pipeline-windows-2 override omitted. See [ORCA_Q4KS_V01441.md](ORCA_Q4KS_V01441.md) |
-| [4] SC117 trial | `iq3_s-sc117-abliterated` | Unqualified Strata .44.1 trial, CPU vision, native 262144, `--spec 3` + pipeline-windows 2, INT8 KV, one slot/group, trusted-LAN `0.0.0.0:8080` (unauthenticated), dedicated state; no qualification or production authorization |
-| Strata standard | `orca-q4_k_s-v01441` | Q4_K_S .44.1, native 262K, CPU vision, auto prefill, trimmed split 14,24,36, one slot |
+| [3] Orca .45 | `orca-q4_k_s` / runtime `0.1.45` | Standard machine-specific profile; native 262K, CPU vision, 8 GiB/four-slot cache, auto prefill, trimmed split 14,24,36, one serving slot. Pipeline-windows-2 override omitted. No .45-specific quality/speed claim. See [ORCA_Q4KS_V01441.md](ORCA_Q4KS_V01441.md) |
+| [4] SC117 trial | `iq3_s-sc117-abliterated` | Unqualified Strata .45 trial, CPU vision, native 262144, `--spec 3` + pipeline-windows 2, INT8 KV, one slot/group, trusted-LAN `0.0.0.0:8080` (unauthenticated), dedicated state; no qualification or production authorization |
+| Strata standard | `orca-q4_k_s-v01441` | Q4_K_S .45, native 262K, CPU vision, auto prefill, trimmed split 14,24,36, one slot |
 | Rollback | `orca-q4_k_s` | Generic Q4 .39 profile, native 262K, CPU vision, one serving slot |
 | Rollback files | Orca runtime `0.1.41` | Separate one-slot and experimental 2-slot/2-group profiles remain available by explicit profile name. See [ORCA_Q4KS_V0141.md](ORCA_Q4KS_V0141.md) |
 
@@ -74,9 +74,9 @@ Swift remains the default; Hauhau's previously verified Q4-KV/xhigh preset remai
 pins, weights and normal flags are unchanged. Hauhau's alternative Q8-KV preset shares those retained weights and
 remains CLI-only.
 
-Strata is a separate **Flash-Next** engine, not an engine for the retained dense 27B Swift/Hauhau GGUFs. The original base IQ3_S CLI profile and rollback assets remain unchanged; HostLLM [4] is the separate SC117 abliterated `.44.1` CPU-vision trial and remains unqualified. The IQ3_XXS weights/pack were removed. Q4_K_S uses a separately pinned CPU-vision helper; one generated synthetic image passed, but broader vision quality is unqualified. Profiles default to one request at a time
+Strata is a separate **Flash-Next** engine, not an engine for the retained dense 27B Swift/Hauhau GGUFs. The original base IQ3_S CLI profile and rollback assets remain unchanged; HostLLM [4] is the separate SC117 abliterated `.45` CPU-vision trial and remains unqualified. The IQ3_XXS weights/pack were removed. Q4_K_S uses a separately pinned CPU-vision helper; one generated synthetic image passed, but broader vision quality is unqualified. Profiles default to one request at a time
 and expose thinking `none/low/medium/high` (**not `xhigh`**).
-The former `.69` baseline used **0.1.39 single-slot**; that profile remains rollback-only. The standard Strata choice is now Orca Q4_K_S `.44.1`. Guarded two-slot
+The former `.69` baseline used **0.1.39 single-slot**; that profile remains rollback-only. The standard Strata choice is now Orca Q4_K_S `.45`. Guarded two-slot
 batching is opt-in; see [STRATA_V0139.md](STRATA_V0139.md) for historical speed/latency and discovered restrictions.
 **0.1.41 was prepared/tested separately, but not promoted:** its new four-way auto placement regressed uncached prefill
 by about 24% for IQ3_S and 37% for IQ3_XXS. See [STRATA_V0141.md](STRATA_V0141.md) for real results and optional use.
@@ -86,7 +86,7 @@ configured reserve. Historical IQ3_XXS tuning results remain documented, but tha
 
 ## Orca Q4_K_S: bounded live probes recorded
 
-See [ORCA_Q4KS.md](ORCA_Q4KS.md). The generic Orca `.39` profile remains available only as an explicit rollback; `.44.1` is the standard Strata choice.
+See [ORCA_Q4KS.md](ORCA_Q4KS.md). The generic Orca `.39`, `.41`, and `.44.1` routes remain explicit rollbacks; `.45` is the standard Strata choice.
 The separate Q4 .41 candidate remains available explicitly through the Hive `orca-q4_k_s-v0141*` profile names; it has no visible HostLLM menu row. Its
 source/build/config/parity/evidence paths are separate. It starts at 32K text-only and cannot migrate context or enable
 CPU vision until its own identity-bound 32K validator succeeds. Start that isolated candidate with
@@ -108,9 +108,10 @@ context/vision quality, snapshot capacity, worst-case memory, throughput, or sus
 paths. Readiness runs before HostLLM pauses anything; the menu leaves an already-running Strata instance alone.
 No generic runtime selection is changed.
 
-The standard machine-specific Q4 .44.1 profile is selected with HostLLM [3], Q4 runtime `auto`, or Hive profile
-`orca-q4_k_s-v01441`. It checks the exact calibration source/build/config/report pins before the HostLLM pause or
-Hive pointer change, and preserves .39/.41 as rollback profiles while selecting .44.1 as standard. Paired screening supported `--prefill auto`
+The standard machine-specific Q4 .45 profile is selected with HostLLM [3], Q4 runtime `auto`, or Hive profile
+`orca-q4_k_s-v01441`. It checks the pinned .45 source/build/runtime artifacts and exact effective config before the
+HostLLM pause or Hive pointer change. The model preset/evidence derive from the prior .44.1 route; no .45-specific
+inference, quality, or speed result is claimed. The .39/.41/.44.1 routes remain explicit rollbacks. Paired screening supported `--prefill auto`
 and `--trim-stage-weights` with split `14,24,36`; the corrected 95% interval for pipeline-windows 2 crosses zero.
 The pinned capability report used that exploratory override, but the launcher removes it from the effective serving
 config; this is not a separate performance qualification of the resulting default-window run. The candidate's bounded
@@ -128,13 +129,16 @@ metadata. Reload Pi/reselect the model after installing it. No global model/sett
 
 ## Strata preparation and validation
 
-See [HOWTOTUNE.md](HOWTOTUNE.md) for the reusable Strata measurement/safety protocol and SC117 `.44.1` trial results. The measured `--pipeline-windows 2 --spec 3` settings are enabled for SC117 HostLLM [4]/Hive [15] only; they remain unqualified and do not affect other profiles.
+See [HOWTOTUNE.md](HOWTOTUNE.md) for the reusable Strata measurement/safety protocol and historical SC117 `.44.1` trial results. Those measurements are not a `.45` speed comparison. The measured `--pipeline-windows 2 --spec 3` settings are retained for SC117 HostLLM [4]/Hive [15] only; they remain unqualified and do not affect other profiles.
 
 See [STRATA_IQ3S.md](STRATA_IQ3S.md) for the original profile's source/model pins, full-file checksums, installed paths and validation scope, and [STRATA_SC117_IQ3S.md](STRATA_SC117_IQ3S.md) for the isolated abliterated model pins and hard qualification gate.
 The preserved Strata 0.1.38 baseline is pinned to `99f3dbd0b21d1401b3769e0c0d963913607f380b`; the side-by-side
 0.1.39 runtime is pinned to `6f32ec070f23ced9f50e704d854d775da52591ab` (see [upgrade/benchmark report](STRATA_V0139.md)).
 Optional 0.1.41 is pinned to `fb58e0dbc8399662c0e47c76578c6e878b14f6cf`; explicit `--prepare-runtime --runtime 0.1.41`
-is build-only and does not alter the selected runtime or an active engine.
+is build-only and does not alter the selected runtime or an active engine. Strata 0.1.45 is pinned to
+`477ac13cbe8e582c20484871ce459d20d82df09d`, restricted to Orca Q4_K_S and the unqualified SC117 trial, and is
+never a generic/default runtime choice. Its explicit `--prepare-runtime --runtime 0.1.45` build records CUDA sm_86,
+Q4/native-expert options, and a separate native-CPU vision helper; it does not run inference or change an active service.
 The IQ3_S publisher revision is
 `ed59f92082b1e93c0e96d60a8b11aab089b52f09`. Native engine and GPU vision helper were built for `sm_86` using existing
 CUDA 12.9 and a private Python/CMake environment, without replacing system tools/drivers.
@@ -173,7 +177,7 @@ Archived comparison profiles remain explicit CLI-only and can re-download remove
 off, not normal native-context performance. Legacy `v1llama_cpp.sh`/`v1glm53.sh` are not shared-host menu choices;
 their old stop/benchmark paths are not covered by the maintained identity-bound guards.
 
-The optional [Hive custom LLM miner](hive-llm-miner/README.md) is separate from the HostLLM engine picker. HostLLM actions [12]–[15] select Swift, Hauhau, Orca `.44.1`, and the isolated SC117 `.44.1` CPU-vision trial. Orca `.44.1` is the standard Hive Strata selection; `.39` and `.41` are rollback-only. If the old SC117 `.39` or generic `.39` pointer exists, installation migrates it to standard `.44.1` before replacing the SC117 profile directory. SC117 remains unqualified and uses trusted-LAN `0.0.0.0:8080` without authentication, with dedicated state; it shares port 8080 exclusively with Orca. The low-level root-only profile menu changes one atomic pointer after idle/readiness checks and never manages services itself. HostLLM wraps [12]–[15] in a serialized switch: verify that all LLM/GPU processes belong to the installed Hive wrapper, pause OctaSpace before stopping Hive, hold `MINER_STOP` during readiness/package refresh, change the pointer, then restore the prior miner/OctaSpace running state. A current unchanged profile returns immediately without stopping or reloading. Rentals, unrelated GPU jobs, and manual HostLLM sessions are refused before any stop. A private `hive-profile-switch.json` recovery journal is retained if safe restoration cannot complete; recover with `sudo python3 hive_profile_switch.py --recover`. Do not run a switch during a rental.
+The optional [Hive custom LLM miner](hive-llm-miner/README.md) is separate from the HostLLM engine picker. HostLLM actions [12]–[15] select Swift, Hauhau, Orca `.45`, and the isolated SC117 `.45` CPU-vision trial. Orca `.45` is the standard Hive Strata selection; `.39`, `.41`, and `.44.1` are explicit rollback routes. If the old SC117 `.39` or generic `.39` pointer exists, installation migrates it to standard `.45` before replacing the SC117 profile directory. SC117 remains unqualified and uses trusted-LAN `0.0.0.0:8080` without authentication, with dedicated state; it shares port 8080 exclusively with Orca. The low-level root-only profile menu changes one atomic pointer after idle/readiness checks and never manages services itself. HostLLM wraps [12]–[15] in a serialized switch: verify that all LLM/GPU processes belong to the installed Hive wrapper, pause OctaSpace before stopping Hive, hold `MINER_STOP` during readiness/package refresh, change the pointer, then restore the prior miner/OctaSpace running state. A current unchanged profile returns immediately without stopping or reloading. Rentals, unrelated GPU jobs, and manual HostLLM sessions are refused before any stop. A private `hive-profile-switch.json` recovery journal is retained if safe restoration cannot complete; recover with `sudo python3 hive_profile_switch.py --recover`. Do not run a switch during a rental.
 
 ## Checks and references
 

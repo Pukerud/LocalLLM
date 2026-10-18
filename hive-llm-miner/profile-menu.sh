@@ -45,7 +45,7 @@ usage() {
     cat <<'EOF'
 Usage:
   profile-menu.sh                 Show the interactive selector
-  profile-menu.sh --profile NAME  Select an installed Swift, Hauhau, Orca .44.1, or SC117 trial profile
+  profile-menu.sh --profile NAME  Select an installed Swift, Hauhau, Orca .45, or SC117 trial profile
   profile-menu.sh --list          Show installed profiles and current selection
   profile-menu.sh --help          Show this help
 
@@ -59,10 +59,10 @@ profile_label() {
         orca-q4_k_s) printf '%s' 'Orca Uncensored Q4_K_S — Strata 0.1.39 rollback-only, native 262K, CPU vision, one serving slot' ;;
         orca-q4_k_s-v0141) printf '%s' 'Orca Uncensored Q4_K_S — Strata 0.1.41, native 262K, CPU vision, 8 GiB cache, one serving slot' ;;
         orca-q4_k_s-v0141-2slot) printf '%s' 'Experimental Orca Q4_K_S — Strata 0.1.41, native 262K, CPU vision, 8 GiB cache, two serving slots/two groups; very low VRAM headroom' ;;
-        orca-q4_k_s-v01441) printf '%s' 'Orca Q4_K_S — Strata 0.1.44.1 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted' ;;
+        orca-q4_k_s-v01441) printf '%s' 'Orca Q4_K_S — Strata 0.1.45 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted' ;;
         swift15u-q8) printf '%s' 'Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots' ;;
         hauhau-q8-fastmtp-q4kv-xhigh) printf '%s' 'Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots' ;;
-        iq3_s-sc117-abliterated) printf '%s' 'SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot; unqualified trusted-LAN trial on 8080 (no auth)' ;;
+        iq3_s-sc117-abliterated) printf '%s' 'SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot; unqualified trusted-LAN trial on 8080 (no auth)' ;;
         *) return 1 ;;
     esac
 }
@@ -146,12 +146,12 @@ check_selected_profile_ready() {
                 PYTHONDONTWRITEBYTECODE=1 PYTHONPYCACHEPREFIX="$trial_state/pycache" \
                 SETUPTOOLS_USE_DISTUTILS=stdlib STRATA_SC117_IQ3S_TRIAL=1 \
                 STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata \
-                STRATA_STATE_ROOT="$trial_state" STRATA_RUNTIME=0.1.44.1 \
+                STRATA_STATE_ROOT="$trial_state" STRATA_RUNTIME=0.1.45 \
                 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 STRATA_PORT=8080 STRATA_HOST=0.0.0.0 \
                 "$LLM_ROOT/v1strata.sh" --check-ready --profile iq3_s-sc117-abliterated \
-                --runtime 0.1.44.1 --parallel 1 --batch-groups 1)" || \
-                fail 'SC117 .44.1 isolated trial readiness failed; profile unchanged'
-            expected_readiness='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.'
+                --runtime 0.1.45 --parallel 1 --batch-groups 1)" || \
+                fail 'SC117 .45 isolated trial readiness failed; profile unchanged'
+            expected_readiness='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.'
             actual_readiness="$(grep '^TRIAL CONFIG:' <<< "$readiness" || true)"
             [[ "$actual_readiness" == "$expected_readiness" && "$readiness" != *'READY CONFIG:'* ]] || \
                 fail 'SC117 exact unqualified CPU-vision trial preflight is incomplete; profile unchanged'
@@ -188,7 +188,7 @@ check_selected_profile_ready() {
             ;;
         orca-q4_k_s-v01441)
             [[ -x "$LLM_ROOT/v1strata.sh" ]] || fail "Strata launcher not found: $LLM_ROOT/v1strata.sh"
-            command -v runuser >/dev/null 2>&1 || fail 'runuser is unavailable; Q4 .44.1 readiness cannot be checked'
+            command -v runuser >/dev/null 2>&1 || fail 'runuser is unavailable; Q4 .45 readiness cannot be checked'
             local readiness expected_readiness actual_readiness
             readiness="$(runuser -u user -- env -i \
                 HOME=/home/user USER=user LOGNAME=user \
@@ -196,14 +196,14 @@ check_selected_profile_ready() {
                 PYTHONDONTWRITEBYTECODE=1 \
                 STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata \
                 STRATA_STATE_ROOT=/home/user/.local/state/locallm-strata \
-                STRATA_RUNTIME=0.1.44.1 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 STRATA_PORT=8080 \
+                STRATA_RUNTIME=0.1.45 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 STRATA_PORT=8080 \
                 "$LLM_ROOT/v1strata.sh" --check-ready --profile orca-q4_k_s \
-                --runtime 0.1.44.1 --parallel 1 --batch-groups 1)" || \
-                fail 'Orca Q4_K_S .44.1 readiness/evidence check failed; profile unchanged'
-            expected_readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.44.1; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'
+                --runtime 0.1.45 --parallel 1 --batch-groups 1)" || \
+                fail 'Orca Q4_K_S .45 readiness/evidence check failed; profile unchanged'
+            expected_readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.45; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'
             actual_readiness="$(grep '^READY CONFIG:' <<< "$readiness" || true)"
             [[ "$actual_readiness" == "$expected_readiness" ]] || \
-                fail 'Orca Q4_K_S .44.1 exact configuration/evidence is incomplete; profile unchanged'
+                fail 'Orca Q4_K_S .45 exact configuration/build evidence is incomplete; profile unchanged'
             ;;
         orca-q4_k_s-v0141-2slot)
             [[ -x "$LLM_ROOT/v1strata.sh" ]] || fail "Strata launcher not found: $LLM_ROOT/v1strata.sh"

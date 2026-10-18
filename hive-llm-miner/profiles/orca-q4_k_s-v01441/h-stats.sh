@@ -2,7 +2,7 @@
 
 # Inference host: Hive has no hash-rate result to report.
 khs=0
-version='Orca Uncensored Q4_K_S Strata 0.1.44.1 native 262K CPU vision; prefill-auto/trim candidate; windows-2 override omitted'
+version='Orca Uncensored Q4_K_S Strata 0.1.45 native 262K CPU vision; prefill-auto/trim candidate; windows-2 override omitted'
 
 if [[ -n "${gpu_stats:-}" ]] && command -v jq >/dev/null 2>&1 \
     && jq -e . >/dev/null 2>&1 <<< "$gpu_stats"; then

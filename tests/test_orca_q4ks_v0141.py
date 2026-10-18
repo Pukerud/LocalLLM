@@ -89,7 +89,7 @@ class CandidateIdentity(unittest.TestCase):
 
 
 class RuntimeRouting(unittest.TestCase):
-    def test_auto_q4_selects_0441_and_039_requires_explicit_rollback(self):
+    def test_auto_q4_selects_045_and_keeps_explicit_rollback_routes(self):
         import strata_launcher as launcher
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -102,26 +102,56 @@ class RuntimeRouting(unittest.TestCase):
             with mock.patch.object(launcher, 'data_root', return_value=root), \
                  mock.patch.object(launcher, 'ready_q4ks', return_value=baseline) as base_ready, \
                  mock.patch.object(launcher.q4ks_v0141, 'ready_q4ks_v0141', return_value=optin) as q4_candidate, \
-                 mock.patch.object(launcher.q4ks_v01441, 'ready_q4ks_v01441', return_value=standard) as standard_ready, \
+                 mock.patch.object(launcher, 'ready_q4ks_v0145', return_value=standard) as v0145_ready, \
+                 mock.patch.object(launcher.q4ks_v01441, 'ready_q4ks_v01441', return_value=standard) as v01441_ready, \
                  mock.patch.object(launcher.runtimes, 'configure', side_effect=AssertionError('generic manager used')):
                 result_default = launcher.ready_runtime(assets.HOST_PROFILE, runtime='auto', parallel=1, batch_groups=1)
                 result_rollback = launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.39', parallel=1, batch_groups=1)
                 result_candidate = launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.41', parallel=1, batch_groups=1)
+                result_v01441 = launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.44.1', parallel=1, batch_groups=1)
             self.assertEqual(result_default[0], standard[0])
-            self.assertEqual(result_default[3], '0.1.44.1')
+            self.assertEqual(result_default[3], '0.1.45')
             self.assertEqual(result_rollback[0], baseline[0])
             self.assertEqual(result_rollback[3], '0.1.39')
             self.assertEqual(result_candidate[0], optin[0])
             self.assertEqual(result_candidate[3], '0.1.41')
+            self.assertEqual(result_v01441[0], standard[0])
+            self.assertEqual(result_v01441[3], '0.1.44.1')
             base_ready.assert_called_once_with(root)
             q4_candidate.assert_called_once_with(root)
-            standard_ready.assert_called_once_with(root)
+            v0145_ready.assert_called_once_with(root)
+            v01441_ready.assert_called_once_with(root)
             self.assertEqual(selection.read_bytes(), before)
+
+    def test_v0145_rewires_the_q4_preset_to_the_verified_engine_and_cpu_helper(self):
+        import strata_launcher as launcher
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            runtime_source=root/'runtimes/0.1.45/source'
+            cfg={'exe':'/base/engine/strata','cwd':'/base','vision':{'exe':'/base/engine/strata-vision','gpu':False},
+                 'args':['--max-context','262144']}
+            preset=(Path('/base'),Path('/base/config.json'),cfg)
+            with mock.patch.object(launcher.q4ks_v01441,'ready_q4ks_v01441',return_value=preset), \
+                 mock.patch.object(launcher.runtimes,'prepared_runtime',return_value=(runtime_source,{})) as prepared:
+                source,path,effective=launcher.ready_q4ks_v0145(root)
+            self.assertEqual(source,runtime_source)
+            self.assertEqual(path,preset[1])
+            self.assertEqual(effective['exe'],str(runtime_source/'engine/strata'))
+            self.assertEqual(effective['cwd'],str(runtime_source))
+            self.assertEqual(effective['vision']['exe'],str(runtime_source/'engine/strata-vision-cpu'))
+            self.assertEqual(effective['_launcher_python'],str(runtime_source/'.venv/bin/python'))
+            prepared.assert_called_once_with(root,launcher.runtimes.NEXT_VERSION)
+            bad=(Path('/base'),Path('/base/config.json'),{'vision':{'gpu':True}})
+            with mock.patch.object(launcher.q4ks_v01441,'ready_q4ks_v01441',return_value=bad), \
+                 mock.patch.object(launcher.runtimes,'prepared_runtime',return_value=(runtime_source,{})):
+                with self.assertRaisesRegex(SafetyError,'requires its CPU vision configuration'):
+                    launcher.ready_q4ks_v0145(root)
 
     def test_q4_candidate_defaults_to_loopback_and_allows_only_explicit_trusted_lan_hosts(self):
         import strata_launcher as launcher
         with mock.patch.dict(os.environ, {}, clear=True):
             self.assertEqual(launcher._effective_host(assets.HOST_PROFILE, '0.1.41', '0.0.0.0'), '127.0.0.1')
+            self.assertEqual(launcher._effective_host(assets.HOST_PROFILE, '0.1.45', '0.0.0.0'), '127.0.0.1')
         for requested in ('127.0.0.1', '0.0.0.0'):
             with self.subTest(requested=requested), mock.patch.dict(os.environ, {'STRATA_HOST': requested}):
                 self.assertEqual(launcher._effective_host(assets.HOST_PROFILE, '0.1.41', '127.0.0.1'), requested)
@@ -204,7 +234,7 @@ class RuntimeRouting(unittest.TestCase):
                  mock.patch.object(launcher.q4ks_v0141, 'ready_q4ks_v0141',
                                    return_value=(Path('/candidate'), Path('/candidate/config.json'),
                                                  json.loads(json.dumps(candidate_config)))):
-                with self.assertRaisesRegex(SafetyError, 'standard .44.1 or explicit .39/.41 rollback'):
+                with self.assertRaisesRegex(SafetyError, 'standard .45 or explicit .39/.41/.44.1 rollback'):
                     launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.38', parallel=1, batch_groups=1)
                 with self.assertRaisesRegex(SafetyError, 'preserved Q4 .39.*one slot'):
                     launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.39', parallel=2, batch_groups=2)

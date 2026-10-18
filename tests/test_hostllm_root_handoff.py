@@ -19,11 +19,12 @@ class StrataOperatorHandoff(unittest.TestCase):
                             f'Path({str(log)!r}).write_text(json.dumps(sys.argv[1:]))\n')
             stub.chmod(0o755)
             profile = 'iq3_s-sc117-abliterated' if trial else 'orca-q4_k_s'
+            runtime = '0.1.45' if trial else '0.1.44.1'
             function = 'run_selected v1strata.sh' if through_selection else 'run_strata_as_operator'
             host_assignment = '' if default_host else 'STRATA_HOST=' + ('0.0.0.0' if trial else '127.0.0.1')
             command = f'''source "$1/HostLLM.sh"
 STRATA_SC117_IQ3S_TRIAL={int(trial)} {host_assignment} \\
-    {function} --quickstart --profile {profile} --runtime 0.1.44.1 --parallel 1 --batch-groups 1
+    {function} --quickstart --profile {profile} --runtime {runtime} --parallel 1 --batch-groups 1
 '''
             env = {'PATH': f'{scratch}:/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/root',
                    'QWEN38_OWNER_USER': owner, 'PYTHONPATH': '/hostile',
@@ -45,7 +46,8 @@ STRATA_SC117_IQ3S_TRIAL={int(trial)} {host_assignment} \\
                 self.assertIn('STRATA_STATE_ROOT=/home/user/.local/state/locallm-strata' + suffix, arguments)
                 self.assertIn('--run-strata', arguments)
                 self.assertEqual(arguments[-8:], ['--profile', 'iq3_s-sc117-abliterated' if trial else 'orca-q4_k_s',
-                                                  '--runtime', '0.1.44.1', '--parallel', '1', '--batch-groups', '1'])
+                                                  '--runtime', '0.1.45' if trial else '0.1.44.1',
+                                                  '--parallel', '1', '--batch-groups', '1'])
                 self.assertNotIn('PYTHONPATH=/hostile', arguments)
                 self.assertNotIn('STRATA_PREFILL_CPU_SHARE=hostile', arguments)
 

@@ -192,16 +192,16 @@ if [[ "$EUID" -ne 0 ]]; then
 fi
 grep -q '\[1\] Swift 1.5 Uncensored Q8_K_XL — DEFAULT' "$root/HostLLM.sh"
 grep -q '\[2\] Hauhau Q8_K_P — BF16 vision' "$root/HostLLM.sh"
-grep -q '\[3\] Orca Q4_K_S — Strata 0.1.44.1 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted' "$root/HostLLM.sh"
-grep -q '\[4\] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot' "$root/HostLLM.sh"
+grep -q '\[3\] Orca Q4_K_S — Strata 0.1.45 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted' "$root/HostLLM.sh"
+grep -q '\[4\] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot' "$root/HostLLM.sh"
 grep -q '\[12\] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL' "$root/HostLLM.sh"
 grep -q '\[13\] Set next Hive miner - Hauhau Q8_K_P' "$root/HostLLM.sh"
-grep -q '\[14\] Set next Hive miner - Orca Q4_K_S .44.1' "$root/HostLLM.sh"
-grep -q '\[15\] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.44.1 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot' "$root/HostLLM.sh"
+grep -q '\[14\] Set next Hive miner - Orca Q4_K_S .45' "$root/HostLLM.sh"
+grep -q '\[15\] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot' "$root/HostLLM.sh"
 ! grep -qE '^ *echo .*\[(5|6|7)\] Orca Q4_K_S — Strata 0\.1\.(41|44\.1)' "$root/HostLLM.sh"
 ! grep -q '\[3\] SC117.*0.1.39' "$root/HostLLM.sh"
 ! grep -q '\[17\].*SC117' "$root/HostLLM.sh"
-grep -q 'STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected .*--runtime 0.1.44.1' "$root/HostLLM.sh"
+grep -q 'STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected .*--runtime 0.1.45' "$root/HostLLM.sh"
 grep -q 'SC117.*0.0.0.0:8080' "$root/HostLLM.sh"
 grep -q 'windows-2 override omitted' "$root/HostLLM.sh"
 grep -q -- '--prepare-q4ks141' "$root/HostLLM.sh"
@@ -231,8 +231,8 @@ trace="$scratch/maintrace"
 )
 grep -qx 'v1qwen38.sh --quickstart --profile swift15u-q8' "$trace"
 grep -qx 'v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q4kv-xhigh' "$trace"
-grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$trace"
-grep -qx 'v1strata.sh --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$trace"
+grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.45 --parallel 1 --batch-groups 1' "$trace"
+grep -qx 'v1strata.sh --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.45 --parallel 1 --batch-groups 1' "$trace"
 grep -qx 'unset|0.0.0.0|unset' "$trace.env"
 grep -qx '1|0.0.0.0|8080' "$trace.env"
 [[ "$(wc -l < "$trace")" -eq 4 ]]
@@ -299,7 +299,7 @@ fi
   run_selected() { printf '%s\n' "$*" >> "$trace"; }
   main < <(printf '3\n11\n') > /dev/null
 )
-[[ "$(tail -n1 "$trace")" == 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.44.1 --parallel 1 --batch-groups 1' ]]
+[[ "$(tail -n1 "$trace")" == 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.45 --parallel 1 --batch-groups 1' ]]
 [[ "$(wc -l < "$trace")" -eq 5 ]]
 # Choosing Orca while Strata runs must not call the launch/pause/stop path.
 (
@@ -346,7 +346,7 @@ grep -qx -- '--check-ready --profile orca-q4_k_s --runtime 0.1.41' "$ready_trace
 )
 grep -qx -- '--check-ready --profile orca-q4_k_s --runtime 0.1.41' "$ready_trace"
 [[ "$(wc -l < "$ready_trace")" -eq 3 ]]
-# .44.1 checks readiness before a lease and strips inherited tuning/Python overrides.
+# .45 checks readiness before a lease and strips inherited tuning/Python overrides.
 candidate_ready="$scratch/candidate-readiness.trace"
 candidate_env="$scratch/candidate-environment.trace"
 (
@@ -356,9 +356,9 @@ candidate_env="$scratch/candidate-environment.trace"
   chmod +x "$SCRIPT_DIR/v1strata.sh"
   PYTHONPATH=/hostile STRATA_STAGE_PIN=1 STRATA_PREFILL_CPU_SHARE=0
   export PYTHONPATH STRATA_STAGE_PIN STRATA_PREFILL_CPU_SHARE
-  if run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.44.1 --parallel 1 --batch-groups 1; then exit 1; fi
+  if run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.45 --parallel 1 --batch-groups 1; then exit 1; fi
 )
-grep -qx -- '--check-ready --profile orca-q4_k_s --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$candidate_ready"
+grep -qx -- '--check-ready --profile orca-q4_k_s --runtime 0.1.45 --parallel 1 --batch-groups 1' "$candidate_ready"
 grep -qx 'unset|unset|unset|unset' "$candidate_env"
 [[ "$(wc -l < "$ready_trace")" -eq 3 ]]
 # The candidate consumer rejects readiness with a prefix, suffix, or duplicate READY CONFIG line.
@@ -368,7 +368,7 @@ bad_readiness_case="$scratch/readiness-case"
 cat > "$strict_ready_root/v1strata.sh" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.44.1; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'
+readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.45; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'
 if [[ "\${1:-}" == --check-ready ]]; then
   case "\$(cat '$bad_readiness_case')" in
     prefix) printf 'prefix %s\\n' "\$readiness" ;;
@@ -387,7 +387,7 @@ for bad_readiness in prefix suffix duplicate; do
     SCRIPT_DIR="$strict_ready_root" HOST_TRACE="$bad_trace"
     export SCRIPT_DIR HOST_TRACE
     hosting() { echo "$*" >> "$HOST_TRACE"; }
-    if run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.44.1 --parallel 1 --batch-groups 1; then exit 1; fi
+    if run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.45 --parallel 1 --batch-groups 1; then exit 1; fi
   )
   [[ ! -e "$bad_trace" ]]
 done
@@ -416,14 +416,14 @@ lease_id="$(awk '$1 == "begin" {print $4}' "$launch_root/host")"
 grep -qx "begin --require-new-lease --lease-id $lease_id --port 18199" "$launch_root/host"
 grep -qx "verify-lease --lease-id $lease_id" "$launch_root/host"
 grep -qx "release --lease-id $lease_id" "$launch_root/host"
-# The .44.1 route carries a clean environment and the inherited exclusive launch reservation.
+# The .45 route carries a clean environment and the inherited exclusive launch reservation.
 candidate_launch_root="$scratch/candidate-launch-reservation"
 mkdir -p "$candidate_launch_root/state"
 : > "$candidate_launch_root/state/lifecycle.lock"
 cat > "$candidate_launch_root/v1strata.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.44.1; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'
+readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.45; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'
 if [[ "${1:-}" == --check-ready ]]; then printf '%s\n' "$readiness"; exit 0; fi
 [[ "$HOSTLLM_LAUNCH_LEASE_ID" =~ ^[a-f0-9]{64}$ ]]
 [[ "${PYTHONPATH-unset}" == unset && "${STRATA_STAGE_PIN-unset}" == unset ]]
@@ -451,7 +451,7 @@ chmod +x "$candidate_launch_root/v1strata.sh"
   STRATA_API_KEY=secret PYTHONPATH=/hostile STRATA_STAGE_PIN=1 STRATA_PREFILL_CPU_SHARE=auto STRATA_HOST=127.0.0.1
   export SCRIPT_DIR HOSTLLM_STATE_ROOT STRATA_API_KEY PYTHONPATH STRATA_STAGE_PIN STRATA_PREFILL_CPU_SHARE STRATA_HOST
   hosting() { printf '%s\n' "$*" >> "$candidate_launch_root/host"; }
-  candidate_output="$(run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.44.1 --parallel 1 --batch-groups 1)"
+  candidate_output="$(run_selected v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.45 --parallel 1 --batch-groups 1)"
   printf '%s\n' "$candidate_output" | grep -Fq 'candidate-lock-reserved'
   printf '%s\n' "$candidate_output" | grep -Fq 'candidate-start-ok|unset|unset|unset'
 )

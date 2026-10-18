@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicitly build/test the isolated Q4_K_S / Strata 0.1.41 rollback candidate; never changes the .44.1 standard or .39 rollback assets."""
+"""Explicitly build/test the isolated Q4_K_S / Strata 0.1.41 rollback candidate; never changes the .45 standard or .39 rollback assets."""
 import argparse
 import fcntl
 import json

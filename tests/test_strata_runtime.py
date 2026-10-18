@@ -78,6 +78,57 @@ class Runtime(unittest.TestCase):
         (folder/'prepared.json').write_text(json.dumps(manifest))
         return source
 
+    def install_v0145(self):
+        folder=r.runtime_root(self.root,r.NEXT_VERSION);source=folder/'source'
+        (source/'third_party/llama.cpp').mkdir(parents=True)
+        (source/'.venv').symlink_to(self.base/'.venv',target_is_directory=True)
+        llama=source/'third_party/llama.cpp'
+        engine_cache=source/'build/CMakeCache.txt';engine_cache.parent.mkdir(parents=True)
+        lines=[]
+        for key,value in r.V0145_BUILD_OPTIONS.items():
+            kind='PATH' if key=='CMAKE_CUDA_ARCHITECTURES' else 'BOOL' if value in ('ON','OFF') else 'STRING'
+            lines.append(f'{key}:{kind}={value}')
+        lines.append(f'STRATA_GGML_DIR:PATH={llama}')
+        engine_cache.write_text('\n'.join(lines)+'\n')
+        cpu_cache=source/'build-vision-cpu/CMakeCache.txt';cpu_cache.parent.mkdir(parents=True)
+        cpu_cache.write_text(f'STRATA_VISION_CUDA:BOOL=OFF\nSTRATA_PORTABLE:BOOL=OFF\nLLAMA_DIR:PATH={llama}\n')
+        assets=[]
+        for name in ('strata','strata-vision','strata-vision-cpu'):
+            p=source/'engine'/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(name+' 0.1.45')
+            assets.append({'path':str(p),'bytes':p.stat().st_size,'sha256':r.digest(p)})
+        manifest={'version':r.NEXT_VERSION,'source_commit':r.PINS[r.NEXT_VERSION],
+            'llama_commit':r.LLAMA_PIN,'source':str(source),'cuda_arch':86,
+            'cuda_toolkit':'/usr/local/cuda-12.9','runtime_assets':assets,
+            'build_options':r.V0145_BUILD_OPTIONS,'python_environment':str(self.base/'.venv')}
+        (folder/'prepared.json').write_text(json.dumps(manifest))
+        return source
+
+    def test_v0145_prepared_runtime_checks_cmake_provenance_and_cpu_vision(self):
+        source=self.install_v0145()
+        checked,manifest=r.prepared_runtime(self.root,r.NEXT_VERSION)
+        self.assertEqual(checked,source)
+        self.assertEqual(manifest['build_options'],r.V0145_BUILD_OPTIONS)
+        cache=source/'build/CMakeCache.txt'
+        original=cache.read_text()
+        cache.write_text(original.replace('STRATA_MMQ_TAB:BOOL=OFF','STRATA_MMQ_TAB:BOOL=ON'))
+        with self.assertRaisesRegex(SafetyError,'CMake option differs: STRATA_MMQ_TAB'):
+            r.prepared_runtime(self.root,r.NEXT_VERSION)
+        cache.write_text(original)
+        cpu=source/'build-vision-cpu/CMakeCache.txt'
+        cpu.write_text(cpu.read_text().replace(str(source/'third_party/llama.cpp'),'/untrusted/llama.cpp'))
+        with self.assertRaisesRegex(SafetyError,'CPU vision helper build differs'):
+            r.prepared_runtime(self.root,r.NEXT_VERSION)
+
+    def test_v0145_is_never_a_generic_or_global_runtime_choice(self):
+        with self.assertRaisesRegex(SafetyError,'restricted to the requested Q4/SC117'):
+            self.cfg(r.NEXT_VERSION)
+        self.assertNotIn(r.NEXT_VERSION,r.GENERIC_VERSIONS)
+        with self.assertRaisesRegex(SafetyError,'cannot be globally selected'):
+            r.select(self.root,r.NEXT_VERSION)
+        (self.root/'runtime-selection.json').write_text(json.dumps({'version':r.NEXT_VERSION}))
+        with self.assertRaisesRegex(SafetyError,'cannot be a generic/default selection'):
+            r.selected_version(self.root,'auto')
+
     def test_tested_legacy_selection_and_workaround_retained(self):
         source=self.install_legacy();r.select(self.root,r.LEGACY_VERSION)
         self.assertEqual(self.cfg('auto')[0],source)
@@ -237,6 +288,17 @@ class Runtime(unittest.TestCase):
         response=io.BytesIO(json.dumps({'engine':version,'loaded':True,'concurrency':{'serving':1}}).encode())
         with mock.patch.object(s,'open_local_api',return_value=response):
             self.assertEqual(s.verify_serving(cfg,version,18080),1)
+
+    def test_v0145_startup_is_eager_only_for_the_requested_profiles(self):
+        import strata_launcher as s
+        original={'lazy_load':True,'idle_unload_s':30,'args':['--max-context','262144'],'host':'0.0.0.0'}
+        for profile in ('orca-q4_k_s','iq3_s-sc117-abliterated'):
+            with self.subTest(profile=profile):
+                effective=s.startup_config(dict(original),r.NEXT_VERSION,profile)
+                self.assertIs(effective['lazy_load'],False)
+                self.assertEqual(effective['idle_unload_s'],0)
+                self.assertEqual(effective['args'],original['args'])
+        self.assertEqual(s.startup_config(dict(original),r.NEXT_VERSION,'iq3_s'),original)
 
     def test_startup_config_keeps_pinned_engine_settings_and_rollback_profiles(self):
         import strata_launcher as s

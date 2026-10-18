@@ -27,9 +27,9 @@ For this repository, begin with `README.md`, `STRATA_SC117_IQ3S.md`, `hosting_li
 
 A useful report is machine-readable JSON: host/model/runtime pins; baseline/effective arguments; per-arm overrides; exact prompt fixture IDs/hashes; sampling settings; per-request token/timing data; medians; MTP counters; telemetry; startup/shutdown/restore status; and scope/limitations. Keep benchmark evidence distinct from any model qualification record.
 
-## SC117 `.44.1` trial: current evidence
+## SC117 `.44.1` trial: historical evidence
 
-The live screen was run on **OctaSpace-WorkerFifteen**, four RTX 3090s (96 GiB aggregate VRAM), Strata `0.1.44.1`, model `qwen3.8-flash-next-sc117-abliterated-iq3_s` (publisher revision `eec4e10a2c29b440a2ae85591fa11569ce752963`), one serving slot/group, context 262,144, INT8 KV with 32,768 resident, CPU vision, and the existing 8,192 MiB/four-slot conversation cache. Each arm was cold-started, warmed separately, then tested with three fresh ~5.3K-token prefill prompts (16-token output cap) and three fresh 384-token decode probes (temperature 0.7, top-p 0.95, top-k 20, high reasoning). Prompts/seeds were held constant, `cache_n=0` was required, per-GPU telemetry was collected, and medians are reported.
+The live screen was run on **OctaSpace-WorkerFifteen**, four RTX 3090s (96 GiB aggregate VRAM), Strata `0.1.44.1`, model `qwen3.8-flash-next-sc117-abliterated-iq3_s` (publisher revision `eec4e10a2c29b440a2ae85591fa11569ce752963`), one serving slot/group, context 262,144, INT8 KV with 32,768 resident, CPU vision, and the existing 8,192 MiB/four-slot conversation cache. Each arm was cold-started, warmed separately, then tested with three fresh ~5.3K-token prefill prompts (16-token output cap) and three fresh 384-token decode probes (temperature 0.7, top-p 0.95, top-k 20, high reasoning). Prompts/seeds were held constant, `cache_n=0` was required, per-GPU telemetry was collected, and medians are reported. The current isolated SC117 trial uses Strata `.45` with the same measured flags, but this historical `.44.1` sweep is not a `.45` performance comparison or qualification result.
 
 The prefill fixtures were generated as follows; `i` is 0, 1, and 2, with seed `8100 + i`:
 

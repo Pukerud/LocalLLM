@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HiveOS custom miner: opt-in Orca Uncensored Q4_K_S Strata 0.1.44.1 candidate.
+# HiveOS custom miner: Orca Uncensored Q4_K_S Strata 0.1.45 candidate.
 # Hive supervises this wrapper; the model launcher runs as unprivileged user.
 # Keep osn.service running as the prior Qwen Hive miner does.
 set -Eeuo pipefail
@@ -11,7 +11,7 @@ STRATA_HOME='/home/user'
 STRATA_DATA_ROOT='/home/user/.local/share/localllm-strata'
 STRATA_STATE_ROOT='/home/user/.local/state/locallm-strata'
 PROFILE='orca-q4_k_s'
-RUNTIME='0.1.44.1'
+RUNTIME='0.1.45'
 PORT='8080'
 STOP_FILE="${MINER_STOP:-/run/hive/MINER_STOP}"
 STATE_FILE="${STRATA_STATE_ROOT}/server.json"
@@ -137,7 +137,7 @@ try:
         raise SystemExit(1)
     if '--engine' not in identity['cmd'] or identity['cmd'][identity['cmd'].index('--engine')+1]!='strata':
         raise SystemExit(1)
-    if runtime=='0.1.44.1' and ('--host' not in identity['cmd'] or
+    if runtime=='0.1.45' and ('--host' not in identity['cmd'] or
         identity['cmd'][identity['cmd'].index('--host')+1]!='0.0.0.0'):
         raise SystemExit(1)
     print(f'{pid}:{identity["start_ticks"]}:{ppid}:{profile}:{runtime}')
@@ -272,7 +272,7 @@ if (( available_mib < 12288 )); then
 fi
 abort_if_stopping
 
-say 'checking standard Q4_K_S Strata 0.1.44.1 profile (native context 262144, CPU vision, auto prefill, trimmed 14,24,36 split, 8 GiB conversation cache, one slot)'
+say 'checking standard Q4_K_S Strata 0.1.45 profile (native context 262144, CPU vision, auto prefill, trimmed 14,24,36 split, 8 GiB conversation cache, one slot)'
 readiness="$(run_strata_user "$STRATA_LAUNCHER" --check-ready --profile "$PROFILE" \
     --runtime "$RUNTIME" --parallel 1 --batch-groups 1)" || {
     say 'Q4_K_S readiness failed; no existing service was stopped'
@@ -280,10 +280,10 @@ readiness="$(run_strata_user "$STRATA_LAUNCHER" --check-ready --profile "$PROFIL
     exit 1
 }
 printf '%s\n' "$readiness"
-expected_readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.44.1; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'
+expected_readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.45; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'
 actual_readiness="$(grep '^READY CONFIG:' <<< "$readiness" || true)"
 if [[ "$actual_readiness" != "$expected_readiness" ]]; then
-    say 'Q4 .44.1 standard-profile readiness/evidence is incomplete; the .39/.41 rollback profiles remain untouched'
+    say 'Q4 .45 standard-profile readiness/build evidence is incomplete; the .39/.41/.44.1 rollback route remains untouched'
     request_hive_stop
     exit 1
 fi
@@ -312,7 +312,7 @@ fi
 abort_if_stopping
 
 STRATA_LAUNCH_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(24))')"
-say 'starting opt-in Orca Uncensored Q4_K_S Strata 0.1.44.1 candidate (four GPUs, one slot; windows-2 override omitted; osn.service remains running)'
+say 'starting Orca Uncensored Q4_K_S Strata 0.1.45 candidate (four GPUs, one slot; windows-2 override omitted; osn.service remains running)'
 run_strata_user "$STRATA_LAUNCHER" --quickstart --profile "$PROFILE" \
     --runtime "$RUNTIME" --parallel 1 --batch-groups 1 &
 LAUNCH_JOB_PID=$!

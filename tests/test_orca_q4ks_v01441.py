@@ -111,7 +111,7 @@ class SourceTreeIntegrity(unittest.TestCase):
 
 
 class RuntimeRouting(unittest.TestCase):
-    def test_auto_selects_0441_and_039_is_explicit_rollback_one_slot_only(self):
+    def test_auto_selects_045_and_039_is_explicit_rollback_one_slot_only(self):
         import strata_launcher as launcher
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -119,6 +119,8 @@ class RuntimeRouting(unittest.TestCase):
             old_candidate = (Path('/q4-041'), Path('/q4-041/config.json'), {'args': ['--max-context', '262144']})
             candidate_result = (Path('/q4-0441'), Path('/q4-0441/config.json'),
                                 {'args': ['--max-context', '262144']})
+            standard_result = (Path('/q4-045'), Path('/q4-045/config.json'),
+                               {'args': ['--max-context', '262144']})
             selection = root / 'runtime-selection.json'
             selection.write_text('{"version":"0.1.41"}\n')
             before = selection.read_bytes()
@@ -128,6 +130,8 @@ class RuntimeRouting(unittest.TestCase):
                                    return_value=old_candidate) as old_ready, \
                  mock.patch.object(launcher.q4ks_v01441, 'ready_q4ks_v01441',
                                    return_value=candidate_result) as new_ready, \
+                 mock.patch.object(launcher, 'ready_q4ks_v0145',
+                                   return_value=standard_result) as standard_ready, \
                  mock.patch.object(launcher.runtimes, 'configure',
                                    side_effect=AssertionError('generic runtime manager used')):
                 default = launcher.ready_runtime(assets.HOST_PROFILE, runtime='auto', parallel=1, batch_groups=1)
@@ -138,8 +142,8 @@ class RuntimeRouting(unittest.TestCase):
                     launcher.ready_runtime(assets.HOST_PROFILE, runtime='auto', parallel=2, batch_groups=2)
                 with self.assertRaisesRegex(SafetyError, 'single-slot'):
                     launcher.ready_runtime(assets.HOST_PROFILE, runtime='0.1.44.1', parallel=2, batch_groups=2)
-            self.assertEqual(default[0], candidate_result[0])
-            self.assertEqual(default[3], '0.1.44.1')
+            self.assertEqual(default[0], standard_result[0])
+            self.assertEqual(default[3], '0.1.45')
             self.assertEqual(rollback[0], baseline[0])
             self.assertEqual(rollback[3], '0.1.39')
             self.assertEqual(old[0], old_candidate[0])
@@ -148,8 +152,9 @@ class RuntimeRouting(unittest.TestCase):
             self.assertEqual(new[3], '0.1.44.1')
             base_ready.assert_called_once_with(root)
             old_ready.assert_called_once_with(root)
-            self.assertEqual(new_ready.call_count, 2)
-            new_ready.assert_called_with(root)
+            self.assertEqual(new_ready.call_count, 1)
+            new_ready.assert_called_once_with(root)
+            standard_ready.assert_called_once_with(root)
             self.assertEqual(selection.read_bytes(), before)
 
     def test_0441_launch_environment_strips_arbitrary_engine_and_python_overrides(self):

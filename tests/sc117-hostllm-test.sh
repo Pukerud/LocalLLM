@@ -22,10 +22,10 @@ if [[ "${1:-}" == --check-ready ]]; then
         "${STRATA_STATE_ROOT-unset}" "${PYTHONPYCACHEPREFIX-unset}" "${PYTHONDONTWRITEBYTECODE-unset}" \
         "${SETUPTOOLS_USE_DISTUTILS-unset}" >> "$events.env"
     case "$variant" in
-        trial-exact) printf '%s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' ;;
-        trial-prefix) printf 'prefix %s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' ;;
-        trial-suffix) printf '%s contradictory\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' ;;
-        trial-duplicate) printf '%s\n%s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' ;;
+        trial-exact) printf '%s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' ;;
+        trial-prefix) printf 'prefix %s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' ;;
+        trial-suffix) printf '%s contradictory\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' ;;
+        trial-duplicate) printf '%s\n%s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' ;;
     esac
     exit 0
 fi
@@ -63,9 +63,9 @@ for kind in omitted-pin alternate-runtime multiple-slots multiple-groups duplica
     case "$kind" in
         omitted-pin) args=(--quickstart --profile iq3_s-sc117-abliterated) ;;
         alternate-runtime) args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.39 --parallel 1 --batch-groups 1) ;;
-        multiple-slots) args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 2 --batch-groups 1) ;;
-        multiple-groups) args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 2) ;;
-        duplicate-option) args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 1 --parallel=2) ;;
+        multiple-slots) args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.45 --parallel 2 --batch-groups 1) ;;
+        multiple-groups) args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.45 --parallel 1 --batch-groups 2) ;;
+        duplicate-option) args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.45 --parallel 1 --batch-groups 1 --parallel=2) ;;
     esac
     if STRATA_SC117_IQ3S_TRIAL=1 STRATA_HOST=0.0.0.0 STRATA_PORT=8080 \
         run_selected v1strata.sh "${args[@]}"; then
@@ -79,26 +79,26 @@ done
 : > "$events"
 STRATA_SC117_IQ3S_TRIAL=1 STRATA_HOST=0.0.0.0 STRATA_PORT=8080 \
     run_selected v1strata.sh --quickstart --profile=iq3_s-sc117-abliterated \
-    --runtime=0.1.44.1 --parallel=1 --batch-groups=1
+    --runtime=0.1.45 --parallel=1 --batch-groups=1
 check_line="$(grep -n '^check ' "$events" | cut -d: -f1)"
 lease_line="$(grep -n '^hosting begin ' "$events" | cut -d: -f1)"
 launch_line="$(grep -n '^launch ' "$events" | cut -d: -f1)"
 [[ "$check_line" -lt "$lease_line" && "$lease_line" -lt "$launch_line" ]]
-grep -qx 'check --check-ready --profile=iq3_s-sc117-abliterated --runtime=0.1.44.1 --parallel=1 --batch-groups=1' "$events"
-grep -Fq 'host=0.0.0.0 key=unset fd=unset marker=1 runtime=0.1.44.1 port=8080' "$events.env"
+grep -qx 'check --check-ready --profile=iq3_s-sc117-abliterated --runtime=0.1.45 --parallel=1 --batch-groups=1' "$events"
+grep -Fq 'host=0.0.0.0 key=unset fd=unset marker=1 runtime=0.1.45 port=8080' "$events.env"
 
-# .44.1 is reachable only through its exact trusted-LAN trial environment and a trial-specific preflight.
+# .45 is reachable only through its exact trusted-LAN trial environment and a trial-specific preflight.
 trial_state="${HOME:-/home/user}/.local/state/locallm-strata/sc117-iq3s-trial"
 for variant in trial-prefix trial-suffix trial-duplicate; do
     printf '%s\n' "$variant" > "$SCRATCH/variant"
     : > "$events"
     if STRATA_SC117_IQ3S_TRIAL=1 STRATA_HOST=0.0.0.0 STRATA_PORT=8080 \
         run_selected v1strata.sh --quickstart --profile iq3_s-sc117-abliterated \
-            --runtime 0.1.44.1 --parallel 1 --batch-groups 1; then
+            --runtime 0.1.45 --parallel 1 --batch-groups 1; then
         echo "unexpected SC117 trial launch with $variant readiness" >&2
         exit 1
     fi
-    grep -qx 'check --check-ready --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$events"
+    grep -qx 'check --check-ready --profile iq3_s-sc117-abliterated --runtime 0.1.45 --parallel 1 --batch-groups 1' "$events"
     ! grep -q '^hosting begin ' "$events"
     ! grep -q '^launch ' "$events"
 done
@@ -114,7 +114,7 @@ for kind in trial-missing-marker trial-loopback trial-wrong-port trial-invalid-h
     esac
     if STRATA_SC117_IQ3S_TRIAL="$marker" STRATA_HOST="$host" STRATA_PORT="$port" \
         run_selected v1strata.sh --quickstart --profile iq3_s-sc117-abliterated \
-            --runtime 0.1.44.1 --parallel 1 --batch-groups 1; then
+            --runtime 0.1.45 --parallel 1 --batch-groups 1; then
         echo "unexpected SC117 trial with $kind" >&2
         exit 1
     fi
@@ -124,19 +124,19 @@ done
 : > "$events"
 STRATA_SC117_IQ3S_TRIAL=1 STRATA_HOST=0.0.0.0 STRATA_PORT=8080 \
     run_selected v1strata.sh --quickstart --profile iq3_s-sc117-abliterated \
-        --runtime 0.1.44.1 --parallel 1 --batch-groups 1
+        --runtime 0.1.45 --parallel 1 --batch-groups 1
 trial_check_line="$(grep -n '^check ' "$events" | cut -d: -f1)"
 trial_lease_line="$(grep -n '^hosting begin ' "$events" | cut -d: -f1)"
 trial_launch_line="$(grep -n '^launch ' "$events" | cut -d: -f1)"
 [[ "$trial_check_line" -lt "$trial_lease_line" && "$trial_lease_line" -lt "$trial_launch_line" ]]
-grep -qx 'check --check-ready --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$events"
-grep -Fqx "host=0.0.0.0 key=unset fd=unset marker=1 runtime=0.1.44.1 port=8080 state=$trial_state cache=$trial_state/pycache pycache=1 distutils=stdlib" "$events.env"
+grep -qx 'check --check-ready --profile iq3_s-sc117-abliterated --runtime 0.1.45 --parallel 1 --batch-groups 1' "$events"
+grep -Fqx "host=0.0.0.0 key=unset fd=unset marker=1 runtime=0.1.45 port=8080 state=$trial_state cache=$trial_state/pycache pycache=1 distutils=stdlib" "$events.env"
 grep -Fqx 'hosting begin --require-new-lease --lease-id 0000000000000000000000000000000000000000000000000000000000000000 --port 8080' "$events"
-grep -qx 'launch --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.44.1 --parallel 1 --batch-groups 1' "$events"
+grep -qx 'launch --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.45 --parallel 1 --batch-groups 1' "$events"
 
 # The launcher is never asked to parse a key from an argument or inherit one in its environment.
 ! grep -Fq 'candidate_env+=("STRATA_API_KEY=' "$ROOT/HostLLM.sh"
 grep -Fq 'exec_with_stdin_api_key.py' "$ROOT/HostLLM.sh"
 grep -Fq 'Refusing exported STRATA_API_KEY' "$ROOT/HostLLM.sh"
 
-echo 'HostLLM SC117 .39 retirement, exact .44.1 preflight-before-lease, one-slot refusals, trusted-LAN-only and 8080 gates: PASS'
+echo 'HostLLM SC117 .39 retirement, exact .45 preflight-before-lease, one-slot refusals, trusted-LAN-only and 8080 gates: PASS'

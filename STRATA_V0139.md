@@ -2,7 +2,7 @@
 
 ## Decision
 
-**Historical decision from 2026-10-05, superseded for the current Orca Q4 menu:** at that time, use **0.1.39, one slot** for menu choices [3]/[4] on the prepared node and preserve 0.1.38 as an explicit rollback. The current standard Orca Q4_K_S Strata route is `.44.1`; `.39` remains rollback-only. Swift Q8 remains the main model and Hauhau remains the fallback; their runtimes/defaults were not changed.
+**Historical decision from 2026-10-05, superseded for the current Orca Q4 menu:** at that time, use **0.1.39, one slot** for menu choices [3]/[4] on the prepared node and preserve 0.1.38 as an explicit rollback. The Q4 standard at the time of this report was `.44.1`; it has since moved to `.45`, with `.39`, `.41`, and `.44.1` retained as explicit rollback routes. Swift Q8 remains the main model and Hauhau remains the fallback; their runtimes/defaults were not changed.
 Two slots are **opt-in**, not a universal speed upgrade. Larger counts have not been validated and are refused by this controller.
 
 The checked source is `6f32ec070f23ced9f50e704d854d775da52591ab` (release v0.1.39), beside the original

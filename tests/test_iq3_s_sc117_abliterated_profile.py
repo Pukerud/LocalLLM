@@ -597,7 +597,7 @@ class SC117ProfileTests(unittest.TestCase):
             qualified.assert_not_called()
         settings = dict(profile.DEFAULT_SETTINGS)
         cache_prefix = state / 'pycache'
-        env = {'STRATA_SC117_IQ3S_TRIAL': '1', 'STRATA_RUNTIME': '0.1.44.1',
+        env = {'STRATA_SC117_IQ3S_TRIAL': '1', 'STRATA_RUNTIME': '0.1.45',
                'PYTHONPYCACHEPREFIX': str(cache_prefix), 'SETUPTOOLS_USE_DISTUTILS': 'stdlib'}
         with patch('pathlib.Path.home', return_value=home), \
                 patch.dict(os.environ, env, clear=True), \
@@ -614,7 +614,7 @@ class SC117ProfileTests(unittest.TestCase):
             trial_artifacts.assert_called_once_with(self.root, state)
         with patch('pathlib.Path.home', return_value=home), \
                 patch.dict(os.environ, env | {'STRATA_RUNTIME': '0.1.39'}, clear=True):
-            with self.assertRaisesRegex(SafetyError, 'require Strata .44.1'):
+            with self.assertRaisesRegex(SafetyError, 'require Strata .45'):
                 profile.authorize_start(self.root, settings, host='0.0.0.0', port=8080, state_root=state)
 
     def test_readiness_recomputes_profile_fingerprint_and_rejects_fabricated_probe_receipts(self):

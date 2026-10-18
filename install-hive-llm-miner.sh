@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Install HiveOS profiles with Orca Q4 .44.1 as the standard Strata route, .39/.41 rollback routes,
-# Swift/Hauhau Qwen routes, and the isolated unqualified SC117 .44.1 trial. Never starts/stops Hive or osn.service.
+# Install HiveOS profiles with Orca Q4 .45 as the standard Strata route, .39/.41/.44.1 rollback routes,
+# Swift/Hauhau Qwen routes, and the isolated unqualified SC117 .45 trial. Never starts/stops Hive or osn.service.
 set -Eeuo pipefail
 unset STRATA_API_KEY
 
@@ -41,7 +41,7 @@ read_profile_runtime() {
 sc117_profile_for_runtime() {
     case "$1" in
         0.1.39) printf 'orca-q4_k_s-v01441' ;;
-        0.1.44.1) printf 'iq3_s-sc117-abliterated' ;;
+        0.1.44.1|0.1.45) printf 'iq3_s-sc117-abliterated' ;;
         *) return 1 ;;
     esac
 }
@@ -101,7 +101,7 @@ for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s
 done
 [[ -f "$SOURCE_DIR/profile-menu.sh" && ! -L "$SOURCE_DIR/profile-menu.sh" ]] || fail 'profile menu is missing or symlinked'
 command -v runuser >/dev/null 2>&1 || fail 'runuser is unavailable; Q4 readiness cannot be checked'
-# The standard .44.1 target is the mandatory install gate. Explicit .39/.41 rollback routes
+# The standard .45 target is the mandatory install gate. Explicit .39/.41/.44.1 rollback routes
 # are readiness-gated when selected, avoiding slow irrelevant checks during default migration.
 candidate_readiness="$(runuser -u user -- env -i \
     HOME=/home/user USER=user LOGNAME=user \
@@ -109,14 +109,14 @@ candidate_readiness="$(runuser -u user -- env -i \
     PYTHONDONTWRITEBYTECODE=1 \
     STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata \
     STRATA_STATE_ROOT=/home/user/.local/state/locallm-strata \
-    STRATA_RUNTIME=0.1.44.1 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 STRATA_PORT=8080 \
+    STRATA_RUNTIME=0.1.45 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 STRATA_PORT=8080 \
     "$LLM_ROOT/v1strata.sh" --check-ready --profile orca-q4_k_s \
-    --runtime 0.1.44.1 --parallel 1 --batch-groups 1)" || \
-    fail 'Orca Q4_K_S .44.1 readiness/evidence check failed; Hive configuration was not changed'
-candidate_expected_readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.44.1; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'
+    --runtime 0.1.45 --parallel 1 --batch-groups 1)" || \
+    fail 'Orca Q4_K_S .45 readiness/build-evidence check failed; Hive configuration was not changed'
+candidate_expected_readiness='READY CONFIG: pinned Q4_K_S Strata 0.1.45; future profile context=262144; CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted (decode gain unconfirmed).'
 candidate_actual_readiness="$(grep '^READY CONFIG:' <<< "$candidate_readiness" || true)"
 [[ "$candidate_actual_readiness" == "$candidate_expected_readiness" ]] || \
-    fail 'Orca Q4_K_S .44.1 effective config is not pinned; Hive configuration was not changed'
+    fail 'Orca Q4_K_S .45 effective config/build evidence is not pinned; Hive configuration was not changed'
 sc117_trial_state='/home/user/.local/state/locallm-strata/sc117-iq3s-trial'
 sc117_trial_readiness="$(runuser -u user -- env -i \
     HOME=/home/user USER=user LOGNAME=user \
@@ -124,18 +124,18 @@ sc117_trial_readiness="$(runuser -u user -- env -i \
     PYTHONDONTWRITEBYTECODE=1 PYTHONPYCACHEPREFIX="$sc117_trial_state/pycache" \
     SETUPTOOLS_USE_DISTUTILS=stdlib STRATA_SC117_IQ3S_TRIAL=1 \
     STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata STRATA_STATE_ROOT="$sc117_trial_state" \
-    STRATA_RUNTIME=0.1.44.1 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 \
+    STRATA_RUNTIME=0.1.45 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 \
     STRATA_PORT=8080 STRATA_HOST=0.0.0.0 \
     "$LLM_ROOT/v1strata.sh" --check-ready --profile iq3_s-sc117-abliterated \
-    --runtime 0.1.44.1 --parallel 1 --batch-groups 1)" || \
-    fail 'SC117 unqualified .44.1 trial preflight failed; Hive configuration was not changed'
-sc117_trial_expected='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.44.1; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.'
+    --runtime 0.1.45 --parallel 1 --batch-groups 1)" || \
+    fail 'SC117 unqualified .45 trial preflight failed; Hive configuration was not changed'
+sc117_trial_expected='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.'
 sc117_trial_actual="$(grep '^TRIAL CONFIG:' <<< "$sc117_trial_readiness" || true)"
 [[ "$sc117_trial_actual" == "$sc117_trial_expected" && "$sc117_trial_readiness" != *'READY CONFIG:'* ]] || \
-    fail 'SC117 .44.1 CPU-vision preflight is not the exact unqualified trial; Hive configuration was not changed'
+    fail 'SC117 .45 CPU-vision preflight is not the exact unqualified trial; Hive configuration was not changed'
 assert_idle
 
-# Orca .44.1 is the standard Strata target. Retain .39 only for explicit rollback;
+# Orca .45 is the standard Strata target. Retain .39/.41/.44.1 only for explicit rollback;
 # migrate an old .39/SC117 pointer before replacing the SC117 profile directory.
 initial_profile='orca-q4_k_s-v01441'
 migrate_legacy_pointer=0
@@ -196,7 +196,7 @@ elif [[ -e "$CUSTOM_DIR/llm-hosting.conf" ]]; then
         recognized_legacy_profile='iq3_s-sc117-abliterated'
     fi
     [[ -n "$recognized_legacy_profile" ]] || \
-        fail 'legacy Hive profile config is unrecognized; refusing to infer the .44.1 standard selection'
+        fail 'legacy Hive profile config is unrecognized; refusing to infer the .45 standard selection'
     if [[ "$recognized_legacy_profile" == iq3_s-sc117-abliterated ]]; then
         legacy_sc117_runtime="$(read_profile_runtime "$CUSTOM_DIR/llm-hosting.conf")" || \
             fail 'cannot identify the legacy SC117 runtime; refusing to change its Hive selection'
@@ -268,18 +268,18 @@ if [[ "$migrate_legacy_pointer" -eq 1 ]]; then
         *) fail 'legacy Hive pointer target is not eligible for standard-profile migration' ;;
     esac
     [[ -d "$CUSTOM_DIR/profiles/orca-q4_k_s-v01441" && ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v01441" ]] || \
-        fail 'standard Orca .44.1 profile is unavailable; legacy pointer was not changed'
+        fail 'standard Orca .45 profile is unavailable; legacy pointer was not changed'
     for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
         cmp -s "$SOURCE_DIR/profiles/orca-q4_k_s-v01441/$file" \
                "$CUSTOM_DIR/profiles/orca-q4_k_s-v01441/$file" || \
-            fail "standard Orca .44.1 profile changed before pointer migration: $file"
+            fail "standard Orca .45 profile changed before pointer migration: $file"
     done
     migration_link="$CUSTOM_DIR/.current-migrate.$$.$RANDOM"
     ln -s -- 'profiles/orca-q4_k_s-v01441' "$migration_link"
     mv -Tf -- "$migration_link" "$CUSTOM_DIR/current"
     initial_profile='orca-q4_k_s-v01441'
     sync
-    printf 'Migrated the obsolete .39/SC117 .39 next-start pointer to the verified standard Orca Q4_K_S .44.1 profile before replacing the trial profile.\n'
+    printf 'Migrated the obsolete .39/SC117 .39 next-start pointer to the verified standard Orca Q4_K_S .45 profile before replacing the trial profile.\n'
 fi
 for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated; do
     install_profile_files "$profile"
@@ -327,8 +327,7 @@ printf '  MINER=custom\n'
 printf '  CUSTOM_MINER=%s\n' "$CUSTOM_NAME"
 printf '  Profile: %s%s\n' "$initial_profile" "$([[ "$initial_profile" == orca-q4_k_s-v01441 ]] && printf ' (standard Strata default)' || printf ' (preserved selection)')"
 printf '  Switch menu: %s/profile-menu.sh\n' "$CUSTOM_DIR"
-printf '  Standard Strata: Orca .44.1; Orca .39 and .41 remain available only as explicit rollback profiles\n'
-printf '  Menu routes: Swift, Hauhau, Orca .44.1, and SC117 .44.1 CPU-vision trial\n'
-printf '  SC117 remains unqualified, unauthenticated on trusted-LAN 0.0.0.0:8080; use only on a trusted, firewalled LAN; dedicated trial state\n'
+printf '  Standard Strata: Orca .45; Orca .39, .41, and .44.1 remain available only as explicit rollback routes\n'
+printf '  Menu routes: Swift, Hauhau, Orca .45, and SC117 .45 CPU-vision trial\n'printf '  SC117 remains unqualified, unauthenticated on trusted-LAN 0.0.0.0:8080; use only on a trusted, firewalled LAN; dedicated trial state\n'
 printf '  No miner start/stop command was run; osn.service was not modified.\n'
 printf '\nThe profile menu refuses changes while Hive, the API, Docker, or GPU compute is active.\n'
