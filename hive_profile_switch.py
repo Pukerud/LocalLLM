@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shlex
 import signal
 import stat
 import subprocess
@@ -26,6 +27,11 @@ PROFILES = ('swift15u-q8', 'hauhau-q8-fastmtp-q4kv-xhigh', 'orca-q4_k_s-v01441',
 
 def say(message):
     print(f'[Hive switch] {message}', flush=True)
+
+
+def recovery_command():
+    return (f'sudo env HOSTLLM_STATE_ROOT={shlex.quote(str(hosting.ROOT))} '
+            f'python3 {shlex.quote(__file__)} --recover')
 
 
 def llm_processes():
@@ -168,7 +174,7 @@ def package_current(profile):
 
 def switch_profile(profile):
     if JOURNAL.exists() or JOURNAL.is_symlink():
-        raise SafetyError(f'An earlier switch needs recovery: sudo python3 {__file__} --recover')
+        raise SafetyError(f'An earlier switch needs recovery: {recovery_command()}')
     wrappers = inspect_owned_workload()
     if os.readlink(CURRENT) == f'profiles/{profile}' and package_current(profile):
         say(f'{profile} is already selected; no stop/reload is needed.')
@@ -215,7 +221,7 @@ def switch_profile(profile):
         try:
             restore(previous)
         except BaseException as error:
-            say(f'Restoration waits for safe recovery: {error}. Run sudo python3 {__file__} --recover')
+            say(f'Restoration waits for safe recovery: {error}. Run {recovery_command()}')
             raise
     say(f'Selected {profile}. Previous miner/OctaSpace running state restored; no manual stop race.')
 

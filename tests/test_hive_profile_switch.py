@@ -145,10 +145,17 @@ class SwitchTransaction(unittest.TestCase):
         self.assertEqual(self.journal.stat().st_mode & 0o777, 0o600)
         self.assertNotIn((switch.hosting.MINER, 'start'), self.events)
 
+    def test_recovery_command_preserves_the_hostllm_state_root(self):
+        command = switch.recovery_command()
+        self.assertIn(f'HOSTLLM_STATE_ROOT={self.root}', command)
+        self.assertTrue(command.endswith('--recover'))
+
     def test_preexisting_switch_journal_is_not_overwritten(self):
         self.journal.write_text('old transaction')
-        with self.assertRaisesRegex(SafetyError, 'needs recovery'):
+        with self.assertRaisesRegex(SafetyError, 'needs recovery') as caught:
             switch.switch_profile('iq3_s-sc117-abliterated')
+        self.assertIn(f'HOSTLLM_STATE_ROOT={self.root}', str(caught.exception))
+        self.assertIn('--recover', str(caught.exception))
         self.execute.assert_not_called()
         self.assertEqual(self.journal.read_text(), 'old transaction')
 
