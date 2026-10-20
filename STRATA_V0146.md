@@ -50,7 +50,7 @@ A short successful request is only a smoke test. No .46 speed gain, broad qualit
 
 The operator explicitly requires **API-key-free trusted-LAN hosting on every future upgrade**, not just .46. This is recorded in [AGENTS.md](AGENTS.md). Inspect new upstream auth/startup changes, retain previous version-specific patch/ownership contracts, and prove a real LAN request without Authorization/x-api-key headers before claiming an upgrade works. Do not substitute a dummy token or silently add mandatory auth. Keep public exposure disabled and preserve Host/Origin and workload safety checks.
 
-## Live results: 2026-10-20
+## Initial direct-HostLLM live results: 2026-10-20
 
 The pinned runtime/build and exact patch checks passed. Real HTTP requests used `http://192.168.1.69:8080`, with no API-key environment input and no Authorization/x-api-key headers. Both .46 frontends/native engines ran as UID 1000, eagerly loaded the expected runtime, and reported `api_key=false` and one serving slot.
 
@@ -60,7 +60,7 @@ The pinned runtime/build and exact patch checks passed. Real HTTP requests used 
 | Root HostLLM explicit SC117 .46 trial | HTTP 200, no key | `63` | `Magenta` | Passed |
 | Root HostLLM explicit SC117 .45 rollback trial | HTTP 200, no key | `63` | Not rerun | Passed |
 
-Same-origin browser-style POSTs without a key returned HTTP 200. Untrusted Host and Origin requests still returned HTTP 403. These checks used this host's LAN address, not an independent remote-device/firewall validation. The .46 Hive wrapper/profile-pointer switch was not live-tested; the installed Hive selection was preserved.
+Same-origin browser-style POSTs without a key returned HTTP 200. Untrusted Host and Origin requests still returned HTTP 403. These checks used this host's LAN address, not an independent remote-device/firewall validation. That initial run did not exercise HostLLM [16] or the .46 Hive wrapper/profile-pointer switch; the installed Hive selection was preserved. The follow-up below covers the actual menu/Hive path.
 
 ### .46 process-group compatibility discovered during the first start
 
@@ -68,10 +68,22 @@ The initial start failed the old same-PGID ownership gate: upstream `serve/lifel
 
 The first test's exact owned family was safely stopped using the corrected identity gate, its lease was released, and fresh Q4/SC117 .46 starts subsequently passed requests and clean shutdown. CPU regression tests cover both the new child-group layout and refusal cases, including real fake-frontend startup/request/external-stop/reap.
 
-### Final state and scope
+### Initial test final state and scope
 
 The prior Wildrig miner and OctaSpace service were restored, `MINER_STOP` was absent, there was no HostLLM pause lease or candidate listener, and 45 retained runtime/profile/Hive-config hashes were unchanged. Orca .45 remains standard; SC117 remains unqualified. The .45 rollback request also passed after the launcher changes.
 
 Validation: 350 Python tests (one skipped), all seven shell tests, Python compilation, shell syntax, and `git diff --check` passed.
 
 [Machine-readable results](results/strata-v0146-noauth-20261020.json). Raw build, readiness, response, startup-failure, and lifecycle artifacts: `/tmp/localllm-v0146-noauth-20261020/` on the tested host. No throughput/speed comparison, full-context generation, sustained/multi-user load, or general quality qualification was performed.
+
+## Follow-up: actual HostLLM [16] / Hive .46 switch
+
+The operator found a missed selector bug: Python preflight hard-coded `/usr/bin/runuser`, but HiveOS provides `/usr/sbin/runuser`. The helper now resolves it only through trusted system directories (`/usr/sbin:/usr/bin:/sbin:/bin`), never through an inherited user-writable PATH. If unavailable, it still refuses before pausing services or changing the pointer. Exact trial readiness and key-free LAN settings remain mandatory.
+
+The corrected path was tested in a real root controlling terminal: select **16**, wait for the serialized package/profile switch, press Enter, and exit. The existing .45 server was proved Hive-owned before any stop. Preflight passed, OctaSpace was paused, only that owned Hive session was stopped, the .46 package/pointer was selected, and Hive/OctaSpace running state was restored. The new .46 Hive frontend/native engine ran as UID 1000, eagerly loaded, reported one serving slot and `api_key=false`, and served the web UI/models plus text (`63`) and CPU-image (`Magenta`) requests on `192.168.1.69:8080` without authentication headers. A same-origin browser-style image POST also passed.
+
+The explicitly requested SC117 .46 trial was left **selected and running**, with OctaSpace active, `MINER_STOP` absent, and no pause lease or switch recovery journal. This differs from the initial smoke run, which restored Wildrig. The guarded package refresh also set Hive's custom-miner config to `llm-hosting` and its stable config path; `rig.conf` and the generic runtime-selection hash were unchanged. SC117 remains unqualified, and the separate standard Orca route remains .45.
+
+Regression checks: **357 Python tests (one skipped), seven shell tests**, compilation, shell syntax, and clean diff checks. Coverage now executes the preflight command rather than only mocking the whole preflight function, including trusted/sbin lookup, missing-command refusal before mutations, and exact-line rejection.
+
+[Actual menu/Hive results](results/hive-option16-runuser-20261020.json). Raw PTY transcript, request replies, and snapshots: `/tmp/hive-option16-runuser-20261020/`. These remain bounded smoke checks, not full-context, sustained-load, or quality qualification.

@@ -2,6 +2,8 @@
 from contextlib import ExitStack
 import os
 from pathlib import Path
+import shlex
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -88,6 +90,31 @@ class SwitchTransaction(unittest.TestCase):
         self.assertTrue(self.miner)
         self.assertEqual(self.service,'active')
 
+    def test_v0146_missing_runuser_refuses_before_any_mutation(self):
+        with mock.patch.object(switch.shutil,'which',return_value=None), \
+                mock.patch.object(switch.subprocess,'run') as launch:
+            with self.assertRaisesRegex(SafetyError,'runuser is unavailable'):
+                switch.switch_profile(switch.SC117_V0146_PROFILE)
+        launch.assert_not_called()
+        self.execute.assert_not_called()
+        self.assertEqual(self.service,'active')
+        self.assertTrue(self.miner)
+        self.assertFalse(self.stop.exists())
+        self.assertFalse(self.journal.exists())
+        self.assertEqual(os.readlink(self.current),'profiles/orca-q4_k_s-v01441')
+
+    def test_v0146_failed_preflight_refuses_before_any_mutation(self):
+        failed=subprocess.CompletedProcess([],1,stdout='',stderr='readiness failed')
+        with mock.patch.object(switch.shutil,'which',return_value='/usr/sbin/runuser'), \
+                mock.patch.object(switch.subprocess,'run',return_value=failed):
+            with self.assertRaisesRegex(SafetyError,'before any service/miner pause'):
+                switch.switch_profile(switch.SC117_V0146_PROFILE)
+        self.execute.assert_not_called()
+        self.assertEqual(self.service,'active')
+        self.assertTrue(self.miner)
+        self.assertFalse(self.stop.exists())
+        self.assertFalse(self.journal.exists())
+
     def test_octa_stop_may_already_stop_the_miner(self):
         original = self.command
         def stop_together(args, timeout=180):
@@ -173,6 +200,61 @@ class SwitchTransaction(unittest.TestCase):
         self.assertIn('--recover', str(caught.exception))
         self.execute.assert_not_called()
         self.assertEqual(self.journal.read_text(), 'old transaction')
+
+
+class PreflightChecks(unittest.TestCase):
+    def test_sbin_runuser_is_resolved_from_trusted_paths_not_inherited_path(self):
+        ready=subprocess.CompletedProcess([],0,stdout=switch.SC117_V0146_READINESS+'\n',stderr='')
+        with mock.patch.dict(os.environ,{'PATH':'/tmp/untrusted-bin'}), \
+                mock.patch.object(switch.shutil,'which',return_value='/usr/sbin/runuser') as lookup, \
+                mock.patch.object(switch.subprocess,'run',return_value=ready) as launch:
+            switch.preflight_profile(switch.SC117_V0146_PROFILE)
+        lookup.assert_called_once_with('runuser',path='/usr/sbin:/usr/bin:/sbin:/bin')
+        command=launch.call_args.args[0]
+        self.assertEqual(command[:6],['/usr/sbin/runuser','-u','user','--','/usr/bin/env','-i'])
+        self.assertIn('STRATA_RUNTIME=0.1.46',command)
+        self.assertIn('STRATA_HOST=0.0.0.0',command)
+        self.assertIn('STRATA_PORT=8080',command)
+        self.assertIn('STRATA_SC117_IQ3S_TRIAL=1',command)
+        self.assertFalse(any(arg.startswith('STRATA_API_KEY=') for arg in command))
+        self.assertEqual(launch.call_args.kwargs,{'capture_output':True,'text':True,'timeout':600})
+
+    def test_legacy_system_runuser_location_is_also_supported(self):
+        ready=subprocess.CompletedProcess([],0,stdout=switch.SC117_V0146_READINESS,stderr='')
+        with mock.patch.object(switch.shutil,'which',return_value='/bin/runuser'), \
+                mock.patch.object(switch.subprocess,'run',return_value=ready) as launch:
+            switch.preflight_profile(switch.SC117_V0146_PROFILE)
+        self.assertEqual(launch.call_args.args[0][0],'/bin/runuser')
+
+    def test_exact_preflight_line_remains_required(self):
+        for output in ('prefix '+switch.SC117_V0146_READINESS,
+                       switch.SC117_V0146_READINESS+'\n'+switch.SC117_V0146_READINESS,
+                       switch.SC117_V0146_READINESS+'\nREADY CONFIG: contradictory'):
+            ready=subprocess.CompletedProcess([],0,stdout=output,stderr='')
+            with self.subTest(output=output), \
+                    mock.patch.object(switch.shutil,'which',return_value='/usr/sbin/runuser'), \
+                    mock.patch.object(switch.subprocess,'run',return_value=ready):
+                with self.assertRaisesRegex(SafetyError,'before any service/miner pause'):
+                    switch.preflight_profile(switch.SC117_V0146_PROFILE)
+
+    def test_other_profiles_do_not_invoke_sc117_046_preflight(self):
+        with mock.patch.object(switch.shutil,'which') as lookup, \
+                mock.patch.object(switch.subprocess,'run') as launch:
+            switch.preflight_profile('orca-q4_k_s-v01441')
+        lookup.assert_not_called()
+        launch.assert_not_called()
+
+    def test_resolved_runuser_subprocess_is_really_executed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);stub=root/'runuser';trace=root/'argv'
+            stub.write_text('#!/bin/bash\nprintf "%s\\n" "$@" > '+str(trace)+'\nprintf "%s\\n" '+
+                            shlex.quote(switch.SC117_V0146_READINESS)+'\n')
+            stub.chmod(0o755)
+            with mock.patch.object(switch.shutil,'which',return_value=str(stub)):
+                switch.preflight_profile(switch.SC117_V0146_PROFILE)
+            args=trace.read_text().splitlines()
+            self.assertEqual(args[:5],['-u','user','--','/usr/bin/env','-i'])
+            self.assertEqual(args[-6:],['--runtime','0.1.46','--parallel','1','--batch-groups','1'])
 
 
 class OwnershipChecks(unittest.TestCase):

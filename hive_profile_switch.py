@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import secrets
 import shlex
+import shutil
 import signal
 import stat
 import subprocess
@@ -184,9 +185,14 @@ def preflight_profile(profile):
     """Run the new SC117 route's exact readiness check before pausing Hive/OctaSpace."""
     if profile != SC117_V0146_PROFILE:
         return
+    # util-linux installs runuser under sbin on HiveOS/Ubuntu. Search only
+    # trusted system directories, never an inherited/user-writable PATH.
+    runuser = shutil.which('runuser', path='/usr/sbin:/usr/bin:/sbin:/bin')
+    if runuser is None:
+        raise SafetyError('runuser is unavailable in trusted system paths; no service/miner pause was started')
     trial_state = '/home/user/.local/state/locallm-strata/sc117-iq3s-trial'
     command = [
-        '/usr/bin/runuser', '-u', 'user', '--', '/usr/bin/env', '-i',
+        runuser, '-u', 'user', '--', '/usr/bin/env', '-i',
         'HOME=/home/user', 'USER=user', 'LOGNAME=user',
         'PATH=/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin',
         'PYTHONDONTWRITEBYTECODE=1', f'PYTHONPYCACHEPREFIX={trial_state}/pycache',
