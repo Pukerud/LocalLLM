@@ -1,6 +1,6 @@
 # LocalLLM — Swift, Hauhau, Strata and Orca
 
-Local HostLLM menu definition for `.69` (4× RTX 3090, 128 GB RAM). The standard Strata route is Orca Q4_K_S `.45` with auto prefill and trimmed `14,24,36` split; the windows-2 override is omitted. Orca `.39`, `.41`, and `.44.1` remain explicit rollback routes. Strata `.46` (source `90767252f420e25223c739d604145ad15911d48b`) is an isolated, unqualified test candidate only: HostLLM [5] for single-slot Q4, and Hive [16] for SC117. It is not the default, and no `.46` runtime build or inference result is documented yet. SC117 `.45`/`.46` remain unqualified trials on trusted-LAN `0.0.0.0:8080` without API authentication, using CPU vision and dedicated state; neither is normal or production hosting. SC117 and Orca share port 8080 and cannot serve concurrently. The `.45` engine/build is pinned and artifact-checked, but no `.45`-specific Q4 speed/quality claim is made.
+Local HostLLM menu definition for `.69` (4× RTX 3090, 128 GB RAM). The standard Strata route is Orca Q4_K_S `.45` with auto prefill and trimmed `14,24,36` split; the windows-2 override is omitted. Orca `.39`, `.41`, and `.44.1` remain explicit rollback routes. Strata `.46` (source `90767252f420e25223c739d604145ad15911d48b`) is an isolated, unqualified test candidate only: HostLLM [5] for single-slot Q4, and Hive [16] for SC117. It is not the default. Its pinned build and bounded no-key LAN text/synthetic-image smoke tests passed on 2026-10-20; see [STRATA_V0146.md](STRATA_V0146.md). This is not qualification or a performance result. SC117 `.45`/`.46` remain unqualified trials on trusted-LAN `0.0.0.0:8080` without API authentication, using CPU vision and dedicated state; neither is normal or production hosting. SC117 and Orca share port 8080 and cannot serve concurrently. The `.45` engine/build is pinned and artifact-checked, but no `.45`-specific Q4 speed/quality claim is made.
 
 ```text
   [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots
@@ -16,6 +16,8 @@ Local HostLLM menu definition for `.69` (4× RTX 3090, 128 GB RAM). The standard
   [15] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) .45 unqualified trial (MTP)
   [16] Set next Hive miner - SC117 IQ3_S .46 unqualified CPU-vision trial
 ```
+
+**Standing upgrade rule:** trusted-LAN hosting must remain API-key-free on every runtime upgrade. See [AGENTS.md](AGENTS.md); every candidate must pass a real LAN request without Authorization/x-api-key headers, not just compile/readiness checks.
 
 ## Start hosting
 
@@ -70,7 +72,7 @@ Other Strata profiles remain unauthenticated by default: **do not expose them pu
 | [2] Hauhau | `hauhau-q8-fastmtp-q4kv-xhigh` | Q8_K_P weights, BF16 vision, matching FastMTP sidecar depth 4, Q4_0 K/V, xhigh, three 262144-token slots |
 | [3] Orca .45 | `orca-q4_k_s` / runtime `0.1.45` | Standard machine-specific profile; native 262K, CPU vision, 8 GiB/four-slot cache, auto prefill, trimmed split 14,24,36, one serving slot. Pipeline-windows-2 override omitted. No .45-specific quality/speed claim. See [ORCA_Q4KS_V01441.md](ORCA_Q4KS_V01441.md) |
 | [4] SC117 trial | `iq3_s-sc117-abliterated` | Unqualified Strata .45 trial, CPU vision, native 262144, `--spec 3` + pipeline-windows 2, INT8 KV, one slot/group, trusted-LAN `0.0.0.0:8080` (unauthenticated), dedicated state; no qualification or production authorization |
-| [5] Orca .46 test | `orca-q4_k_s` / runtime `0.1.46` | Isolated pinned test candidate; CPU vision, single-slot; not built or inference-validated yet, no promotion/performance claim |
+| [5] Orca .46 test | `orca-q4_k_s` / runtime `0.1.46` | Isolated pinned test candidate; CPU vision, single-slot; pinned build and bounded no-key LAN text/image smoke passed; no promotion/performance claim |
 | Hive [16] SC117 .46 trial | `iq3_s-sc117-abliterated-v0146` | Unqualified CPU-vision trial, native 262144, `--spec 3` + pipeline-windows 2, INT8 KV, one slot/group, trusted-LAN `0.0.0.0:8080`, dedicated state; no qualification or production authorization |
 | Strata standard | `orca-q4_k_s-v01441` | Q4_K_S .45, native 262K, CPU vision, auto prefill, trimmed split 14,24,36, one slot |
 | Rollback | `orca-q4_k_s` | Generic Q4 .39 profile, native 262K, CPU vision, one serving slot |
@@ -149,8 +151,10 @@ Strata 0.1.46 is separately pinned to `90767252f420e25223c739d604145ad15911d48b`
 explicit Q4 test and SC117 trial routes and is never a generic/default runtime choice. Its build inherits the pinned
 .45 options and enables `STRATA_MMQ_TQ_OVERLAY=ON`. The upstream SM86 defaults remain unvalidated on this host and
 establish no speed or quality gain. `./v1strata.sh --prepare-runtime --runtime 0.1.46` is build-only; exact artifact
-and readiness checks must pass before any inference. No .46 runtime preparation, live start, or inference result is
-claimed here. The IQ3_S publisher revision is
+and readiness checks must pass before any inference. The exact local three-line no-key LAN startup patch is recorded
+and hash-checked separately from the upstream pin. Both .46 models passed short unauthenticated LAN text/image smoke
+checks; .45 SC117 also passed a rollback text smoke. These do not establish broad quality, speed, or qualification.
+See [the .46 patch, lifecycle compatibility, and results](STRATA_V0146.md). The IQ3_S publisher revision is
 `ed59f92082b1e93c0e96d60a8b11aab089b52f09`. Native engine and GPU vision helper were built for `sm_86` using existing
 CUDA 12.9 and a private Python/CMake environment, without replacing system tools/drivers.
 

@@ -1,0 +1,369 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-20",
+  "host": "192.168.1.69",
+  "hardware": "4 x NVIDIA GeForce RTX 3090",
+  "scope": "Pinned build, exact local no-key startup patch, and bounded real-GPU unauthenticated LAN startup/text/synthetic-image/shutdown checks. Not qualification, general quality, full-context capacity, load, throughput, or a speed comparison.",
+  "standing_operator_preference": "Trusted-LAN hosting must remain API-key-free on every future runtime upgrade; verify actual no-Authorization/no-x-api-key requests.",
+  "default_route_unchanged": "Orca Q4 0.1.45; Q4 0.1.39/0.1.41/0.1.44.1 remain explicit rollbacks; SC117 remains unqualified.",
+  "build": {
+    "runtime": "0.1.46",
+    "source_commit": "90767252f420e25223c739d604145ad15911d48b",
+    "llama_commit": "3cf03257f219afbe7334045ff7c6a06ac68c627d",
+    "prepared_at": "2026-10-20T10:19:24Z",
+    "cuda_toolkit": "/usr/local/cuda-12.9",
+    "cuda_arch": 86,
+    "build_options": {
+      "CMAKE_BUILD_TYPE": "Release",
+      "CMAKE_CUDA_ARCHITECTURES": "86",
+      "STRATA_ENABLE_CUDA": "ON",
+      "STRATA_BUILD_TESTS": "OFF",
+      "STRATA_NATIVE_EXPERTS": "ON",
+      "STRATA_ORCA_Q4KS_MMQ": "ON",
+      "STRATA_MMQ_KQUANTS": "ON",
+      "STRATA_MMQ_TAB": "OFF",
+      "STRATA_MMQ_TQ_OVERLAY": "ON"
+    },
+    "source_patches": [
+      {
+        "path": "serve/server.py",
+        "upstream_sha256": "f15efbe6a1e3a97d58ddbc0fa9a68ce544c90f6c1b03cbf6cecf50c625a5a5f8",
+        "sha256": "36f7a63d02e2c9fc4106904ec597d9a161b21f6b588f70d90a10fd8d92d6269f",
+        "purpose": "optional API key on explicit trusted-LAN routes"
+      }
+    ],
+    "runtime_assets": [
+      {
+        "name": "strata",
+        "bytes": 101821296,
+        "sha256": "50daeab8e8c463bc9bc9208ef1c7f47b0ca1d416178e226059419423553e6459"
+      },
+      {
+        "name": "strata-vision",
+        "bytes": 67956248,
+        "sha256": "5c37bc94b874f3f823511eb4a96a6d6f1a494b1f1252fc54811e605d5ef3832a"
+      },
+      {
+        "name": "strata-vision-cpu",
+        "bytes": 7633360,
+        "sha256": "84bb7893f7d4438b68c9a0ecff04a4cf12c739d8535d8cea7c7a706bc243245e"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "label": "q4-v0146-noauth",
+      "runtime": "0.1.46",
+      "profile": "orca-q4_k_s",
+      "route": "HostLLM menu 5",
+      "base_url": "http://192.168.1.69:8080",
+      "started_at": "2026-10-20T10:24:31Z",
+      "source_commit": "90767252f420e25223c739d604145ad15911d48b",
+      "server_uid": 1000,
+      "authentication_headers_sent": false,
+      "api_key_environment_present": false,
+      "health": {
+        "status": "ok",
+        "max_context": 262144,
+        "model": "qwen3.8-flash-next-orca-q4_k_s-strata",
+        "images": true,
+        "api_key": false,
+        "image_generation": false,
+        "loaded": true,
+        "service": "strata"
+      },
+      "model": "qwen3.8-flash-next-orca-q4_k_s-strata",
+      "same_origin_post_status": 200,
+      "untrusted_host_status": 403,
+      "untrusted_origin_status": 403,
+      "result": "pass",
+      "launcher_exit_code": 0,
+      "lease_released": true,
+      "state_removed": true,
+      "port_closed": true,
+      "osn_after": "active",
+      "hive_pointer_after": "profiles/iq3_s-sc117-abliterated",
+      "serving_slots": 1,
+      "text": {
+        "request": "What is 7 * 9? Reply with only the number.",
+        "http_status": 200,
+        "reply": "63",
+        "usage": {
+          "prompt_tokens": 26,
+          "completion_tokens": 3,
+          "total_tokens": 29,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        }
+      },
+      "vision": {
+        "input": "generated solid 128x128 magenta PNG",
+        "http_status": 200,
+        "reply": "Magenta",
+        "cpu_vision": true
+      },
+      "configuration": {
+        "host": "0.0.0.0",
+        "port": 8080,
+        "context": 262144,
+        "kv": "int8",
+        "kv_resident": 32768,
+        "spec": 4,
+        "pipeline_windows": null,
+        "layer_split": "14,24,36",
+        "cache_mib": 8192,
+        "conversation_cache_slots": 4,
+        "lazy_load": false,
+        "idle_unload_s": 0,
+        "state_root": "/home/user/.local/state/locallm-strata"
+      },
+      "web_ui_http_status": 200,
+      "models_http_status": 200,
+      "process_groups": [
+        {
+          "pid": 1221887,
+          "pgid": 1221887,
+          "sid": 1221887,
+          "uid": 1000,
+          "executable": "/usr/bin/python3.10"
+        },
+        {
+          "pid": 1221920,
+          "pgid": 1221920,
+          "sid": 1221887,
+          "uid": 1000,
+          "executable": "/home/user/.local/share/localllm-strata/runtimes/0.1.46/source/engine/strata-vision-cpu"
+        },
+        {
+          "pid": 1221932,
+          "pgid": 1221932,
+          "sid": 1221887,
+          "uid": 1000,
+          "executable": "/home/user/.local/share/localllm-strata/runtimes/0.1.46/source/engine/strata"
+        }
+      ]
+    },
+    {
+      "label": "sc117-v0146-noauth",
+      "runtime": "0.1.46",
+      "profile": "iq3_s-sc117-abliterated",
+      "route": "Root HostLLM --run-strata",
+      "base_url": "http://192.168.1.69:8080",
+      "started_at": "2026-10-20T10:26:08Z",
+      "source_commit": "90767252f420e25223c739d604145ad15911d48b",
+      "server_uid": 1000,
+      "authentication_headers_sent": false,
+      "api_key_environment_present": false,
+      "health": {
+        "status": "ok",
+        "max_context": 262144,
+        "model": "qwen3.8-flash-next-sc117-abliterated-iq3_s",
+        "images": true,
+        "api_key": false,
+        "image_generation": false,
+        "loaded": true,
+        "service": "strata"
+      },
+      "model": "qwen3.8-flash-next-sc117-abliterated-iq3_s",
+      "same_origin_post_status": 200,
+      "untrusted_host_status": 403,
+      "untrusted_origin_status": 403,
+      "result": "pass",
+      "launcher_exit_code": 0,
+      "lease_released": true,
+      "state_removed": true,
+      "port_closed": true,
+      "osn_after": "active",
+      "hive_pointer_after": "profiles/iq3_s-sc117-abliterated",
+      "serving_slots": 1,
+      "text": {
+        "request": "What is 7 * 9? Reply with only the number.",
+        "http_status": 200,
+        "reply": "63",
+        "usage": {
+          "prompt_tokens": 26,
+          "completion_tokens": 3,
+          "total_tokens": 29,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        }
+      },
+      "vision": {
+        "input": "generated solid 128x128 magenta PNG",
+        "http_status": 200,
+        "reply": "Magenta",
+        "cpu_vision": true
+      },
+      "configuration": {
+        "host": "0.0.0.0",
+        "port": 8080,
+        "context": 262144,
+        "kv": "int8",
+        "kv_resident": 32768,
+        "spec": 3,
+        "pipeline_windows": "2",
+        "layer_split": "14,24,36",
+        "cache_mib": 8192,
+        "conversation_cache_slots": 4,
+        "lazy_load": false,
+        "idle_unload_s": 0,
+        "state_root": "/home/user/.local/state/locallm-strata/sc117-iq3s-trial"
+      },
+      "web_ui_http_status": 200,
+      "models_http_status": 200,
+      "process_groups": [
+        {
+          "pid": 1236369,
+          "pgid": 1236369,
+          "sid": 1236369,
+          "uid": 1000,
+          "executable": "/usr/bin/python3.10"
+        },
+        {
+          "pid": 1236406,
+          "pgid": 1236406,
+          "sid": 1236369,
+          "uid": 1000,
+          "executable": "/home/user/.local/share/localllm-strata/runtimes/0.1.46/source/engine/strata-vision-cpu"
+        },
+        {
+          "pid": 1236414,
+          "pgid": 1236414,
+          "sid": 1236369,
+          "uid": 1000,
+          "executable": "/home/user/.local/share/localllm-strata/runtimes/0.1.46/source/engine/strata"
+        }
+      ]
+    },
+    {
+      "label": "sc117-v0145-rollback-noauth",
+      "runtime": "0.1.45",
+      "profile": "iq3_s-sc117-abliterated",
+      "route": "Root HostLLM --run-strata",
+      "base_url": "http://192.168.1.69:8080",
+      "started_at": "2026-10-20T10:29:38Z",
+      "source_commit": "477ac13cbe8e582c20484871ce459d20d82df09d",
+      "server_uid": 1000,
+      "authentication_headers_sent": false,
+      "api_key_environment_present": false,
+      "health": {
+        "status": "ok",
+        "max_context": 262144,
+        "model": "qwen3.8-flash-next-sc117-abliterated-iq3_s",
+        "images": true,
+        "api_key": false,
+        "image_generation": false,
+        "loaded": true,
+        "service": "strata"
+      },
+      "model": "qwen3.8-flash-next-sc117-abliterated-iq3_s",
+      "same_origin_post_status": 200,
+      "untrusted_host_status": 403,
+      "untrusted_origin_status": 403,
+      "result": "pass",
+      "launcher_exit_code": 0,
+      "lease_released": true,
+      "state_removed": true,
+      "port_closed": true,
+      "osn_after": "active",
+      "hive_pointer_after": "profiles/iq3_s-sc117-abliterated",
+      "serving_slots": 1,
+      "text": {
+        "request": "What is 7 * 9? Reply with only the number.",
+        "http_status": 200,
+        "reply": "63",
+        "usage": {
+          "prompt_tokens": 26,
+          "completion_tokens": 3,
+          "total_tokens": 29,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        }
+      },
+      "configuration": {
+        "host": "0.0.0.0",
+        "port": 8080,
+        "context": 262144,
+        "kv": "int8",
+        "kv_resident": 32768,
+        "spec": 3,
+        "pipeline_windows": "2",
+        "layer_split": "14,24,36",
+        "cache_mib": 8192,
+        "conversation_cache_slots": 4,
+        "lazy_load": false,
+        "idle_unload_s": 0,
+        "state_root": "/home/user/.local/state/locallm-strata/sc117-iq3s-trial"
+      },
+      "web_ui_http_status": 200,
+      "models_http_status": 200,
+      "process_groups": [
+        {
+          "pid": 1249539,
+          "pgid": 1249539,
+          "sid": 1249539,
+          "uid": 1000,
+          "executable": "/usr/bin/python3.10"
+        },
+        {
+          "pid": 1249571,
+          "pgid": 1249539,
+          "sid": 1249539,
+          "uid": 1000,
+          "executable": "/home/user/.local/share/localllm-strata/runtimes/0.1.45/source/engine/strata-vision-cpu"
+        },
+        {
+          "pid": 1249578,
+          "pgid": 1249539,
+          "sid": 1249539,
+          "uid": 1000,
+          "executable": "/home/user/.local/share/localllm-strata/runtimes/0.1.45/source/engine/strata"
+        }
+      ]
+    }
+  ],
+  "initial_startup_failure": {
+    "result": "excluded failed startup; retained in raw artifacts",
+    "reason": "Upstream .46 lifeline now puts engine and vision in separate PGIDs, so the old strict same-PGID ownership check refused startup/cleanup.",
+    "fix": "Only .46 exact allowed non-Python direct children in the same UID/session and their own PGID are adopted; recorded identities are required after frontend exit. Other versions and unknown parents/UIDs/executables/groups/PID reuse remain refused.",
+    "recovery": "Only the test-owned identity-verified frontend/engine/vision family was stopped; its own lease was released; subsequent fresh Q4 and SC117 runs passed."
+  },
+  "restoration": {
+    "at": "2026-10-20T10:32:59Z",
+    "active_engine": "none",
+    "osn": "active",
+    "pause_lease_present": false,
+    "miner_run": true,
+    "miner_stop": false,
+    "gpu_jobs": [
+      {
+        "pid": 1252981,
+        "exe": "/hive/miners/custom/wildrig-multi-hiveos/wildrig-multi",
+        "uid": 0
+      }
+    ],
+    "jobs_are_hive_miners": true,
+    "hive_pointer": "profiles/iq3_s-sc117-abliterated",
+    "retained_file_hashes_checked": 45,
+    "retained_files_changed": []
+  },
+  "tests": {
+    "python_tests_run": 350,
+    "skipped": 1,
+    "shell_tests_passed": 7,
+    "python_compilation": "pass",
+    "shell_syntax": "pass",
+    "git_diff_check": "pass"
+  },
+  "limitations": [
+    "LAN requests used the host's actual 192.168.1.69 address; no independent remote-device/network-firewall qualification was run.",
+    "No .46 Hive profile-pointer/package live switch was performed; the installed Hive selection and prior configured Wildrig miner were preserved.",
+    "No full-context prompt, multi-user capacity test, sustained load test, comprehensive model quality test, or matched speed benchmark was run.",
+    "The .45 rollback check used SC117 short text/same-origin requests, not a new Q4 .45 inference test.",
+    "SC117 trial results are not qualification evidence and do not enable normal/production hosting."
+  ],
+  "raw_artifacts": "/tmp/localllm-v0146-noauth-20261020"
+}

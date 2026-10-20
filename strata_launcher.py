@@ -650,8 +650,19 @@ def family(state):
         p = proc(int(d.name))
         if p is None:
             continue
-        if p['sid'] != leader['sid'] or p['pgid'] != leader['pgid'] or p['uid'] != leader['uid']:
+        if p['sid'] != leader['sid'] or p['uid'] != leader['uid']:
             raise SafetyError('Strata process-family identity mismatch')
+        if p['pgid'] != leader['pgid']:
+            # .46 lifeline isolates its engine/vision in their own groups, still
+            # in the frontend's session. Adopt only an exact allowed non-Python
+            # direct child while the frontend is live, or an already recorded
+            # unchanged identity during teardown. Never trust a session/group alone.
+            known = recorded.get(p['pid'])
+            if (state.get('runtime_version') != '0.1.46' or
+                    p['pgid'] != p['pid'] or p['exe'] == leader['exe'] or p['exe'] not in allowed or
+                    (known is not None and not same_process(known, p)) or
+                    (known is None and (live is None or p.get('ppid') != leader['pid']))):
+                raise SafetyError('Strata process-family identity mismatch: unverified isolated child group')
         if live is None and not same_process(recorded.get(p['pid']), p):
             raise SafetyError('Frontend exited before this child identity was recorded; stop refused')
         if p['exe'] not in allowed:

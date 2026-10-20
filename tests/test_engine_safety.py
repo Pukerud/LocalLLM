@@ -394,6 +394,61 @@ class StrataState(unittest.TestCase):
         send.assert_not_called()
 
 
+class IsolatedGroupFamily(unittest.TestCase):
+    def setUp(self):
+        self.leader={'pid':41001,'start_ticks':123,'exe':str(Path(sys.executable).resolve()),
+                     'uid':os.getuid(),'ppid':1,'pgid':41001,'sid':41001,'cmd':['python','-m','serve.server']}
+        self.child={'pid':41002,'start_ticks':456,'exe':'/candidate/native','uid':os.getuid(),
+                    'ppid':41001,'pgid':41002,'sid':41001,'cmd':['/candidate/native','--serve']}
+        self.state={'identity':self.leader,'runtime_version':'0.1.46','children':[],
+                    'allowed_executables':[self.leader['exe'],'/candidate/native','/candidate/vision']}
+
+    def family(self, *, live=True):
+        identities={41002:self.child}
+        if live:identities[41001]=self.leader
+        def read_stat(path,*args,**kwargs):
+            p=identities[int(path.parent.name)]
+            return f'{p["pid"]} (fixture) S {p["ppid"]} {p["pgid"]} {p["sid"]} 0'
+        with mock.patch.object(launcher,'proc',side_effect=lambda pid:identities.get(pid)), \
+             mock.patch.object(Path,'iterdir',return_value=iter(Path('/proc')/str(pid) for pid in identities)), \
+             mock.patch.object(Path,'read_text',new=read_stat):
+            return launcher.family(self.state)
+
+    def test_v0146_direct_native_child_in_own_group_is_verified(self):
+        self.assertIn(self.child,self.family())
+        self.child['exe']='/candidate/vision'
+        self.assertIn(self.child,self.family())
+
+    def test_0146_group_contract_remains_when_candidate_version_advances(self):
+        with mock.patch.object(launcher.runtimes,'TEST_VERSION','0.1.47'):
+            self.assertIn(self.child,self.family())
+
+    def test_other_releases_still_refuse_separate_groups(self):
+        for version in ('0.1.39','0.1.41','0.1.44.1','0.1.45'):
+            self.state['runtime_version']=version
+            with self.assertRaisesRegex(guard.SafetyError,'unverified isolated child group'):self.family()
+
+    def test_foreign_parent_executable_uid_group_and_python_are_refused(self):
+        original=dict(self.child)
+        for field,value in (('ppid',999),('exe','/unknown/job'),('uid',os.getuid()+1),
+                            ('pgid',41003),('exe',self.leader['exe'])):
+            self.child=dict(original,**{field:value})
+            with self.assertRaisesRegex(guard.SafetyError,'process-family identity mismatch'):self.family()
+
+    def test_unrecorded_orphan_refused_but_exact_recorded_child_can_teardown(self):
+        with self.assertRaisesRegex(guard.SafetyError,'unverified isolated child group'):self.family(live=False)
+        self.state['children']=[dict(self.child)]
+        self.child['ppid']=1
+        self.assertEqual(self.family(live=False),[self.child])
+        self.child['start_ticks']+=1
+        with self.assertRaisesRegex(guard.SafetyError,'unverified isolated child group'):self.family(live=False)
+
+    def test_changed_recorded_child_refused_even_if_parent_still_matches(self):
+        self.state['children']=[dict(self.child)]
+        self.child['cmd']=['/candidate/native','--other-session']
+        with self.assertRaisesRegex(guard.SafetyError,'unverified isolated child group'):self.family()
+
+
 class ForegroundIntegration(unittest.TestCase):
     def test_cpu_http_start_request_external_stop_and_reap(self):
         self.run_case('iq3_s')
@@ -407,7 +462,10 @@ class ForegroundIntegration(unittest.TestCase):
     def test_cpu_q4ks_start_replaces_dead_hive_state_before_reply(self):
         self.run_case('orca-q4_k_s', stale_hive_state=True)
 
-    def run_case(self, profile, *, stale_hive_state=False):
+    def test_cpu_v0146_native_groups_request_external_stop_and_reap(self):
+        self.run_case('orca-q4_k_s', isolated_groups=True)
+
+    def run_case(self, profile, *, stale_hive_state=False, isolated_groups=False):
         """Fake CPU frontend exercises the real launcher lifecycle, not model inference."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -416,8 +474,10 @@ class ForegroundIntegration(unittest.TestCase):
             (source / '.venv/bin/python').symlink_to(sys.executable)
             (source / 'serve').mkdir()
             (source / 'serve/__init__.py').write_text('')
-            status_version = '0.1.45' if profile == 'orca-q4_k_s' else '0.1.39'
+            status_version = ('0.1.46' if isolated_groups else '0.1.45') if profile == 'orca-q4_k_s' else '0.1.39'
             server_script = '''import argparse,json\nfrom http.server import HTTPServer,BaseHTTPRequestHandler\np=argparse.ArgumentParser();p.add_argument('--port',type=int);a,_=p.parse_known_args()\nclass H(BaseHTTPRequestHandler):\n def do_GET(self):\n  self.send_response(200);self.end_headers();self.wfile.write(b'{"engine":"__ENGINE_VERSION__","loaded":true,"concurrency":{"serving":1},"status":"ok"}' if self.path == '/v1/status' else b'{"status":"ok"}')\n def do_POST(self):\n  self.rfile.read(int(self.headers.get('Content-Length','0')));self.send_response(200);self.end_headers();self.wfile.write(b'{"choices":[{"message":{"content":"ANSWER=42"}}]}')\nHTTPServer(('127.0.0.1',a.port),H).serve_forever()\n'''
+            if isolated_groups:
+                server_script='import os,subprocess\nchildren=[subprocess.Popen(["/bin/sleep","30"],preexec_fn=os.setpgrp) for _ in range(2)]\n'+server_script
             (source / 'serve/server.py').write_text(server_script.replace('__ENGINE_VERSION__', status_version))
             with socket.socket() as sock:
                 sock.bind(('127.0.0.1', 0))
@@ -467,7 +527,7 @@ s.ready_q4ks=lambda root: (pathlib.Path({str(source)!r}),pathlib.Path('unused'),
 original_ready_runtime=s.ready_runtime
 def fixture_ready_runtime(profile='iq3_s',runtime='auto',parallel=1,batch_groups=1):
     if profile=='orca-q4_k_s':
-        return pathlib.Path({str(source)!r}),pathlib.Path('unused'),{cfg!r},'0.1.45'
+        return pathlib.Path({str(source)!r}),pathlib.Path('unused'),{cfg!r},{status_version!r}
     return original_ready_runtime(profile,runtime,parallel,batch_groups)
 s.ready_runtime=fixture_ready_runtime
 # The fake-runner test isolates lifecycle handoff; candidate authorization has dedicated tests.

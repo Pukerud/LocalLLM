@@ -1,4 +1,5 @@
 """CPU-only provenance, slot-policy and side-by-side rollback checks."""
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -12,6 +13,64 @@ if sys.platform != 'linux':
     raise unittest.SkipTest('Linux runtime controller imports')
 import strata_runtime as r
 from engine_safety import SafetyError
+
+
+class TrustedLANPatch(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        self.source=Path(self.tmp.name)
+        self.server=self.source/r.V0146_SERVER_PATH;self.server.parent.mkdir()
+        self.original=b'def main():\n'+r.V0146_API_KEY_GATE+b'    return 0  # Host/Origin/auth logic unchanged\n'
+        self.patched=self.original.replace(r.V0146_API_KEY_GATE,b'')
+        self.server.write_bytes(self.original)
+        for name,value in [('V0146_SERVER_UPSTREAM_SHA256',hashlib.sha256(self.original).hexdigest()),
+                           ('V0146_SERVER_LAN_SHA256',hashlib.sha256(self.patched).hexdigest())]:
+            patch=mock.patch.object(r,name,value);patch.start();self.addCleanup(patch.stop)
+        patch=mock.patch.object(r,'command_output',return_value=r.V0146_SERVER_PATH+'\n')
+        self.changed=patch.start();self.addCleanup(patch.stop)
+
+    def test_only_three_line_startup_gate_removed_and_patch_is_idempotent(self):
+        with self.assertRaisesRegex(SafetyError,'patch digest differs'):
+            r.verify_source_changes(self.source,r.TEST_VERSION)
+        records=r.verify_source_changes(self.source,r.TEST_VERSION,prepare=True)
+        self.assertEqual(self.server.read_bytes(),self.patched)
+        self.assertEqual(len(self.original.splitlines())-len(self.patched.splitlines()),3)
+        self.assertEqual(records,r.source_patch_records(r.TEST_VERSION))
+        self.assertEqual(r.verify_source_changes(self.source,r.TEST_VERSION,prepare=True),records)
+        self.assertEqual(r.verify_source_changes(self.source,r.TEST_VERSION),records)
+
+    def test_patch_contract_stays_with_0146_when_candidate_version_advances(self):
+        with mock.patch.object(r,'TEST_VERSION','0.1.47'):
+            self.assertEqual(r.source_patch_records('0.1.47'),[])
+            self.assertTrue(r.verify_source_changes(self.source,'0.1.46',prepare=True))
+            self.assertEqual(self.server.read_bytes(),self.patched)
+
+    def test_other_releases_keep_upstream_source_and_reject_patch(self):
+        for version in (r.LEGACY_VERSION,r.VERSION,r.NEXT_VERSION):
+            self.assertEqual(r.source_patch_records(version),[])
+            with self.assertRaisesRegex(SafetyError,'tracked source files'):
+                r.verify_source_changes(self.source,version,prepare=True)
+        self.assertEqual(self.server.read_bytes(),self.original)
+
+    def test_unrelated_edits_refused_before_patch(self):
+        self.changed.return_value='serve/server.py\nsetup.py\n'
+        with self.assertRaisesRegex(SafetyError,'outside the pinned patch'):
+            r.verify_source_changes(self.source,r.TEST_VERSION,prepare=True)
+        self.assertEqual(self.server.read_bytes(),self.original)
+
+    def test_different_upstream_or_arbitrary_tamper_never_rewritten(self):
+        for contents in (self.original+b'# extra\n',self.patched+b'# tampered\n'):
+            self.server.write_bytes(contents)
+            with self.assertRaisesRegex(SafetyError,'patch digest differs'):
+                r.verify_source_changes(self.source,r.TEST_VERSION,prepare=True)
+            self.assertEqual(self.server.read_bytes(),contents)
+
+    def test_symlink_server_refused(self):
+        target=self.source/'other.py';target.write_bytes(self.original)
+        self.server.unlink();self.server.symlink_to(target)
+        with self.assertRaisesRegex(SafetyError,'symlinked'):
+            r.verify_source_changes(self.source,r.TEST_VERSION,prepare=True)
+        self.assertEqual(target.read_bytes(),self.original)
 
 
 class Runtime(unittest.TestCase):
@@ -146,10 +205,14 @@ class Runtime(unittest.TestCase):
         for name in ('strata','strata-vision','strata-vision-cpu'):
             p=source/'engine'/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(name+' 0.1.46')
             assets.append({'path':str(p),'bytes':p.stat().st_size,'sha256':r.digest(p)})
+        server=source/r.V0146_SERVER_PATH;server.parent.mkdir(parents=True,exist_ok=True)
+        server.write_bytes(b'fixture patched server\n')
+        patch=mock.patch.object(r,'V0146_SERVER_LAN_SHA256',r.digest(server));patch.start();self.addCleanup(patch.stop)
         manifest={'version':r.TEST_VERSION,'source_commit':r.PINS[r.TEST_VERSION],
             'llama_commit':r.LLAMA_PIN,'source':str(source),'cuda_arch':86,
             'cuda_toolkit':'/usr/local/cuda-12.9','runtime_assets':assets,
-            'build_options':r.V0146_BUILD_OPTIONS,'python_environment':str(self.base/'.venv')}
+            'build_options':r.V0146_BUILD_OPTIONS,'python_environment':str(self.base/'.venv'),
+            'source_patches':r.source_patch_records(r.TEST_VERSION)}
         (folder/'prepared.json').write_text(json.dumps(manifest))
         return source
 
@@ -168,6 +231,18 @@ class Runtime(unittest.TestCase):
         cache=source/'build/CMakeCache.txt';original=cache.read_text()
         cache.write_text(original.replace('STRATA_MMQ_TQ_OVERLAY:BOOL=ON','STRATA_MMQ_TQ_OVERLAY:BOOL=OFF'))
         with self.assertRaisesRegex(SafetyError,'CMake option differs: STRATA_MMQ_TQ_OVERLAY'):
+            r.prepared_runtime(self.root,r.TEST_VERSION)
+
+    def test_v0146_server_patch_and_manifest_cannot_be_tampered(self):
+        source=self.install_v0146()
+        server=source/r.V0146_SERVER_PATH
+        server.write_bytes(b'not the reviewed patch')
+        with self.assertRaisesRegex(SafetyError,'patch digest differs'):
+            r.prepared_runtime(self.root,r.TEST_VERSION)
+        server.write_bytes(b'fixture patched server\n')
+        path=r.runtime_root(self.root,r.TEST_VERSION)/'prepared.json'
+        manifest=json.loads(path.read_text());manifest.pop('source_patches');path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(SafetyError,'patch provenance differs'):
             r.prepared_runtime(self.root,r.TEST_VERSION)
 
     def test_tested_legacy_selection_and_workaround_retained(self):

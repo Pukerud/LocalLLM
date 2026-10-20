@@ -33,6 +33,17 @@ V0146_BUILD_OPTIONS = {
     **V0145_BUILD_OPTIONS,
     'STRATA_MMQ_TQ_OVERLAY': 'ON',
 }
+# The only allowed local source change: remove .46's mandatory non-loopback API-key
+# startup gate for explicitly selected trusted-LAN profiles. Auth when configured,
+# Host validation, and browser Origin checks remain byte-for-byte upstream.
+V0146_SERVER_PATH = 'serve/server.py'
+V0146_SERVER_UPSTREAM_SHA256 = 'f15efbe6a1e3a97d58ddbc0fa9a68ce544c90f6c1b03cbf6cecf50c625a5a5f8'
+V0146_SERVER_LAN_SHA256 = '36f7a63d02e2c9fc4106904ec597d9a161b21f6b588f70d90a10fd8d92d6269f'
+V0146_API_KEY_GATE = (
+    b'    if a.host not in ("127.0.0.1", "localhost", "::1") and not preflight_api_key:\n'
+    b'        print("[strata] a non-loopback bind requires an inference API key", file=sys.stderr, flush=True)\n'
+    b'        return 2\n'
+)
 LLAMA_PIN = '3cf03257f219afbe7334045ff7c6a06ac68c627d'
 PROFILES = ('iq3_s', 'orca-iq3_xxs')
 # Preserve the measured 0.1.39 workaround; 0.1.41 has a per-window all-resident batch fix.
@@ -62,6 +73,39 @@ def _cmake_values(path):
     except OSError as exc:
         raise SafetyError(f'Candidate CMake build cache is unavailable: {path}') from exc
     return values
+
+
+def source_patch_records(version):
+    # Keep this tied to the tested release, not a moving future TEST_VERSION.
+    if version != '0.1.46':
+        return []
+    return [{'path': V0146_SERVER_PATH, 'upstream_sha256': V0146_SERVER_UPSTREAM_SHA256,
+             'sha256': V0146_SERVER_LAN_SHA256, 'purpose': 'optional API key on explicit trusted-LAN routes'}]
+
+
+def verify_source_changes(source, version, *, prepare=False):
+    """Accept only the exact reviewed .46 LAN patch; fail closed on any other edit."""
+    source = Path(source)
+    patches = source_patch_records(version)
+    changed = command_output(['git', '-c', f'safe.directory={source}', '-C', str(source),
+                              'diff', '--name-only', 'HEAD']).splitlines()
+    if set(changed) - {patch['path'] for patch in patches}:
+        raise SafetyError('Candidate tracked source files were modified outside the pinned patch')
+    for patch in patches:
+        path = source / patch['path']
+        if path.is_symlink() or not path.is_file():
+            raise SafetyError('Candidate trusted-LAN server patch is missing or symlinked')
+        contents = path.read_bytes()
+        if prepare and hashlib.sha256(contents).hexdigest() == patch['upstream_sha256']:
+            if contents.count(V0146_API_KEY_GATE) != 1:
+                raise SafetyError('Candidate API-key startup gate differs from the reviewed patch')
+            contents = contents.replace(V0146_API_KEY_GATE, b'')
+            if hashlib.sha256(contents).hexdigest() != patch['sha256']:
+                raise SafetyError('Candidate trusted-LAN patch result differs from its pinned digest')
+            path.write_bytes(contents)
+        if hashlib.sha256(contents).hexdigest() != patch['sha256']:
+            raise SafetyError('Candidate trusted-LAN server patch digest differs; no arbitrary source edits allowed')
+    return patches
 
 
 def runtime_root(root, version=VERSION):
@@ -104,8 +148,9 @@ def prepared_runtime(root, version=VERSION):
         raise SafetyError('Candidate runtime provenance/toolchain mismatch')
     if command_output(['git','-c',f'safe.directory={source}','-C',str(source),'rev-parse','HEAD']).strip() != PINS[version]:
         raise SafetyError('Candidate source checkout changed')
-    if command_output(['git','-c',f'safe.directory={source}','-C',str(source),'diff','--name-only','HEAD']).strip():
-        raise SafetyError('Candidate tracked source files were modified')
+    if manifest.get('source_patches', []) != source_patch_records(version):
+        raise SafetyError('Candidate source patch provenance differs from the pinned trusted-LAN contract')
+    verify_source_changes(source, version)
     records = {r['path']:r for r in manifest.get('runtime_assets', [])}
     executables = [source / 'engine/strata', source / 'engine/strata-vision']
     if version in PROFILE_BOUND_VERSIONS:

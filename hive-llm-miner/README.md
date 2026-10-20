@@ -1,6 +1,8 @@
 # HiveOS LocalLLM custom miner
 
-This package installs one Hive custom miner with an atomic next-start profile selector. The standard Strata selection is Orca Q4_K_S Strata 0.1.45 with auto prefill and trimmed `14,24,36` split; the windows-2 override is omitted. Orca .39 is rollback-only; .41 and .44.1 remain explicit rollback runtimes. Strata .46, pinned to source `90767252f420e25223c739d604145ad15911d48b`, is not the standard: HostLLM [5] is an isolated single-slot Q4 test candidate, and the Hive profile-menu [5]/HostLLM [16] select the unqualified SC117 .46 CPU-vision trial. No .46 build or inference result is claimed yet. Hive's standard Orca profile deliberately binds `0.0.0.0:8080` for trusted-LAN serving and is unauthenticated; do not expose it to an untrusted network. HostLLM's Orca route also defaults to trusted-LAN serving (explicit `STRATA_HOST=127.0.0.1` retains local-only access). The unqualified SC117 `.45` and `.46` trials also bind trusted-LAN `0.0.0.0:8080` without authentication and share the port exclusively with Orca. The other user-facing actions are Swift, Hauhau, and those SC117 trials. The old SC117 .39 selector route is retired; shared model/native-pack assets are preserved. Strata .45 is build/provenance checked; no Q4-specific speed, quality, or 40% improvement is claimed.
+This package installs one Hive custom miner with an atomic next-start profile selector. The standard Strata selection is Orca Q4_K_S Strata 0.1.45 with auto prefill and trimmed `14,24,36` split; the windows-2 override is omitted. Orca .39 is rollback-only; .41 and .44.1 remain explicit rollback runtimes. Strata .46, pinned to source `90767252f420e25223c739d604145ad15911d48b`, is not the standard: HostLLM [5] is an isolated single-slot Q4 test candidate, and the Hive profile-menu [5]/HostLLM [16] select the unqualified SC117 .46 CPU-vision trial. The .46 pinned build and bounded no-key LAN text/image smoke tests passed through HostLLM; see [the patch and results](../STRATA_V0146.md). This does not qualify SC117 or establish a live .46 Hive-wrapper test. Hive's standard Orca profile deliberately binds `0.0.0.0:8080` for trusted-LAN serving and is unauthenticated; do not expose it to an untrusted network. HostLLM's Orca route also defaults to trusted-LAN serving (explicit `STRATA_HOST=127.0.0.1` retains local-only access). The unqualified SC117 `.45` and `.46` trials also bind trusted-LAN `0.0.0.0:8080` without authentication and share the port exclusively with Orca. The other user-facing actions are Swift, Hauhau, and those SC117 trials. The old SC117 .39 selector route is retired; shared model/native-pack assets are preserved. Strata .45 is build/provenance checked; no Q4-specific speed, quality, or 40% improvement is claimed.
+
+**Standing upgrade rule:** trusted-LAN routes must continue to start and serve requests without an API key after every upgrade. See [the maintenance rules](../AGENTS.md). No required key, dummy key, or client Authorization header may be introduced for normal LAN use.
 
 ## Interactive selector
 
@@ -44,7 +46,7 @@ sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile iq3_s-sc117-ablit
 sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile iq3_s-sc117-abliterated-v0146
 ```
 
-The existing Orca .45 and SC117 .45 routes load their weights and vision encoder immediately during startup, before the API opens. The launcher requires the model to be loaded before reporting ready; a blank HTTP frontend is not a successful start. Idle unloading is disabled. The .46 candidate routes have not been built or live-tested yet and make no loading or runtime claim.
+The existing Orca .45 and SC117 .45 routes load their weights and vision encoder immediately during startup, before the API opens. The launcher requires the model to be loaded before reporting ready; a blank HTTP frontend is not a successful start. Idle unloading is disabled. The .46 candidates also passed bounded eager-load/text/image smoke checks through HostLLM, with no API key. The .46 Hive wrapper itself was not live-switched in that run.
 
 ## SC117 trial isolation
 
@@ -59,7 +61,8 @@ Port:       8080
 State:      /home/user/.local/state/locallm-strata/sc117-iq3s-trial
 Runtime:    Strata 0.1.45 (Hive menu [4], HostLLM [15])
 Vision:     CPU
-MTP:        4
+Spec:       3 (stock/non-abliterated head; maximum head depth 4)
+Windows:    2
 Context:    262144 native
 KV:         INT8 (32768 resident)
 Prefill:    auto

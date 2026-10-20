@@ -13,7 +13,8 @@ import time
 from engine_safety import SafetyError, docker_empty, command_output
 from strata_runtime import (VERSION, NEXT_VERSION, TEST_VERSION, PROFILE_BOUND_VERSIONS,
                             LEGACY_VERSION, BASE_VERSION, PINS, LLAMA_PIN, PROFILES,
-                            V0145_BUILD_OPTIONS, V0146_BUILD_OPTIONS, digest, runtime_root)
+                            V0145_BUILD_OPTIONS, V0146_BUILD_OPTIONS, digest, runtime_root,
+                            verify_source_changes)
 from prepare_orca import atomic_json
 
 
@@ -97,8 +98,7 @@ def main():
             subprocess.run(['git','-C',str(source),'checkout','--detach',pin],check=True)
         if command_output(['git','-c',f'safe.directory={source}','-C',str(source),'rev-parse','HEAD']).strip() != pin:
             raise SafetyError('Existing candidate source differs from release pin; not overwritten')
-        if command_output(['git','-c',f'safe.directory={source}','-C',str(source),'diff','--name-only','HEAD']).strip():
-            raise SafetyError('Candidate has tracked local changes; not overwritten')
+        source_patches = verify_source_changes(source, version, prepare=True)
         venv = source / '.venv'
         old_venv = source0 / '.venv'
         overlay = folder / 'python'
@@ -194,7 +194,7 @@ def main():
             runtime_assets.append(record(engine / 'strata-vision-cpu'))
         manifest = {'version':version,'source_commit':pin,'llama_commit':LLAMA_PIN,
             'source':str(source),'cuda_arch':86,'cuda_toolkit':'/usr/local/cuda-12.9',
-            'runtime_assets':runtime_assets,
+            'source_patches':source_patches,'runtime_assets':runtime_assets,
             'baseline_configs':configs,'vision_reused_identical_source':reused,'inference_tested':False,
             'python_environment':str(overlay),'python_packages':packages,'jsonschema_version':'4.25.1',
             'python_assets':[record(overlay / 'pyvenv.cfg'),record(pth)] + [record(p) for p in sorted(site.glob('*.dist-info/METADATA'))],
@@ -203,6 +203,8 @@ def main():
         if version in PROFILE_BOUND_VERSIONS:
             manifest['build_options'] = build_options
         atomic_json(folder / 'prepared.json', manifest)
+        if source_patches:
+            print('Verified the exact .46 trusted-LAN startup patch: API key optional; configured auth and Host/Origin checks unchanged.', flush=True)
         print(f'{version} PREPARED beside unchanged runtimes. No model download/repack/inference/service/system change.',flush=True)
 
 
