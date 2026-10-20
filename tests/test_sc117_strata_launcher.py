@@ -55,6 +55,7 @@ class LauncherModule:
             'iq3_s_sc117_abliterated_profile': module(
                 'iq3_s_sc117_abliterated_profile', PROFILE='iq3_s-sc117-abliterated',
                 RUNTIME_VERSION='0.1.39', TRIAL_RUNTIME_VERSION='0.1.45',
+                TRIAL_CANDIDATE_RUNTIME_VERSION='0.1.46', TRIAL_RUNTIME_VERSIONS=('0.1.45','0.1.46'),
                 TRIAL_STATE_ROOT_NAME='sc117-iq3s-trial', TRIAL_BIND_HOST='0.0.0.0', TRIAL_PORT=8080,
                 TRIAL_ENV='STRATA_SC117_IQ3S_TRIAL', TRIAL_DEFAULT_SPEC='3',
                 TRIAL_DEFAULT_PIPELINE_WINDOWS='2',
@@ -66,8 +67,10 @@ class LauncherModule:
             'prepare_iq3_s_sc117_abliterated': module(
                 'prepare_iq3_s_sc117_abliterated', verify_readiness=lambda *_a, **_k: None),
             'strata_runtime': module('strata_runtime', LEGACY_VERSION='0.1.39', VERSION='0.1.41',
-                                     NEXT_VERSION='0.1.45', BASE_VERSION='0.1.38', PINS={'0.1.39': 'pin'},
-                                     runtime_env=lambda *_: {}, prepared_runtime=lambda *_: (Path('/runtimes/0.1.45/source'), {}),
+                                     NEXT_VERSION='0.1.45', TEST_VERSION='0.1.46',
+                                     PROFILE_BOUND_VERSIONS=('0.1.45','0.1.46'),
+                                     BASE_VERSION='0.1.38', PINS={'0.1.39': 'pin','0.1.45':'pin45','0.1.46':'pin46'},
+                                     runtime_env=lambda *_: {}, prepared_runtime=lambda _root, version: (Path(f'/runtimes/{version}/source'), {}),
                                      configure=lambda *_a: None),
         }
         name = '_test_strata_launcher_sc117'
@@ -124,7 +127,7 @@ class SC117LauncherSecretTests(unittest.TestCase):
                 mock.patch.object(LAUNCHER.runtimes, 'configure') as configure:
             for runtime in ('auto', '0.1.39', '0.1.41'):
                 with self.subTest(runtime=runtime), self.assertRaisesRegex(
-                        SAFETY_ERROR, 'only its explicit trusted-LAN .45 trial is allowed'):
+                        SAFETY_ERROR, 'only its explicit trusted-LAN .45 or .46 trial is allowed'):
                     LAUNCHER.ready_runtime(profile.PROFILE, runtime, 1, 1)
             ready.assert_not_called()
             configure.assert_not_called()
@@ -209,6 +212,41 @@ class SC117LauncherSecretTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(SAFETY_ERROR, 'only through its explicit unqualified trusted-LAN trial'):
                 LAUNCHER.ready_runtime(profile.PROFILE, '0.1.45', 1, 1)
+
+    def test_sc117_046_is_an_explicit_unqualified_trial_using_cpu_vision_and_same_isolated_preset(self):
+        profile=LAUNCHER.sc117_profile
+        candidate=(Path('/q4-preset'),Path('/q4-preset/config.json'),
+                   {'args':['--trim-stage-weights'],'vision':{'gpu':False}})
+        effective={'model_name':'sc117','vision':{'gpu':False},'args':['--spec','3','--pipeline-windows','2']}
+        runtime_source=Path('/runtimes/0.1.46/source')
+        with mock.patch.dict(os.environ, {'STRATA_SC117_IQ3S_TRIAL':'1','STRATA_RUNTIME':'0.1.46'}, clear=True), \
+                mock.patch.object(LAUNCHER, 'data_root', return_value=Path('/data')), \
+                mock.patch.object(LAUNCHER.prepare_sc117, 'verify_readiness'), \
+                mock.patch.object(LAUNCHER.q4ks_v01441, 'ready_q4ks_v01441', return_value=candidate), \
+                mock.patch.object(LAUNCHER.runtimes, 'prepared_runtime', return_value=(runtime_source, {})) as prepared, \
+                mock.patch.object(profile, 'build_v01441_trial_config', return_value=effective):
+            result=LAUNCHER.ready_runtime(profile.PROFILE, '0.1.46', 1, 1)
+        prepared.assert_called_once_with(Path('/data'),'0.1.46')
+        self.assertEqual(result[0],runtime_source)
+        self.assertEqual(result[3],'0.1.46')
+        self.assertEqual(result[2]['vision']['exe'],str(runtime_source/'engine/strata-vision-cpu'))
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(SAFETY_ERROR, 'only through its explicit unqualified trusted-LAN trial'):
+                LAUNCHER.ready_runtime(profile.PROFILE, '0.1.46', 1, 1)
+
+    def test_q4_046_is_an_explicit_single_slot_test_route_while_auto_stays_045(self):
+        candidate=(Path('/q4-preset'),Path('/q4-preset/config.json'),
+                   {'args':['--max-context','262144'],'vision':{'gpu':False}})
+        with mock.patch.object(LAUNCHER,'data_root',return_value=Path('/data')), \
+                mock.patch.object(LAUNCHER.q4ks_v01441,'ready_q4ks_v01441',return_value=candidate), \
+                mock.patch.object(LAUNCHER.runtimes,'prepared_runtime',side_effect=lambda _root,v:(Path(f'/runtimes/{v}/source'),{})) as prepared:
+            result=LAUNCHER.ready_runtime('q4-profile','0.1.46',1,1)
+        prepared.assert_called_once_with(Path('/data'),'0.1.46')
+        self.assertEqual(result[0],Path('/runtimes/0.1.46/source'))
+        self.assertEqual(result[3],'0.1.46')
+        self.assertEqual(result[2]['vision']['exe'],'/runtimes/0.1.46/source/engine/strata-vision-cpu')
+        with self.assertRaisesRegex(SAFETY_ERROR,'single-slot/single-group'):
+            LAUNCHER.ready_runtime('q4-profile','0.1.46',2,2)
 
     def test_sc117_baseline_readiness_does_not_require_generic_model_or_pack_files(self):
         with tempfile.TemporaryDirectory() as directory:

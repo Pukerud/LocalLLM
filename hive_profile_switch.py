@@ -21,8 +21,16 @@ CURRENT = WRAPPER.parent / 'current'
 CUR_MINER = Path('/run/hive/cur_miner')
 JOURNAL = hosting.ROOT / 'hive-profile-switch.json'
 PROFILES = ('swift15u-q8', 'hauhau-q8-fastmtp-q4kv-xhigh', 'orca-q4_k_s-v01441',
-            'iq3_s-sc117-abliterated', 'orca-q4_k_s', 'orca-q4_k_s-v0141',
+            'iq3_s-sc117-abliterated', 'iq3_s-sc117-abliterated-v0146',
+            'orca-q4_k_s', 'orca-q4_k_s-v0141',
             'orca-q4_k_s-v0141-2slot')
+SC117_V0146_PROFILE = 'iq3_s-sc117-abliterated-v0146'
+SC117_V0146_READINESS = (
+    'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.46; trusted-LAN=0.0.0.0:8080 (unauthenticated); '
+    'native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; '
+    'one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; '
+    'conversation cache=8192 MiB / 4 slots; pipeline-windows=2; new SM86 release defaults enabled. This is not qualification.'
+)
 
 
 def say(message):
@@ -172,10 +180,38 @@ def package_current(profile):
                filecmp.cmp(source / src, WRAPPER.parent / dst, shallow=False) for src, dst in files)
 
 
+def preflight_profile(profile):
+    """Run the new SC117 route's exact readiness check before pausing Hive/OctaSpace."""
+    if profile != SC117_V0146_PROFILE:
+        return
+    trial_state = '/home/user/.local/state/locallm-strata/sc117-iq3s-trial'
+    command = [
+        '/usr/bin/runuser', '-u', 'user', '--', '/usr/bin/env', '-i',
+        'HOME=/home/user', 'USER=user', 'LOGNAME=user',
+        'PATH=/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin',
+        'PYTHONDONTWRITEBYTECODE=1', f'PYTHONPYCACHEPREFIX={trial_state}/pycache',
+        'SETUPTOOLS_USE_DISTUTILS=stdlib', 'STRATA_SC117_IQ3S_TRIAL=1',
+        'STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata', f'STRATA_STATE_ROOT={trial_state}',
+        'STRATA_RUNTIME=0.1.46', 'STRATA_PARALLEL=1', 'STRATA_BATCH_GROUPS=1',
+        'STRATA_PORT=8080', 'STRATA_HOST=0.0.0.0',
+        '/home/user/LocalLLM/v1strata.sh', '--check-ready', '--profile', 'iq3_s-sc117-abliterated',
+        '--runtime', '0.1.46', '--parallel', '1', '--batch-groups', '1',
+    ]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=600)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise SafetyError(f'SC117 .46 readiness failed before any service/miner pause: {exc}') from exc
+    lines = [line for line in result.stdout.splitlines() if line.startswith('TRIAL CONFIG:')]
+    if (result.returncode or lines != [SC117_V0146_READINESS] or 'READY CONFIG:' in result.stdout):
+        raise SafetyError('SC117 .46 exact unqualified readiness failed before any service/miner pause')
+    say('SC117 .46 exact unqualified readiness passed; no service/miner state has changed.')
+
+
 def switch_profile(profile):
     if JOURNAL.exists() or JOURNAL.is_symlink():
         raise SafetyError(f'An earlier switch needs recovery: {recovery_command()}')
     wrappers = inspect_owned_workload()
+    preflight_profile(profile)
     if os.readlink(CURRENT) == f'profiles/{profile}' and package_current(profile):
         say(f'{profile} is already selected; no stop/reload is needed.')
         return

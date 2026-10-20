@@ -11,8 +11,9 @@ import sys
 import time
 
 from engine_safety import SafetyError, docker_empty, command_output
-from strata_runtime import (VERSION, NEXT_VERSION, LEGACY_VERSION, BASE_VERSION, PINS, LLAMA_PIN, PROFILES,
-                            V0145_BUILD_OPTIONS, digest, runtime_root)
+from strata_runtime import (VERSION, NEXT_VERSION, TEST_VERSION, PROFILE_BOUND_VERSIONS,
+                            LEGACY_VERSION, BASE_VERSION, PINS, LLAMA_PIN, PROFILES,
+                            V0145_BUILD_OPTIONS, V0146_BUILD_OPTIONS, digest, runtime_root)
 from prepare_orca import atomic_json
 
 
@@ -23,7 +24,7 @@ def record(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--runtime', choices=[LEGACY_VERSION, VERSION, NEXT_VERSION], default=VERSION)
+    parser.add_argument('--runtime', choices=[LEGACY_VERSION, VERSION, NEXT_VERSION, TEST_VERSION], default=VERSION)
     version = parser.parse_args().runtime
     pin = PINS[version]
     import strata_launcher as launcher
@@ -49,8 +50,8 @@ def main():
             raise SafetyError('Need at least 16 GiB available RAM; no live model/miner is stopped to make room')
         configs = {}
         protected = {}
-        if version == NEXT_VERSION:
-            # .45 is profile-bound to Q4/SC117 and must not depend on the removed IQ3_XXS pack.
+        if version in PROFILE_BOUND_VERSIONS:
+            # Candidate releases are profile-bound to Q4/SC117 and must not depend on the removed IQ3_XXS pack.
             source0, _iq3_config, _iq3_cfg = launcher.ready('iq3_s')
             q4_source, q4_config, _q4_cfg = launcher.q4ks_v01441.ready_q4ks_v01441(root)
             launcher.prepare_sc117.verify_readiness(root, full_hash=False)
@@ -82,7 +83,7 @@ def main():
             active_config = Path(state.get('config', ''))
             if active_config.is_absolute():
                 protected[str(active_config)] = digest(active_config) if active_config.is_file() else None
-        for retained in [LEGACY_VERSION, VERSION]:
+        for retained in [LEGACY_VERSION, VERSION, NEXT_VERSION, TEST_VERSION]:
             if retained == version:
                 continue
             other = runtime_root(root, retained)
@@ -121,7 +122,7 @@ def main():
         env['PATH'] = str(overlay / 'bin') + ':' + str(old_venv / 'bin') + ':/usr/local/cuda-12.9/bin:' + env['PATH']
         # Optional schema validation lives only in the candidate overlay. No original/system package is modified.
         packages = {'jsonschema': '4.25.1'}
-        if version in (VERSION, NEXT_VERSION):
+        if version in (VERSION, NEXT_VERSION, TEST_VERSION):
             packages['psutil'] = '7.2.2'  # native-process activity checks, only in the candidate overlay
         for name, package_version in packages.items():
             check = f"from importlib.metadata import version; print(version({name!r}))"
@@ -143,8 +144,9 @@ def main():
         build = source / 'build'
         defs = ['-DCMAKE_BUILD_TYPE=Release','-DSTRATA_ENABLE_CUDA=ON','-DSTRATA_BUILD_TESTS=OFF',
                 '-DCMAKE_CUDA_ARCHITECTURES=86',f'-DCMAKE_CUDA_COMPILER={nvcc}',f'-DSTRATA_GGML_DIR={llama}']
-        if version == NEXT_VERSION:
-            defs.extend(f'-D{key}={value}' for key, value in V0145_BUILD_OPTIONS.items()
+        if version in PROFILE_BOUND_VERSIONS:
+            build_options = V0145_BUILD_OPTIONS if version == NEXT_VERSION else V0146_BUILD_OPTIONS
+            defs.extend(f'-D{key}={value}' for key, value in build_options.items()
                         if key not in ('CMAKE_BUILD_TYPE', 'CMAKE_CUDA_ARCHITECTURES',
                                        'STRATA_ENABLE_CUDA', 'STRATA_BUILD_TESTS'))
         docker_empty()
@@ -169,7 +171,7 @@ def main():
                             f'-DCMAKE_CUDA_COMPILER={nvcc}'],env=env,check=True)
             subprocess.run([cmake,'--build',str(vbuild),'--target','strata-vision','-j3'],env=env,check=True)
             shutil.copy2(vbuild / 'bin/strata-vision',engine / 'strata-vision')
-        if version == NEXT_VERSION:
+        if version in PROFILE_BOUND_VERSIONS:
             cpu_build = source / 'build-vision-cpu'
             subprocess.run([cmake,'-S',str(source / 'tools/vision'),'-B',str(cpu_build),
                             '-DCMAKE_BUILD_TYPE=Release',f'-DLLAMA_DIR={llama}',
@@ -183,12 +185,12 @@ def main():
         build_record = {'source':'local','version':version,'archs':[86],'vision':'gpu',
             'cuda_dirs':['/usr/local/cuda-12.9/bin','/usr/local/cuda-12.9/lib64'],'toolkit':12,
             'vision_src':vision_contract['vision'],'vision_reused_identical_source':reused}
-        if version == NEXT_VERSION:
-            build_record['build_options'] = V0145_BUILD_OPTIONS
+        if version in PROFILE_BOUND_VERSIONS:
+            build_record['build_options'] = build_options
             build_record['cpu_vision'] = 'strata-vision-cpu; CUDA=OFF; native CPU build'
         atomic_json(engine / 'BUILD.json', build_record)
         runtime_assets = [record(engine / 'strata'),record(engine / 'strata-vision')]
-        if version == NEXT_VERSION:
+        if version in PROFILE_BOUND_VERSIONS:
             runtime_assets.append(record(engine / 'strata-vision-cpu'))
         manifest = {'version':version,'source_commit':pin,'llama_commit':LLAMA_PIN,
             'source':str(source),'cuda_arch':86,'cuda_toolkit':'/usr/local/cuda-12.9',
@@ -198,8 +200,8 @@ def main():
             'python_assets':[record(overlay / 'pyvenv.cfg'),record(pth)] + [record(p) for p in sorted(site.glob('*.dist-info/METADATA'))],
             'retained_hashes_or_absences':protected,
             'prepared_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())}
-        if version == NEXT_VERSION:
-            manifest['build_options'] = V0145_BUILD_OPTIONS
+        if version in PROFILE_BOUND_VERSIONS:
+            manifest['build_options'] = build_options
         atomic_json(folder / 'prepared.json', manifest)
         print(f'{version} PREPARED beside unchanged runtimes. No model download/repack/inference/service/system change.',flush=True)
 

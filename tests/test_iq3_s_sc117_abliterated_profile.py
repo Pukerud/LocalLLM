@@ -613,6 +613,12 @@ class SC117ProfileTests(unittest.TestCase):
                                         port=18080, state_root=state)
             trial_artifacts.assert_called_once_with(self.root, state)
         with patch('pathlib.Path.home', return_value=home), \
+                patch.dict(os.environ, env | {'STRATA_RUNTIME': '0.1.46'}, clear=True), \
+                patch.object(profile, '_verify_v01441_trial_artifacts') as candidate_artifacts:
+            self.assertEqual(profile.authorize_start(self.root, settings,
+                                                     host='0.0.0.0', port=8080, state_root=state), 'trial')
+            candidate_artifacts.assert_called_once_with(self.root, state)
+        with patch('pathlib.Path.home', return_value=home), \
                 patch.dict(os.environ, env | {'STRATA_RUNTIME': '0.1.39'}, clear=True):
             with self.assertRaisesRegex(SafetyError, 'require Strata .45'):
                 profile.authorize_start(self.root, settings, host='0.0.0.0', port=8080, state_root=state)

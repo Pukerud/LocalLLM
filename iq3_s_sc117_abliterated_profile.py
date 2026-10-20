@@ -27,6 +27,8 @@ MODEL_ID = assets.MODEL_ID
 RUNTIME_VERSION = '0.1.39'
 RUNTIME_COMMIT = strata_runtime.PINS[RUNTIME_VERSION]
 TRIAL_RUNTIME_VERSION = '0.1.45'
+TRIAL_CANDIDATE_RUNTIME_VERSION = '0.1.46'
+TRIAL_RUNTIME_VERSIONS = (TRIAL_RUNTIME_VERSION, TRIAL_CANDIDATE_RUNTIME_VERSION)
 TRIAL_DISTUTILS_PTH_RELATIVE = Path('distutils-precedence.pth')
 TRIAL_DISTUTILS_PTH_SHA256 = '7ea7ffef3fe2a117ee12c68ed6553617f0d7fd2f0590257c25c484959a3b7373'
 TRIAL_DISTUTILS_PTH_CONTENTS = (b"import os; var = 'SETUPTOOLS_USE_DISTUTILS'; enabled = "
@@ -1425,12 +1427,13 @@ def _apply_v01441_trial_tunables(cfg):
 def authorize_start(root, settings, *, host, port, state_root):
     """Permit only the isolated unqualified trial; normal/qualified starts are retired."""
     if os.environ.get(TRIAL_ENV) != '1':
-        raise SafetyError('SC117 remains unqualified; normal/qualified hosting is disabled, and only the isolated .45 trial is allowed')
+        raise SafetyError('SC117 remains unqualified; normal/qualified hosting is disabled, and only the isolated .45/.46 trial is allowed')
     trial_settings = settings_for_start(allow_trial_env=True)
     validate_settings(settings)
-    if (settings != trial_settings or os.environ.get('STRATA_RUNTIME') != TRIAL_RUNTIME_VERSION or
+    runtime = os.environ.get('STRATA_RUNTIME')
+    if (settings != trial_settings or runtime not in TRIAL_RUNTIME_VERSIONS or
             not allow_trial_start(root, host=host, port=port, state_root=state_root)):
-        raise SafetyError('Unqualified SC117 trials require Strata .45, trusted-LAN 0.0.0.0:8080, and isolated sc117-iq3s-trial state')
+        raise SafetyError('Unqualified SC117 trials require Strata .45 or .46, trusted-LAN 0.0.0.0:8080, and isolated sc117-iq3s-trial state')
     # Trials are explicitly not qualification evidence. The isolated cache prefix makes these
     # existing __pycache__ entries inactive; no normal/qualified start path is enabled.
     _verify_v01441_trial_artifacts(root, state_root)

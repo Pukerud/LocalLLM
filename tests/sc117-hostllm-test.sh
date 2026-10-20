@@ -23,6 +23,7 @@ if [[ "${1:-}" == --check-ready ]]; then
         "${SETUPTOOLS_USE_DISTUTILS-unset}" >> "$events.env"
     case "$variant" in
         trial-exact) printf '%s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' ;;
+        trial46-exact) printf '%s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.46; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2; new SM86 release defaults enabled. This is not qualification.' ;;
         trial-prefix) printf 'prefix %s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' ;;
         trial-suffix) printf '%s contradictory\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' ;;
         trial-duplicate) printf '%s\n%s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' ;;
@@ -134,9 +135,24 @@ grep -Fqx "host=0.0.0.0 key=unset fd=unset marker=1 runtime=0.1.45 port=8080 sta
 grep -Fqx 'hosting begin --require-new-lease --lease-id 0000000000000000000000000000000000000000000000000000000000000000 --port 8080' "$events"
 grep -qx 'launch --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.45 --parallel 1 --batch-groups 1' "$events"
 
+# The .46 trial uses the same isolated SC117 settings, explicitly reports the new SM86 defaults,
+# and still completes exact readiness before any lease or launch.
+: > "$events"
+printf 'trial46-exact\n' > "$SCRATCH/variant"
+STRATA_SC117_IQ3S_TRIAL=1 STRATA_HOST=0.0.0.0 STRATA_PORT=8080 \
+    run_selected v1strata.sh --quickstart --profile iq3_s-sc117-abliterated \
+        --runtime 0.1.46 --parallel 1 --batch-groups 1
+check46_line="$(grep -n '^check ' "$events" | cut -d: -f1)"
+lease46_line="$(grep -n '^hosting begin ' "$events" | cut -d: -f1)"
+launch46_line="$(grep -n '^launch ' "$events" | cut -d: -f1)"
+[[ "$check46_line" -lt "$lease46_line" && "$lease46_line" -lt "$launch46_line" ]]
+grep -qx 'check --check-ready --profile iq3_s-sc117-abliterated --runtime 0.1.46 --parallel 1 --batch-groups 1' "$events"
+grep -Fqx "host=0.0.0.0 key=unset fd=unset marker=1 runtime=0.1.46 port=8080 state=$trial_state cache=$trial_state/pycache pycache=1 distutils=stdlib" "$events.env"
+grep -qx 'launch --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.46 --parallel 1 --batch-groups 1' "$events"
+
 # The launcher is never asked to parse a key from an argument or inherit one in its environment.
 ! grep -Fq 'candidate_env+=("STRATA_API_KEY=' "$ROOT/HostLLM.sh"
 grep -Fq 'exec_with_stdin_api_key.py' "$ROOT/HostLLM.sh"
 grep -Fq 'Refusing exported STRATA_API_KEY' "$ROOT/HostLLM.sh"
 
-echo 'HostLLM SC117 .39 retirement, exact .45 preflight-before-lease, one-slot refusals, trusted-LAN-only and 8080 gates: PASS'
+echo 'HostLLM SC117 .39 retirement, exact .45/.46 preflight-before-lease, one-slot refusals, trusted-LAN-only and 8080 gates: PASS'

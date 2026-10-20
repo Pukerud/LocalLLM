@@ -120,7 +120,7 @@ class Runtime(unittest.TestCase):
             r.prepared_runtime(self.root,r.NEXT_VERSION)
 
     def test_v0145_is_never_a_generic_or_global_runtime_choice(self):
-        with self.assertRaisesRegex(SafetyError,'restricted to the requested Q4/SC117'):
+        with self.assertRaisesRegex(SafetyError,'restricted to its explicit Q4/SC117'):
             self.cfg(r.NEXT_VERSION)
         self.assertNotIn(r.NEXT_VERSION,r.GENERIC_VERSIONS)
         with self.assertRaisesRegex(SafetyError,'cannot be globally selected'):
@@ -128,6 +128,47 @@ class Runtime(unittest.TestCase):
         (self.root/'runtime-selection.json').write_text(json.dumps({'version':r.NEXT_VERSION}))
         with self.assertRaisesRegex(SafetyError,'cannot be a generic/default selection'):
             r.selected_version(self.root,'auto')
+
+    def install_v0146(self):
+        folder=r.runtime_root(self.root,r.TEST_VERSION);source=folder/'source'
+        llama=source/'third_party/llama.cpp';llama.mkdir(parents=True)
+        (source/'.venv').symlink_to(self.base/'.venv',target_is_directory=True)
+        engine_cache=source/'build/CMakeCache.txt';engine_cache.parent.mkdir(parents=True)
+        lines=[]
+        for key,value in r.V0146_BUILD_OPTIONS.items():
+            kind='PATH' if key=='CMAKE_CUDA_ARCHITECTURES' else 'BOOL' if value in ('ON','OFF') else 'STRING'
+            lines.append(f'{key}:{kind}={value}')
+        lines.append(f'STRATA_GGML_DIR:PATH={llama}')
+        engine_cache.write_text('\n'.join(lines)+'\n')
+        cpu_cache=source/'build-vision-cpu/CMakeCache.txt';cpu_cache.parent.mkdir(parents=True)
+        cpu_cache.write_text(f'STRATA_VISION_CUDA:BOOL=OFF\nSTRATA_PORTABLE:BOOL=OFF\nLLAMA_DIR:PATH={llama}\n')
+        assets=[]
+        for name in ('strata','strata-vision','strata-vision-cpu'):
+            p=source/'engine'/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(name+' 0.1.46')
+            assets.append({'path':str(p),'bytes':p.stat().st_size,'sha256':r.digest(p)})
+        manifest={'version':r.TEST_VERSION,'source_commit':r.PINS[r.TEST_VERSION],
+            'llama_commit':r.LLAMA_PIN,'source':str(source),'cuda_arch':86,
+            'cuda_toolkit':'/usr/local/cuda-12.9','runtime_assets':assets,
+            'build_options':r.V0146_BUILD_OPTIONS,'python_environment':str(self.base/'.venv')}
+        (folder/'prepared.json').write_text(json.dumps(manifest))
+        return source
+
+    def test_v0146_candidate_is_pinned_profile_bound_and_checks_overlay_build(self):
+        source=self.install_v0146()
+        checked,manifest=r.prepared_runtime(self.root,r.TEST_VERSION)
+        self.assertEqual(checked,source)
+        self.assertEqual(manifest['source_commit'],'90767252f420e25223c739d604145ad15911d48b')
+        self.assertEqual(manifest['build_options'],r.V0146_BUILD_OPTIONS)
+        self.assertEqual(r.runtime_env(r.TEST_VERSION,1),r.SAFE_ENV)
+        self.assertNotIn(r.TEST_VERSION,r.GENERIC_VERSIONS)
+        with self.assertRaisesRegex(SafetyError,'restricted to its explicit Q4/SC117'):
+            self.cfg(r.TEST_VERSION)
+        with self.assertRaisesRegex(SafetyError,'cannot be globally selected'):
+            r.select(self.root,r.TEST_VERSION)
+        cache=source/'build/CMakeCache.txt';original=cache.read_text()
+        cache.write_text(original.replace('STRATA_MMQ_TQ_OVERLAY:BOOL=ON','STRATA_MMQ_TQ_OVERLAY:BOOL=OFF'))
+        with self.assertRaisesRegex(SafetyError,'CMake option differs: STRATA_MMQ_TQ_OVERLAY'):
+            r.prepared_runtime(self.root,r.TEST_VERSION)
 
     def test_tested_legacy_selection_and_workaround_retained(self):
         source=self.install_legacy();r.select(self.root,r.LEGACY_VERSION)

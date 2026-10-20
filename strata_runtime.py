@@ -11,11 +11,14 @@ VERSION = '0.1.41'
 PIN = 'fb58e0dbc8399662c0e47c76578c6e878b14f6cf'
 NEXT_VERSION = '0.1.45'
 NEXT_PIN = '477ac13cbe8e582c20484871ce459d20d82df09d'
+TEST_VERSION = '0.1.46'
+TEST_PIN = '90767252f420e25223c739d604145ad15911d48b'
 PINS = {BASE_VERSION: '99f3dbd0b21d1401b3769e0c0d963913607f380b',
         LEGACY_VERSION: '6f32ec070f23ced9f50e704d854d775da52591ab', VERSION: PIN,
-        NEXT_VERSION: NEXT_PIN}
+        NEXT_VERSION: NEXT_PIN, TEST_VERSION: TEST_PIN}
 VERSIONS = tuple(PINS)
-GENERIC_VERSIONS = tuple(version for version in VERSIONS if version != NEXT_VERSION)
+PROFILE_BOUND_VERSIONS = (NEXT_VERSION, TEST_VERSION)
+GENERIC_VERSIONS = tuple(version for version in VERSIONS if version not in PROFILE_BOUND_VERSIONS)
 V0145_BUILD_OPTIONS = {
     'CMAKE_BUILD_TYPE': 'Release',
     'CMAKE_CUDA_ARCHITECTURES': '86',
@@ -25,6 +28,10 @@ V0145_BUILD_OPTIONS = {
     'STRATA_ORCA_Q4KS_MMQ': 'ON',
     'STRATA_MMQ_KQUANTS': 'ON',
     'STRATA_MMQ_TAB': 'OFF',
+}
+V0146_BUILD_OPTIONS = {
+    **V0145_BUILD_OPTIONS,
+    'STRATA_MMQ_TQ_OVERLAY': 'ON',
 }
 LLAMA_PIN = '3cf03257f219afbe7334045ff7c6a06ac68c627d'
 PROFILES = ('iq3_s', 'orca-iq3_xxs')
@@ -67,7 +74,7 @@ def read_manifest(root, version):
     try:
         return json.loads((runtime_root(root, version) / 'prepared.json').read_text())
     except FileNotFoundError:
-        raise SafetyError(f'Strata {version} is not prepared; run sudo ./v1strata.sh --prepare-runtime --runtime {version} explicitly') from None
+        raise SafetyError(f'Strata {version} is not prepared; run ./v1strata.sh --prepare-runtime --runtime {version} explicitly as the runtime owner') from None
 
 
 def selected_version(root, requested='auto'):
@@ -77,8 +84,8 @@ def selected_version(root, requested='auto'):
         requested = json.loads(selection.read_text()).get('version') if selection.exists() else BASE_VERSION
     if requested not in PINS:
         raise SafetyError('Unknown Strata runtime selection; 0.1.38 and tested 0.1.39 rollbacks remain available')
-    if automatic and requested == NEXT_VERSION:
-        raise SafetyError('Strata 0.1.45 is restricted to Orca Q4_K_S and the unqualified SC117 trial; it cannot be a generic/default selection')
+    if automatic and requested in PROFILE_BOUND_VERSIONS:
+        raise SafetyError(f'Strata {requested} is restricted to its explicit Q4/SC117 candidate route; it cannot be a generic/default selection')
     if automatic and requested != BASE_VERSION:
         validated = read_manifest(root, requested).get('validation', {})
         if not all(validated.get(p, {}).get('single_slot_passed') and
@@ -101,22 +108,23 @@ def prepared_runtime(root, version=VERSION):
         raise SafetyError('Candidate tracked source files were modified')
     records = {r['path']:r for r in manifest.get('runtime_assets', [])}
     executables = [source / 'engine/strata', source / 'engine/strata-vision']
-    if version == NEXT_VERSION:
-        if manifest.get('build_options') != V0145_BUILD_OPTIONS:
-            raise SafetyError('Strata 0.1.45 build options differ from the pinned SC117/Q4 candidate')
+    if version in PROFILE_BOUND_VERSIONS:
+        build_options = V0145_BUILD_OPTIONS if version == NEXT_VERSION else V0146_BUILD_OPTIONS
+        if manifest.get('build_options') != build_options:
+            raise SafetyError(f'Strata {version} build options differ from its pinned Q4/SC117 candidate')
         executables.append(source / 'engine/strata-vision-cpu')
         engine_cache = _cmake_values(source / 'build/CMakeCache.txt')
-        for key, expected in V0145_BUILD_OPTIONS.items():
+        for key, expected in build_options.items():
             if engine_cache.get(key) != expected:
-                raise SafetyError(f'Strata 0.1.45 CMake option differs: {key}')
+                raise SafetyError(f'Strata {version} CMake option differs: {key}')
         if Path(engine_cache.get('STRATA_GGML_DIR', '')).resolve() != (source / 'third_party/llama.cpp').resolve():
-            raise SafetyError('Strata 0.1.45 engine build is not linked to its pinned llama.cpp checkout')
+            raise SafetyError(f'Strata {version} engine build is not linked to its pinned llama.cpp checkout')
         cpu_vision_cache = _cmake_values(source / 'build-vision-cpu/CMakeCache.txt')
         if (cpu_vision_cache.get('STRATA_VISION_CUDA') != 'OFF' or
                 cpu_vision_cache.get('STRATA_PORTABLE') != 'OFF' or
                 Path(cpu_vision_cache.get('LLAMA_DIR', '')).resolve() !=
                 (source / 'third_party/llama.cpp').resolve()):
-            raise SafetyError('Strata 0.1.45 CPU vision helper build differs from the pinned candidate')
+            raise SafetyError(f'Strata {version} CPU vision helper build differs from the pinned candidate')
     for p in executables:
         r = records.get(str(p))
         if not r or not p.is_file() or p.stat().st_size != r['bytes'] or digest(p) != r['sha256']:
@@ -140,7 +148,7 @@ def runtime_env(version, parallel):
         return dict(BATCH_ENV) if parallel > 1 else {}
     if version == VERSION:
         return dict(SAFE_ENV, STRATA_VERIFY_ALL_RESIDENT='1')
-    if version == NEXT_VERSION:
+    if version in PROFILE_BOUND_VERSIONS:
         return dict(SAFE_ENV)
     return {}
 
@@ -155,8 +163,8 @@ def configure(root, baseline_source, baseline_path, cfg, profile, requested='aut
         if parallel != 1 or batch_groups != 1:
             raise SafetyError('The preserved 0.1.38 runtime is single-slot; batching requires a prepared newer runtime')
         return baseline_source, baseline_path, cfg, version
-    if version == NEXT_VERSION:
-        raise SafetyError('Strata 0.1.45 is restricted to the requested Q4/SC117 profiles')
+    if version in PROFILE_BOUND_VERSIONS:
+        raise SafetyError(f'Strata {version} is restricted to its explicit Q4/SC117 candidate route')
     source, manifest = prepared_runtime(root, version)
     # Retain Orca's failing pipeline refusal. Only separately recorded real swapped-image validation may lift it
     # for the NEW runtime; no version number alone marks a previously failed GPU preset as safe.
@@ -186,10 +194,10 @@ def configure(root, baseline_source, baseline_path, cfg, profile, requested='aut
 
 
 def select(root, version):
-    """Change only future generic launches; 0.1.45 is explicitly profile-bound, not promotable."""
+    """Change only future generic launches; candidate versions are profile-bound, not promotable."""
     from prepare_orca import atomic_json
-    if version == NEXT_VERSION:
-        raise SafetyError('Strata 0.1.45 cannot be globally selected; it is limited to the requested Q4/SC117 profiles')
+    if version in PROFILE_BOUND_VERSIONS:
+        raise SafetyError(f'Strata {version} cannot be globally selected; it is limited to its Q4/SC117 candidate routes')
     selected_version(root, version)
     if version != BASE_VERSION:
         _, manifest = prepared_runtime(root, version)

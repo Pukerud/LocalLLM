@@ -194,14 +194,17 @@ grep -q '\[1\] Swift 1.5 Uncensored Q8_K_XL — DEFAULT' "$root/HostLLM.sh"
 grep -q '\[2\] Hauhau Q8_K_P — BF16 vision' "$root/HostLLM.sh"
 grep -q '\[3\] Orca Q4_K_S — Strata 0.1.45 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted' "$root/HostLLM.sh"
 grep -q '\[4\] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot' "$root/HostLLM.sh"
+grep -q '\[5\] TEST Orca Q4_K_S — Strata 0.1.46 pinned test candidate' "$root/HostLLM.sh"
 grep -q '\[12\] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL' "$root/HostLLM.sh"
 grep -q '\[13\] Set next Hive miner - Hauhau Q8_K_P' "$root/HostLLM.sh"
 grep -q '\[14\] Set next Hive miner - Orca Q4_K_S .45' "$root/HostLLM.sh"
 grep -q '\[15\] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot' "$root/HostLLM.sh"
-! grep -qE '^ *echo .*\[(5|6|7)\] Orca Q4_K_S — Strata 0\.1\.(41|44\.1)' "$root/HostLLM.sh"
+grep -q '\[16\] Set next Hive miner - SC117 IQ3_S — Strata 0.1.46 unqualified CPU-vision trial' "$root/HostLLM.sh"
+! grep -qE '^ *echo .*\[(6|7)\] Orca Q4_K_S — Strata 0\.1\.(41|44\.1)' "$root/HostLLM.sh"
 ! grep -q '\[3\] SC117.*0.1.39' "$root/HostLLM.sh"
 ! grep -q '\[17\].*SC117' "$root/HostLLM.sh"
-grep -q 'STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected .*--runtime 0.1.45' "$root/HostLLM.sh"
+grep -q 'local candidate_runtime=0.1.45' "$root/HostLLM.sh"
+grep -q '\[\[ "$choice" == 5 \]\] && candidate_runtime=0.1.46' "$root/HostLLM.sh"
 grep -q 'SC117.*0.0.0.0:8080' "$root/HostLLM.sh"
 grep -q 'windows-2 override omitted' "$root/HostLLM.sh"
 grep -q -- '--prepare-q4ks141' "$root/HostLLM.sh"
@@ -227,15 +230,26 @@ trace="$scratch/maintrace"
     printf '%s|%s|%s\n' "${STRATA_SC117_IQ3S_TRIAL-unset}" "${STRATA_HOST:-unset}" "${STRATA_PORT:-unset}" >> "$trace.env"
   }
   unset STRATA_HOST STRATA_PORT STRATA_SC117_IQ3S_TRIAL
-  main < <(printf '1\n 2 \n3\n4\n11\n') > /dev/null
+  main < <(printf '1\n 2 \n3\n4\n5\n11\n') > /dev/null
 )
 grep -qx 'v1qwen38.sh --quickstart --profile swift15u-q8' "$trace"
 grep -qx 'v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q4kv-xhigh' "$trace"
 grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.45 --parallel 1 --batch-groups 1' "$trace"
 grep -qx 'v1strata.sh --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.45 --parallel 1 --batch-groups 1' "$trace"
+grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.46 --parallel 1 --batch-groups 1' "$trace"
 grep -qx 'unset|0.0.0.0|unset' "$trace.env"
 grep -qx '1|0.0.0.0|8080' "$trace.env"
-[[ "$(wc -l < "$trace")" -eq 4 ]]
+[[ "$(wc -l < "$trace")" -eq 5 ]]
+# HostLLM [16] selects the separately isolated .46 SC117 Hive profile; it does not start it.
+hive_target_trace="$scratch/hive-target-trace"
+(
+  detect_engine() { echo none; }
+  show_workload_status() { :; }
+  host_gpu_summary() { :; }
+  set_next_hive_profile() { printf '%s\n' "$1" >> "$hive_target_trace"; }
+  main < <(printf '16\n11\n') > /dev/null
+)
+grep -qx 'iq3_s-sc117-abliterated-v0146' "$hive_target_trace"
 # Exercise the inner package/pointer stage with inert installed files. The
 # transaction's owned-stop/OctaSpace ordering has dedicated Python tests.
 hive_menu_trace="$scratch/hive-menu.trace"
@@ -300,7 +314,7 @@ fi
   main < <(printf '3\n11\n') > /dev/null
 )
 [[ "$(tail -n1 "$trace")" == 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.45 --parallel 1 --batch-groups 1' ]]
-[[ "$(wc -l < "$trace")" -eq 5 ]]
+[[ "$(wc -l < "$trace")" -eq 6 ]]
 # Choosing Orca while Strata runs must not call the launch/pause/stop path.
 (
   SCRIPT_DIR="$scratch/live-menu"
@@ -314,7 +328,7 @@ fi
   run_selected() { echo 'unexpected-start' >> "$trace"; }
   main < <(printf '3\n11\n') > /dev/null
 )
-[[ "$(wc -l < "$trace")" -eq 5 ]]
+[[ "$(wc -l < "$trace")" -eq 6 ]]
 # An unprepared Q4 request must use its readiness gate, before any service/engine mutation.
 ready_trace="$scratch/readiness.trace"
 export ready_trace

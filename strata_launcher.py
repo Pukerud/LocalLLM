@@ -51,6 +51,18 @@ SC117_V0145_TRIAL_READY_CONFIG = (
     'one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; '
     'conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.'
 )
+Q4_V0146_TEST_READY_CONFIG = (
+    'READY CONFIG: unvalidated Q4_K_S Strata 0.1.46 test candidate; future profile context=262144; '
+    'CPU vision; single-slot; prefill auto; split 14,24,36; trimmed stage weights; '
+    'conversation cache=8192 MiB / 4 cache slots; pipeline-windows 2 omitted; new SM86 release defaults enabled. '
+    'Readiness only; no Q4 inference or qualification claim.'
+)
+SC117_V0146_TRIAL_READY_CONFIG = (
+    'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.46; trusted-LAN=0.0.0.0:8080 (unauthenticated); '
+    'native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; '
+    'one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; '
+    'conversation cache=8192 MiB / 4 slots; pipeline-windows=2; new SM86 release defaults enabled. This is not qualification.'
+)
 HIVE_CUR_MINER = Path('/run/hive/cur_miner')
 
 _Q4_V01441_LAUNCH_ENV = frozenset({
@@ -167,7 +179,7 @@ def ready(profile='iq3_s'):
 def _effective_host(profile, version, configured_host):
     requested = os.environ.get('STRATA_HOST')
     if profile == ORCA_Q4KS_PROFILE and version in ('0.1.41', q4ks_v01441.RUNTIME_VERSION,
-                                                     runtimes.NEXT_VERSION):
+                                                     *runtimes.PROFILE_BOUND_VERSIONS):
         if requested not in (None, '127.0.0.1', '0.0.0.0'):
             raise SafetyError(f'Q4 {version} STRATA_HOST may only be 127.0.0.1 or 0.0.0.0')
         return requested or '127.0.0.1'
@@ -178,16 +190,20 @@ def _effective_host(profile, version, configured_host):
     return requested or configured_host
 
 
-def _apply_v0145_runtime_paths(cfg, runtime_source):
+def _apply_candidate_runtime_paths(cfg, runtime_source, version):
     runtime_source = Path(runtime_source)
     cfg['exe'] = str(runtime_source / 'engine/strata')
     cfg['cwd'] = str(runtime_source)
     vision = cfg.get('vision')
     if not isinstance(vision, dict) or vision.get('gpu') is not False:
-        raise SafetyError('Strata 0.1.45 SC117/Q4 candidate requires its CPU vision configuration')
+        raise SafetyError(f'Strata {version} SC117/Q4 candidate requires its CPU vision configuration')
     vision['exe'] = str(runtime_source / 'engine/strata-vision-cpu')
     cfg['_launcher_python'] = str(runtime_source / '.venv/bin/python')
     return cfg
+
+
+def _apply_v0145_runtime_paths(cfg, runtime_source):
+    return _apply_candidate_runtime_paths(cfg, runtime_source, runtimes.NEXT_VERSION)
 
 
 def ready_q4ks_v0145(root):
@@ -198,29 +214,42 @@ def ready_q4ks_v0145(root):
     return runtime_source, path, _apply_v0145_runtime_paths(cfg, runtime_source)
 
 
+def ready_q4ks_v0146(root):
+    """Build a separately pinned .46 Q4 test candidate on the retained .44.1-derived preset."""
+    root = Path(root)
+    _base_source, path, cfg = q4ks_v01441.ready_q4ks_v01441(root)
+    runtime_source, _manifest = runtimes.prepared_runtime(root, runtimes.TEST_VERSION)
+    return runtime_source, path, _apply_candidate_runtime_paths(cfg, runtime_source, runtimes.TEST_VERSION)
+
+
 def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
     if profile == sc117_profile.PROFILE:
         if (parallel, batch_groups) != (1, 1):
             raise SafetyError('SC117 abliterated IQ3_S is restricted to one serving slot and one batch group')
-        if runtime != sc117_profile.TRIAL_RUNTIME_VERSION:
-            raise SafetyError('SC117 is unqualified: only its explicit trusted-LAN .45 trial is allowed; .39 hosting is retired')
+        if runtime not in sc117_profile.TRIAL_RUNTIME_VERSIONS:
+            raise SafetyError('SC117 is unqualified: only its explicit trusted-LAN .45 or .46 trial is allowed; .39 hosting is retired')
         if os.environ.get(sc117_profile.TRIAL_ENV) != '1':
-            raise SafetyError('SC117 Strata .45 is available only through its explicit unqualified trusted-LAN trial')
+            raise SafetyError(f'SC117 Strata {runtime} is available only through its explicit unqualified trusted-LAN trial')
         root = data_root()
         prepare_sc117.verify_readiness(root, full_hash=False)
         _base_source, path, base_cfg = q4ks_v01441.ready_q4ks_v01441(root)
-        runtime_source, _manifest = runtimes.prepared_runtime(root, runtimes.NEXT_VERSION)
+        runtime_source, _manifest = runtimes.prepared_runtime(root, runtime)
         cfg = sc117_profile.build_v01441_trial_config(root, base_cfg)
-        return runtime_source, path, _apply_v0145_runtime_paths(cfg, runtime_source), runtime
+        return runtime_source, path, _apply_candidate_runtime_paths(cfg, runtime_source, runtime), runtime
     if profile == ORCA_Q4KS_PROFILE:
         if runtime not in ('auto', ORCA_Q4KS_RUNTIME, '0.1.41', q4ks_v01441.RUNTIME_VERSION,
-                           runtimes.NEXT_VERSION):
-            raise SafetyError('Q4_K_S supports standard .45 or explicit .39/.41/.44.1 rollback profiles only')
+                           *runtimes.PROFILE_BOUND_VERSIONS):
+            raise SafetyError('Q4_K_S supports standard .45, explicit .46 test, or .39/.41/.44.1 rollback profiles only')
         if runtime in ('auto', runtimes.NEXT_VERSION):
             if (parallel, batch_groups) != (1, 1):
                 raise SafetyError('Q4 .45 is restricted to the single-slot/single-group profile')
             source, path, cfg = ready_q4ks_v0145(data_root())
             return source, path, cfg, runtimes.NEXT_VERSION
+        if runtime == runtimes.TEST_VERSION:
+            if (parallel, batch_groups) != (1, 1):
+                raise SafetyError('Q4 .46 test is restricted to the single-slot/single-group profile')
+            source, path, cfg = ready_q4ks_v0146(data_root())
+            return source, path, cfg, runtimes.TEST_VERSION
         if runtime == q4ks_v01441.RUNTIME_VERSION:
             if (parallel, batch_groups) != (1, 1):
                 raise SafetyError('Q4 .44.1 is restricted to the validated single-slot/single-group profile')
@@ -243,40 +272,41 @@ def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
 
 
 def sc117_trial_readiness_line(profile, version, parallel, batch_groups, cfg):
-    """Verify the exact isolated SC117 .45 trial inputs without granting qualification."""
+    """Verify exact isolated SC117 .45/.46 trial inputs without granting qualification."""
     expected_state = Path.home() / '.local/state/locallm-strata' / sc117_profile.TRIAL_STATE_ROOT_NAME
     expected_cache = expected_state / 'pycache'
-    if (profile != sc117_profile.PROFILE or version != sc117_profile.TRIAL_RUNTIME_VERSION or
+    if (profile != sc117_profile.PROFILE or version not in sc117_profile.TRIAL_RUNTIME_VERSIONS or
             (parallel, batch_groups) != (1, 1) or
             os.environ.get(sc117_profile.TRIAL_ENV) != '1' or
-            os.environ.get('STRATA_RUNTIME') != sc117_profile.TRIAL_RUNTIME_VERSION or
+            os.environ.get('STRATA_RUNTIME') != version or
             os.environ.get('STRATA_HOST') != sc117_profile.TRIAL_BIND_HOST or
             os.environ.get('STRATA_PORT') != str(sc117_profile.TRIAL_PORT) or
             Path(os.environ.get('STRATA_STATE_ROOT', '')) != expected_state or
             os.environ.get('PYTHONPYCACHEPREFIX') != str(expected_cache) or
             os.environ.get('PYTHONDONTWRITEBYTECODE') != '1' or
             os.environ.get('SETUPTOOLS_USE_DISTUTILS') != 'stdlib'):
-        raise SafetyError('SC117 .45 trial preflight requires its exact trusted-LAN bind, port, state, and Python-cache environment')
+        raise SafetyError(f'SC117 {version} trial preflight requires its exact trusted-LAN bind, port, state, and Python-cache environment')
     if any(name in os.environ for name in sc117_profile.TRIAL_OVERRIDE_ENV) or any(
             name in os.environ for name in sc117_profile.TRIAL_EXPERIMENT_ENV):
         raise SafetyError('SC117 menu trial preflight does not accept experimental tuning overrides')
     vision = cfg.get('vision')
     if not isinstance(vision, dict) or vision.get('gpu') is not False:
-        raise SafetyError('SC117 .45 trial preflight requires CPU vision')
+        raise SafetyError(f'SC117 {version} trial preflight requires CPU vision')
     args = cfg.get('args')
     if (not isinstance(args, list) or args.count('--spec') != 1 or
             args[args.index('--spec') + 1:args.index('--spec') + 2] != [sc117_profile.TRIAL_DEFAULT_SPEC] or
             args.count('--pipeline-windows') != 1 or
             args[args.index('--pipeline-windows') + 1:args.index('--pipeline-windows') + 2] !=
             [sc117_profile.TRIAL_DEFAULT_PIPELINE_WINDOWS]):
-        raise SafetyError('SC117 .45 trial preflight requires --spec 3 and --pipeline-windows 2')
+        raise SafetyError(f'SC117 {version} trial preflight requires --spec 3 and --pipeline-windows 2')
     settings = sc117_profile.settings_for_start(allow_trial_env=True)
     authorization = sc117_profile.authorize_start(
         data_root(), settings, host=sc117_profile.TRIAL_BIND_HOST,
         port=sc117_profile.TRIAL_PORT, state_root=strata_state())
     if authorization != 'trial':
         raise SafetyError('SC117 .45 preflight did not authorize the isolated trial')
-    return SC117_V0145_TRIAL_READY_CONFIG
+    return (SC117_V0145_TRIAL_READY_CONFIG if version == sc117_profile.TRIAL_RUNTIME_VERSION
+            else SC117_V0146_TRIAL_READY_CONFIG)
 
 
 def _q4ks_recorded_identity_valid(value):
@@ -661,7 +691,7 @@ def guard_during_run(state):
             return False
         if (state.get('profile') == ORCA_Q4KS_PROFILE and
                 state.get('runtime_version') in ('0.1.41', q4ks_v01441.RUNTIME_VERSION,
-                                                  runtimes.NEXT_VERSION)):
+                                                  *runtimes.PROFILE_BOUND_VERSIONS)):
             if state.get('hive_launch_id_sha256'):
                 if host_lifecycle.read_lease() is not None:
                     raise SafetyError('Hive Q4 .41 session conflicts with a HostLLM pause lease')
@@ -827,7 +857,7 @@ def verify_serving(cfg, version, port, requested_parallel=None):
     # This pinned candidate lazily loads its engine on the first chat request.
     # Tolerate only that explicit unloaded state; keep slot counts
     # strict and require an exact version whenever the API reports a loaded engine.
-    special_candidate = version in (q4ks_v01441.RUNTIME_VERSION, runtimes.NEXT_VERSION)
+    special_candidate = version in (q4ks_v01441.RUNTIME_VERSION, *runtimes.PROFILE_BOUND_VERSIONS)
     lazy_unloaded = (cfg.get('lazy_load') is True and special_candidate and
                      'engine' in status and engine is None and status.get('loaded') is False)
     eager_unloaded = (special_candidate and cfg.get('lazy_load') is False and
@@ -855,7 +885,7 @@ def startup_config(cfg, version, profile=None):
     """Load retained Q4/SC117 candidate models before opening the API."""
     effective = dict(cfg)
     if (version == q4ks_v01441.RUNTIME_VERSION or
-            (version == runtimes.NEXT_VERSION and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE))):
+            (version in runtimes.PROFILE_BOUND_VERSIONS and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE))):
         effective.update(lazy_load=False, idle_unload_s=0)
     return effective
 
@@ -896,7 +926,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     hosting_lease_id = None
     hive_launch_id = None
     if profile == ORCA_Q4KS_PROFILE and version in ('0.1.41', q4ks_v01441.RUNTIME_VERSION,
-                                                     runtimes.NEXT_VERSION):
+                                                     *runtimes.PROFILE_BOUND_VERSIONS):
         authorization = require_q4ks_candidate_authorization(
             port, requested_lease_id, host_launch_reserved=inherited_fd is not None)
         if authorization['authorization'] == 'hostllm':
@@ -935,7 +965,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     runtime_config_dir = None
     runtime_config_dir_identity = None
     api_key = None
-    if profile == ORCA_Q4KS_PROFILE and version in (q4ks_v01441.RUNTIME_VERSION, runtimes.NEXT_VERSION):
+    if profile == ORCA_Q4KS_PROFILE and version in (q4ks_v01441.RUNTIME_VERSION,
+                                                       *runtimes.PROFILE_BOUND_VERSIONS):
         env = _q4_v01441_launch_environment()
         env.update(runtimes.runtime_env(version, parallel))
         env.update({'STRATA_RUNTIME': version, 'STRATA_PARALLEL': str(parallel),
@@ -980,6 +1011,12 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
                 'Strata 0.1.45 source/build and its CPU-only vision helper pass the pinned artifact checks.',
                 'Q4 model/settings reuse the bounded .44.1 profile; no .45-specific Q4 inference/quality claim is made.',
             ]
+        elif version == runtimes.TEST_VERSION:
+            evidence = [
+                'Strata 0.1.46 source/build and its CPU-only vision helper pass the pinned artifact checks.',
+                'The new SM86 release defaults are enabled; their upstream RTX 3060/A4000 results do not qualify this RTX 3090 host.',
+                'Q4 model/settings reuse the bounded .44.1 profile; this is a test route, not a promotion or qualification.',
+            ]
         elif version == q4ks_v01441.RUNTIME_VERSION:
             evidence = q4ks_v01441.candidate_evidence_summary(data_root())
         elif version == '0.1.41':
@@ -996,6 +1033,9 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
                       '(32768 resident); stock/non-abliterated MTP head; --spec 3; CPU vision; one serving slot/group; '
                       'prefill auto; split 14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; '
                       'pipeline-windows 2. Performance screen only; not qualification.')
+            elif version == sc117_profile.TRIAL_CANDIDATE_RUNTIME_VERSION:
+                print('TRIAL DEFAULTS: SC117 IQ3_S; Strata=0.1.46; same isolated model/settings; --spec 3 + pipeline-windows 2; '
+                      'new SM86 release defaults enabled; unvalidated on this host; not qualification.')
             else:
                 print(sc117_profile.default_readiness_line())
         else:
@@ -1003,7 +1043,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         print(sc117_assets.MTP_SOURCE_NOTE)
     else:
         print('EXPERIMENTAL Strata IQ3_S | BF16 GPU vision | native 262144 | INT8 KV | MTP | high reasoning')
-    if profile == ORCA_Q4KS_PROFILE and version in (q4ks_v01441.RUNTIME_VERSION, runtimes.NEXT_VERSION):
+    if profile == ORCA_Q4KS_PROFILE and version in (q4ks_v01441.RUNTIME_VERSION,
+                                                       *runtimes.PROFILE_BOUND_VERSIONS):
         print(f'Strata {version} note: pipeline-windows is omitted from this serving baseline.', flush=True)
     print(f'Strata {version}; four-GPU layer split {cfg.get("layer_split", "auto")}; requested slots={parallel}, batch groups={batch_groups}. Log: {log}', flush=True)
     if parallel > 1:
@@ -1223,6 +1264,8 @@ def main():
                 vision_state = 'CPU vision configured' if isinstance(vision_cfg, dict) and vision_cfg.get('gpu') is False else 'text-only'
                 if version == runtimes.NEXT_VERSION:
                     print(Q4_V0145_READY_CONFIG)
+                elif version == runtimes.TEST_VERSION:
+                    print(Q4_V0146_TEST_READY_CONFIG)
                 elif version == q4ks_v01441.RUNTIME_VERSION:
                     print(q4ks_v01441.readiness_line())
                 elif version == '0.1.41':
@@ -1243,6 +1286,12 @@ def main():
                     evidence = [
                         'Strata 0.1.45 source/build and its CPU-only vision helper pass the pinned artifact checks.',
                         'Q4 model/settings reuse the bounded .44.1 profile; no .45-specific Q4 inference/quality claim is made.',
+                    ]
+                elif version == runtimes.TEST_VERSION:
+                    evidence = [
+                        'Strata 0.1.46 source/build and its CPU-only vision helper pass the pinned artifact checks.',
+                        'The new SM86 release defaults are enabled; their upstream RTX 3060/A4000 results do not qualify this RTX 3090 host.',
+                        'Q4 model/settings reuse the bounded .44.1 profile; this is a test route, not a promotion or qualification.',
                     ]
                 elif version == q4ks_v01441.RUNTIME_VERSION:
                     evidence = q4ks_v01441.candidate_evidence_summary(data_root())

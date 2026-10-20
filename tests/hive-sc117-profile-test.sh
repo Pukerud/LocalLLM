@@ -3,15 +3,19 @@ set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 PROFILE_DIR="$ROOT/hive-llm-miner/profiles/iq3_s-sc117-abliterated"
+PROFILE_046_DIR="$ROOT/hive-llm-miner/profiles/iq3_s-sc117-abliterated-v0146"
 MENU="$ROOT/hive-llm-miner/profile-menu.sh"
 INSTALL="$ROOT/install-hive-llm-miner.sh"
 EXPECTED='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.'
+EXPECTED_046='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.46; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2; new SM86 release defaults enabled. This is not qualification.'
 
 for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
     [[ -f "$PROFILE_DIR/$file" && ! -L "$PROFILE_DIR/$file" ]]
+    [[ -f "$PROFILE_046_DIR/$file" && ! -L "$PROFILE_046_DIR/$file" ]]
 done
 for script in "$PROFILE_DIR/h-manifest.conf" "$PROFILE_DIR/h-config.sh" "$PROFILE_DIR/h-run.sh" \
-    "$PROFILE_DIR/h-stats.sh" "$MENU" "$INSTALL" "$ROOT/HostLLM.sh"; do
+    "$PROFILE_DIR/h-stats.sh" "$PROFILE_046_DIR/h-config.sh" "$PROFILE_046_DIR/h-run.sh" \
+    "$PROFILE_046_DIR/h-stats.sh" "$MENU" "$INSTALL" "$ROOT/HostLLM.sh"; do
     tr -d '\r' < "$script" | bash -n
 done
 
@@ -66,8 +70,9 @@ grep -Fq 'TRIM_STAGE_WEIGHTS=1' "$PROFILE_DIR/llm-hosting.conf"
 grep -Fq 'QUALIFIED=0' "$PROFILE_DIR/llm-hosting.conf"
 ! grep -Fq 'PIPELINE_WINDOWS=' "$PROFILE_DIR/llm-hosting.conf"
 grep -Fq '4|iq3_s-sc117-abliterated) target=' "$MENU"
+grep -Fq '5|iq3_s-sc117-abliterated-v0146) target=' "$MENU"
 grep -Fq 'check_selected_profile_ready "$target"' "$MENU"
-grep -Fq 'profiles/iq3_s-sc117-abliterated)' "$MENU"
+grep -Fq 'profiles/iq3_s-sc117-abliterated|' "$MENU"
 grep -Fq 'iq3_s-sc117-abliterated' "$INSTALL"
 grep -Fq -- '--check-ready --profile iq3_s-sc117-abliterated' "$INSTALL"
 grep -Fq "initial_profile='orca-q4_k_s-v01441'" "$INSTALL"
@@ -77,7 +82,7 @@ grep -Fq 'ln -s -- "profiles/$initial_profile"' "$INSTALL"
 ! grep -Eq 'miner[[:space:]]+(start|stop)' "$PROFILE_DIR/h-run.sh" "$MENU" "$INSTALL"
 
 # Qualification remains impossible without the reviewed/trusted runner and pin policy; every SC117 start stays trial-only.
-grep -Fq "SC117 is unqualified: only its explicit trusted-LAN .45 trial is allowed; .39 hosting is retired" "$ROOT/strata_launcher.py"
+grep -Fq "SC117 is unqualified: only its explicit trusted-LAN .45 or .46 trial is allowed; .39 hosting is retired" "$ROOT/strata_launcher.py"
 grep -Fq 'SC117 trial binding is fixed to trusted-LAN' "$ROOT/iq3_s_sc117_abliterated_profile.py"
 grep -Fq 'SC117 remains unqualified; normal/qualified hosting is disabled' "$ROOT/iq3_s_sc117_abliterated_profile.py"
 grep -Fq "mtp_note = 'SC117 strata/rt; stock/non-abliterated head'" "$ROOT/iq3_s_sc117_abliterated_profile.py"
@@ -96,4 +101,12 @@ grep -Fq "parser.add_argument('--build-pack'" "$ROOT/prepare_iq3_s_sc117_abliter
 [[ "$(printf '%s\n%s\n' "$EXPECTED" "$EXPECTED" | grep '^TRIAL CONFIG:')" != "$EXPECTED" ]]
 ! grep -Fq 'mv -Tf -- "$tmp_current" "$CUSTOM_DIR/current"' "$INSTALL"
 
-echo 'Hive SC117 .45 CPU-vision trial profile, trusted-LAN/state isolation, selector, and qualification gates: PASS'
+grep -Fq "RUNTIME='0.1.46'" "$PROFILE_046_DIR/h-run.sh"
+grep -Fq "PROFILE='iq3_s-sc117-abliterated'" "$PROFILE_046_DIR/h-run.sh"
+grep -Fq "expected_readiness='$EXPECTED_046'" "$PROFILE_046_DIR/h-run.sh"
+grep -Fq 'new SM86 release defaults enabled' "$PROFILE_046_DIR/h-run.sh"
+grep -Fq 'RUNTIME=0.1.46' "$PROFILE_046_DIR/llm-hosting.conf"
+grep -Fq 'PIPELINE_WINDOWS=2' "$PROFILE_046_DIR/llm-hosting.conf"
+grep -Fq 'QUALIFIED=0' "$PROFILE_046_DIR/llm-hosting.conf"
+grep -Fq "0.1.46) printf 'iq3_s-sc117-abliterated-v0146'" "$INSTALL"
+echo 'Hive SC117 .45/.46 CPU-vision trial profiles, trusted-LAN/state isolation, selector, and qualification gates: PASS'

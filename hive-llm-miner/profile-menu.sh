@@ -45,7 +45,7 @@ usage() {
     cat <<'EOF'
 Usage:
   profile-menu.sh                 Show the interactive selector
-  profile-menu.sh --profile NAME  Select an installed Swift, Hauhau, Orca .45, or SC117 trial profile
+  profile-menu.sh --profile NAME  Select an installed Swift, Hauhau, Orca .45, or SC117 .45/.46 trial profile
   profile-menu.sh --list          Show installed profiles and current selection
   profile-menu.sh --help          Show this help
 
@@ -63,6 +63,7 @@ profile_label() {
         swift15u-q8) printf '%s' 'Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots' ;;
         hauhau-q8-fastmtp-q4kv-xhigh) printf '%s' 'Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots' ;;
         iq3_s-sc117-abliterated) printf '%s' 'SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot; unqualified trusted-LAN trial on 8080 (no auth)' ;;
+        iq3_s-sc117-abliterated-v0146) printf '%s' 'SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.46 | new SM86 defaults enabled; native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot; unqualified trusted-LAN trial on 8080 (no auth)' ;;
         *) return 1 ;;
     esac
 }
@@ -72,7 +73,7 @@ read_current_profile() {
     if [[ -L "$CURRENT_LINK" ]]; then
         target="$(readlink -- "$CURRENT_LINK")" || return 1
         case "$target" in
-            profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/hauhau-q8-fastmtp-q4kv-xhigh|profiles/iq3_s-sc117-abliterated) printf '%s' "${target#profiles/}" ;;
+            profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/hauhau-q8-fastmtp-q4kv-xhigh|profiles/iq3_s-sc117-abliterated|profiles/iq3_s-sc117-abliterated-v0146) printf '%s' "${target#profiles/}" ;;
             *) return 1 ;;
         esac
         return
@@ -80,7 +81,7 @@ read_current_profile() {
     [[ ! -e "$CURRENT_LINK" ]] || return 1
     current_conf="$CUSTOM_DIR/llm-hosting.conf"
     [[ -f "$current_conf" && ! -L "$current_conf" ]] || return 1
-    for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated; do
+    for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146; do
         if cmp -s <(tr -d '\r' < "$current_conf") <(tr -d '\r' < "$PROFILE_ROOT/$profile/llm-hosting.conf"); then
             printf '%s' "$profile"
             return 0
@@ -131,6 +132,7 @@ show_profiles() {
     printf '  [2] %s\n' "$(profile_label hauhau-q8-fastmtp-q4kv-xhigh)"
     printf '  [3] %s\n' "$(profile_label orca-q4_k_s-v01441)"
     printf '  [4] %s\n' "$(profile_label iq3_s-sc117-abliterated)"
+  printf '  [5] %s\n' "$(profile_label iq3_s-sc117-abliterated-v0146)"
 }
 
 check_selected_profile_ready() {
@@ -155,6 +157,27 @@ check_selected_profile_ready() {
             actual_readiness="$(grep '^TRIAL CONFIG:' <<< "$readiness" || true)"
             [[ "$actual_readiness" == "$expected_readiness" && "$readiness" != *'READY CONFIG:'* ]] || \
                 fail 'SC117 exact unqualified CPU-vision trial preflight is incomplete; profile unchanged'
+            ;;
+        iq3_s-sc117-abliterated-v0146)
+            [[ -x "$LLM_ROOT/v1strata.sh" ]] || fail "Strata launcher not found: $LLM_ROOT/v1strata.sh"
+            command -v runuser >/dev/null 2>&1 || fail 'runuser is unavailable; SC117 .46 trial readiness cannot be checked'
+            local readiness expected_readiness actual_readiness trial_state
+            trial_state='/home/user/.local/state/locallm-strata/sc117-iq3s-trial'
+            readiness="$(runuser -u user -- env -i \
+                HOME=/home/user USER=user LOGNAME=user \
+                PATH='/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin' \
+                PYTHONDONTWRITEBYTECODE=1 PYTHONPYCACHEPREFIX="$trial_state/pycache" \
+                SETUPTOOLS_USE_DISTUTILS=stdlib STRATA_SC117_IQ3S_TRIAL=1 \
+                STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata \
+                STRATA_STATE_ROOT="$trial_state" STRATA_RUNTIME=0.1.46 \
+                STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 STRATA_PORT=8080 STRATA_HOST=0.0.0.0 \
+                "$LLM_ROOT/v1strata.sh" --check-ready --profile iq3_s-sc117-abliterated \
+                --runtime 0.1.46 --parallel 1 --batch-groups 1)" || \
+                fail 'SC117 .46 isolated trial readiness failed; profile unchanged'
+            expected_readiness='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.46; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2; new SM86 release defaults enabled. This is not qualification.'
+            actual_readiness="$(grep '^TRIAL CONFIG:' <<< "$readiness" || true)"
+            [[ "$actual_readiness" == "$expected_readiness" && "$readiness" != *'READY CONFIG:'* ]] || \
+                fail 'SC117 .46 exact unqualified CPU-vision trial preflight is incomplete; profile unchanged'
             ;;
         orca-q4_k_s)
             [[ -x "$LLM_ROOT/v1strata.sh" ]] || fail "Strata launcher not found: $LLM_ROOT/v1strata.sh"
@@ -275,7 +298,8 @@ check_profile_files orca-q4_k_s-v0141-2slot || fail 'Orca .41 two-slot profile f
 check_profile_files orca-q4_k_s-v01441 || fail 'Orca .44.1 candidate profile files are incomplete or symlinked'
 check_profile_files swift15u-q8 || fail 'Swift profile files are incomplete or symlinked'
 check_profile_files hauhau-q8-fastmtp-q4kv-xhigh || fail 'Hauhau profile files are incomplete or symlinked'
-check_profile_files iq3_s-sc117-abliterated || fail 'SC117 trial profile files are incomplete or symlinked'
+check_profile_files iq3_s-sc117-abliterated || fail 'SC117 .45 trial profile files are incomplete or symlinked'
+check_profile_files iq3_s-sc117-abliterated-v0146 || fail 'SC117 .46 trial profile files are incomplete or symlinked'
 validate_profile_layout
 
 case "${1:-}" in
@@ -291,6 +315,7 @@ case "${1:-}" in
         printf '  [2] %s\n' "$(profile_label hauhau-q8-fastmtp-q4kv-xhigh)"
         printf '  [3] %s\n' "$(profile_label orca-q4_k_s-v01441)"
         printf '  [4] %s\n' "$(profile_label iq3_s-sc117-abliterated)"
+        printf '  [5] %s\n' "$(profile_label iq3_s-sc117-abliterated-v0146)"
         printf '  [q] Quit\n'
         read -r -p 'Select profile for the next Hive miner start: ' choice || exit 0
         case "${choice//[[:space:]]/}" in
@@ -298,6 +323,7 @@ case "${1:-}" in
             2|hauhau-q8-fastmtp-q4kv-xhigh) target='hauhau-q8-fastmtp-q4kv-xhigh' ;;
             3|orca-q4_k_s-v01441) target='orca-q4_k_s-v01441' ;;
             4|iq3_s-sc117-abliterated) target='iq3_s-sc117-abliterated' ;;
+            5|iq3_s-sc117-abliterated-v0146) target='iq3_s-sc117-abliterated-v0146' ;;
             q|Q|'') exit 0 ;;
             *) fail 'invalid selection; no files changed' ;;
         esac

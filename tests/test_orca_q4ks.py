@@ -304,7 +304,7 @@ class Q4Profile(unittest.TestCase):
         with mock.patch.object(launcher, 'data_root', return_value=self.root), \
              mock.patch.object(launcher.q4ks_v0141, 'ready_q4ks_v0141', return_value=candidate_result) as ready_candidate:
             result = launcher.ready_runtime(assets.PROFILE, runtime='0.1.41', parallel=1, batch_groups=1)
-            with self.assertRaisesRegex(SafetyError, 'standard .45 or explicit .39/.41/.44.1 rollback'):
+            with self.assertRaisesRegex(SafetyError, 'standard .45, explicit .46 test, or .39/.41/.44.1 rollback'):
                 launcher.ready_runtime(assets.PROFILE, runtime='0.1.38', parallel=1, batch_groups=1)
             with self.assertRaisesRegex(SafetyError, 'single-slot'):
                 launcher.ready_runtime(assets.PROFILE, runtime='auto', parallel=2, batch_groups=1)

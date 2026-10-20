@@ -73,6 +73,21 @@ class SwitchTransaction(unittest.TestCase):
         self.assertFalse(self.stop.exists())
         self.assertFalse(self.journal.exists())
 
+    def test_v0146_sc117_preflight_runs_before_any_service_or_miner_pause(self):
+        calls=[]
+        def preflight(profile):
+            self.assertEqual(profile,switch.SC117_V0146_PROFILE)
+            self.assertEqual(self.service,'active')
+            self.assertTrue(self.miner)
+            self.assertFalse(self.stop.exists())
+            calls.append(profile)
+        with mock.patch.object(switch,'preflight_profile',side_effect=preflight):
+            switch.switch_profile(switch.SC117_V0146_PROFILE)
+        self.assertEqual(calls,[switch.SC117_V0146_PROFILE])
+        self.assertEqual(os.readlink(self.current),f'profiles/{switch.SC117_V0146_PROFILE}')
+        self.assertTrue(self.miner)
+        self.assertEqual(self.service,'active')
+
     def test_octa_stop_may_already_stop_the_miner(self):
         original = self.command
         def stop_together(args, timeout=180):

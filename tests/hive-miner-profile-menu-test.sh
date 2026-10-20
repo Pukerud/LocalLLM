@@ -7,13 +7,15 @@ HOST_MENU="$ROOT/HostLLM.sh"
 INSTALL="$ROOT/install-hive-llm-miner.sh"
 UNINSTALL="$ROOT/uninstall-hive-llm-miner.sh"
 SC117_HIVE="$ROOT/hive-llm-miner/profiles/iq3_s-sc117-abliterated"
+SC117_046_HIVE="$ROOT/hive-llm-miner/profiles/iq3_s-sc117-abliterated-v0146"
 ORCA_HIVE="$ROOT/hive-llm-miner/profiles/orca-q4_k_s-v01441"
 HAUHAU_HIVE="$ROOT/hive-llm-miner/profiles/hauhau-q8-fastmtp-q4kv-xhigh"
 TRIAL_LINE='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.'
+TRIAL_046_LINE='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.46; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2; new SM86 release defaults enabled. This is not qualification.'
 
 for script in "$MENU" "$HOST_MENU" "$INSTALL" "$UNINSTALL" \
     "$ORCA_HIVE/h-run.sh" \
-    "$SC117_HIVE/h-run.sh" "$HAUHAU_HIVE/h-run.sh"; do
+    "$SC117_HIVE/h-run.sh" "$SC117_046_HIVE/h-run.sh" "$HAUHAU_HIVE/h-run.sh"; do
     tr -d '\r' < "$script" | bash -n
 done
 
@@ -22,13 +24,15 @@ grep -Fq '[1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhi
 grep -Fq '[2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots' "$HOST_MENU"
 grep -Fq '[3] Orca Q4_K_S — Strata 0.1.45 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted' "$HOST_MENU"
 grep -Fq '[4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot | LAN 8080' "$HOST_MENU"
+grep -Fq '[5] TEST Orca Q4_K_S — Strata 0.1.46 pinned test candidate' "$HOST_MENU"
 grep -Fq '[9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit' "$HOST_MENU"
 grep -Fq '[12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL' "$HOST_MENU"
 grep -Fq '[13] Set next Hive miner - Hauhau Q8_K_P' "$HOST_MENU"
 grep -Fq '[14] Set next Hive miner - Orca Q4_K_S .45' "$HOST_MENU"
 grep -Fq '[15] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot | LAN 8080' "$HOST_MENU"
-! grep -Eq "^[[:space:]]*echo .*\\[(5|6|7|8|16|17)\\]" "$HOST_MENU"
-grep -Fq '3|4)' "$HOST_MENU"
+grep -Fq '[16] Set next Hive miner - SC117 IQ3_S — Strata 0.1.46 unqualified CPU-vision trial' "$HOST_MENU"
+! grep -Eq "^[[:space:]]*echo .*\\[(6|7|8|17)\\]" "$HOST_MENU"
+grep -Fq '3|4|5)' "$HOST_MENU"
 grep -Fq 'STRATA_SC117_IQ3S_TRIAL=1 STRATA_RUNTIME=0.1.45' "$HOST_MENU"
 grep -Fq 'STRATA_HOST=0.0.0.0 STRATA_PORT=8080' "$HOST_MENU"
 grep -Fq 'sc117_trial_command --stop' "$HOST_MENU"
@@ -42,6 +46,7 @@ grep -Fq '  [1] %s' "$MENU"
 grep -Fq '  [2] %s' "$MENU"
 grep -Fq '  [3] %s' "$MENU"
 grep -Fq '  [4] %s' "$MENU"
+grep -Fq '  [5] %s' "$MENU"
 grep -Fq 'Strata 0.1.39 rollback-only' "$MENU"
 grep -Fq 'STRATA_RUNTIME=0.1.39 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 STRATA_PORT=8080' "$MENU"
 grep -Fq "fail 'Orca Q4_K_S readiness check failed; profile unchanged'" "$MENU"
@@ -52,6 +57,7 @@ grep -Fq 'checking standard Q4_K_S Strata 0.1.45 profile' "$ORCA_HIVE/h-run.sh"
 grep -Fq "2|hauhau-q8-fastmtp-q4kv-xhigh) target='hauhau-q8-fastmtp-q4kv-xhigh'" "$MENU"
 grep -Fq "3|orca-q4_k_s-v01441) target='orca-q4_k_s-v01441'" "$MENU"
 grep -Fq "4|iq3_s-sc117-abliterated) target='iq3_s-sc117-abliterated'" "$MENU"
+grep -Fq "5|iq3_s-sc117-abliterated-v0146) target='iq3_s-sc117-abliterated-v0146'" "$MENU"
 ! grep -Eq "printf .*\\[[0-9]+\\].*0\\.1\\.41" "$MENU"
 grep -Fq 'mv -Tf -- "$temporary" "$link_path"' "$MENU"
 grep -Fq 'legacy install starts with regular Hive files' "$MENU"
@@ -80,6 +86,15 @@ selector_pointer_swap_line="$(grep -nF 'replace_link "$CURRENT_LINK" "profiles/$
 for consumer in "$HOST_MENU" "$MENU" "$INSTALL" "$SC117_HIVE/h-run.sh"; do
     grep -Fq "$TRIAL_LINE" "$consumer"
 done
+grep -Fq "$TRIAL_046_LINE" "$HOST_MENU"
+grep -Fq "$TRIAL_046_LINE" "$MENU"
+grep -Fq "expected_readiness='$TRIAL_046_LINE'" "$SC117_046_HIVE/h-run.sh"
+grep -Fq 'new SM86 release defaults enabled' "$SC117_046_HIVE/h-run.sh"
+grep -Fq "RUNTIME='0.1.46'" "$SC117_046_HIVE/h-run.sh"
+grep -Fq "PROFILE='iq3_s-sc117-abliterated'" "$SC117_046_HIVE/h-run.sh"
+grep -Fq 'RUNTIME=0.1.46' "$SC117_046_HIVE/llm-hosting.conf"
+grep -Fq 'PIPELINE_WINDOWS=2' "$SC117_046_HIVE/llm-hosting.conf"
+grep -Fq 'QUALIFIED=0' "$SC117_046_HIVE/llm-hosting.conf"
 grep -Fq "actual_readiness=\"\$(grep '^TRIAL CONFIG:' <<< \"\$readiness\" || true)\"" "$SC117_HIVE/h-run.sh"
 grep -Fq "STRATA_STATE_ROOT='/home/user/.local/state/locallm-strata/sc117-iq3s-trial'" "$SC117_HIVE/h-run.sh"
 grep -Fq "RUNTIME='0.1.45'" "$SC117_HIVE/h-run.sh"
@@ -107,6 +122,7 @@ grep -Fq 'RUNTIME=0.1.45' "$SC117_HIVE/llm-hosting.conf"
 # Missing Hauhau Hive profile is supplied; exact labels and dispatch exist for all four routes.
 for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
     [[ -f "$SC117_HIVE/$file" && ! -L "$SC117_HIVE/$file" ]]
+    [[ -f "$SC117_046_HIVE/$file" && ! -L "$SC117_046_HIVE/$file" ]]
     [[ -f "$ORCA_HIVE/$file" && ! -L "$ORCA_HIVE/$file" ]]
     [[ -f "$HAUHAU_HIVE/$file" && ! -L "$HAUHAU_HIVE/$file" ]]
 done
@@ -136,6 +152,10 @@ grep -Fq 'current_legacy_runtime="$(read_profile_runtime' "$INSTALL"
 grep -Fq 'migration_runtime="$(read_profile_runtime' "$INSTALL"
 grep -Fq "0.1.39) printf 'orca-q4_k_s-v01441'" "$INSTALL"
 grep -Fq "0.1.44.1|0.1.45) printf 'iq3_s-sc117-abliterated'" "$INSTALL"
+grep -Fq "0.1.46) printf 'iq3_s-sc117-abliterated-v0146'" "$INSTALL"
+grep -Fq 'if [[ "$initial_profile" == iq3_s-sc117-abliterated-v0146 ]]; then' "$INSTALL"
+grep -Fq 'SC117 .46 exact trial preflight failed before the existing Hive selection/package can be changed' "$INSTALL"
+grep -Fq 'STRATA_RUNTIME=0.1.46 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1' "$INSTALL"
 grep -Fq 'Migrated the obsolete .39/SC117 .39 next-start pointer to the verified standard Orca Q4_K_S .45' "$INSTALL"
 # Exercise the exact config parser/mapping used by both symlink and legacy-profile migration paths.
 migration_tmp="$(mktemp -d)"
@@ -145,6 +165,8 @@ printf 'PROFILE=iq3_s-sc117-abliterated\r\nRUNTIME=0.1.39\r\n' > "$migration_tmp
 printf 'PROFILE=iq3_s-sc117-abliterated\nRUNTIME=0.1.44.1\n' > "$migration_tmp/sc117-0441.conf"
 [[ "$(sc117_profile_for_runtime "$(read_profile_runtime "$migration_tmp/sc117-039.conf")")" == orca-q4_k_s-v01441 ]]
 [[ "$(sc117_profile_for_runtime "$(read_profile_runtime "$migration_tmp/sc117-0441.conf")")" == iq3_s-sc117-abliterated ]]
+printf 'RUNTIME=0.1.46\n' > "$migration_tmp/sc117-046.conf"
+[[ "$(sc117_profile_for_runtime "$(read_profile_runtime "$migration_tmp/sc117-046.conf")")" == iq3_s-sc117-abliterated-v0146 ]]
 printf 'RUNTIME=0.1.39\nRUNTIME=0.1.44.1\n' > "$migration_tmp/duplicate.conf"
 printf 'PROFILE=iq3_s-sc117-abliterated\n' > "$migration_tmp/missing.conf"
 ln -s -- "$migration_tmp/sc117-0441.conf" "$migration_tmp/symlink.conf"
@@ -163,6 +185,7 @@ trap - EXIT
 grep -Fq "ln -s -- 'profiles/orca-q4_k_s-v01441'" "$INSTALL"
 grep -Fq 'STRATA_STATE_ROOT="$sc117_trial_state"' "$INSTALL"
 grep -Fq 'STRATA_PORT=8080 STRATA_HOST=0.0.0.0' "$INSTALL"
+grep -Fq 'Menu routes: Swift, Hauhau, Orca .45, SC117 .45 trial, and SC117 .46 trial' "$INSTALL"
 grep -Fq 'PYTHONPYCACHEPREFIX="$sc117_trial_state/pycache"' "$INSTALL"
 grep -Fq 'for port in 8080 18080' "$INSTALL"
 # Rollback runtimes remain selectable but do not lengthen the standard-profile install gate.
@@ -188,4 +211,4 @@ fi
 [[ "$(grep '^TRIAL CONFIG:' <<< "$TRIAL_LINE extra")" != "$TRIAL_LINE" ]]
 [[ "$(printf '%s\n%s\n' "$TRIAL_LINE" "$TRIAL_LINE" | grep '^TRIAL CONFIG:')" != "$TRIAL_LINE" ]]
 
-echo 'Hive menu/profile trial isolation, dispatch, .45-standard installer, and rollback static checks: PASS'
+echo 'Hive menu/profile trial isolation, .46 dispatch, .45-standard installer, and rollback static checks: PASS'
