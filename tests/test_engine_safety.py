@@ -419,6 +419,24 @@ class IsolatedGroupFamily(unittest.TestCase):
         self.child['exe']='/candidate/vision'
         self.assertIn(self.child,self.family())
 
+    def test_deepseek_051_isolated_group_is_literal_profile_bound(self):
+        self.state.update(runtime_version='0.1.51',profile=launcher.deepseek_profile.PROFILE)
+        self.assertIn(self.child,self.family())
+        for wrong in ('iq3_s','orca-q4_k_s','iq3_s-sc117-abliterated'):
+            self.state['profile']=wrong
+            with self.subTest(profile=wrong),self.assertRaisesRegex(guard.SafetyError,'unverified isolated child group'):
+                self.family()
+
+    def test_deepseek_051_keeps_exact_parent_and_recorded_teardown_requirements(self):
+        self.state.update(runtime_version='0.1.51',profile=launcher.deepseek_profile.PROFILE)
+        self.child['ppid']=999
+        with self.assertRaisesRegex(guard.SafetyError,'unverified isolated child group'):self.family()
+        self.child['ppid']=self.leader['pid'];self.state['children']=[dict(self.child)]
+        self.child['ppid']=1
+        self.assertEqual(self.family(live=False),[self.child])
+        self.child['start_ticks']+=1
+        with self.assertRaisesRegex(guard.SafetyError,'unverified isolated child group'):self.family(live=False)
+
     def test_0146_group_contract_remains_when_candidate_version_advances(self):
         with mock.patch.object(launcher.runtimes,'TEST_VERSION','0.1.47'):
             self.assertIn(self.child,self.family())

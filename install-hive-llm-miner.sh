@@ -92,7 +92,7 @@ assert_idle() {
 }
 assert_idle
 
-for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146; do
+for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146 deepseek41-abiray-iq2_xxs; do
     [[ -d "$SOURCE_DIR/profiles/$profile" && ! -L "$SOURCE_DIR/profiles/$profile" ]] || \
         fail "profile directory missing or symlinked: profiles/$profile"
     for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
@@ -167,7 +167,7 @@ if [[ -L "$CUSTOM_DIR/current" ]]; then
                 migrate_legacy_runtime="$current_sc117_runtime"
             fi
             ;;
-        profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/hauhau-q8-fastmtp-q4kv-xhigh|profiles/iq3_s-sc117-abliterated-v0146)
+        profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/hauhau-q8-fastmtp-q4kv-xhigh|profiles/iq3_s-sc117-abliterated-v0146|profiles/deepseek41-abiray-iq2_xxs)
             initial_profile="${current_target#profiles/}"
             ;;
         *) fail "existing Hive profile pointer is not recognized: $current_target" ;;
@@ -184,7 +184,7 @@ elif [[ -e "$CUSTOM_DIR/llm-hosting.conf" ]]; then
     [[ -f "$CUSTOM_DIR/llm-hosting.conf" && ! -L "$CUSTOM_DIR/llm-hosting.conf" ]] || \
         fail 'legacy Hive profile config is not a regular file; refusing to infer a default'
     recognized_legacy_profile=''
-    for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146; do
+    for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146 deepseek41-abiray-iq2_xxs; do
         if cmp -s <(tr -d '\r' < "$CUSTOM_DIR/llm-hosting.conf") \
                   <(tr -d '\r' < "$SOURCE_DIR/profiles/$profile/llm-hosting.conf"); then
             recognized_legacy_profile="$profile"
@@ -228,6 +228,13 @@ if [[ "$initial_profile" == iq3_s-sc117-abliterated-v0146 ]]; then
        "$sc117_candidate_readiness" != *'READY CONFIG:'* ]] || \
         fail 'SC117 .46 exact trial preflight failed before the existing Hive selection/package can be changed'
 fi
+if [[ "$initial_profile" == deepseek41-abiray-iq2_xxs ]]; then
+    runuser -u user -- env -i HOME=/home/user USER=user LOGNAME=user \
+        PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 \
+        STRATA_STATE_ROOT=/home/user/.local/state/locallm-strata/deepseek41-abiray \
+        "$LLM_ROOT/v1strata.sh" --check-ready --profile deepseek41-abiray-iq2_xxs \
+        --runtime 0.1.51 --parallel 1 --batch-groups 1 || fail 'Selected DeepSeek profile readiness failed before package update'
+fi
 
 if ! dpkg-query -W -f='${Status}' hive-miners-custom 2>/dev/null | grep -q 'install ok installed'; then
     printf 'Installing HiveOS custom-miner control package...\n'
@@ -245,9 +252,10 @@ assert_idle
    ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v0141-2slot" && \
    ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v01441" && ! -L "$CUSTOM_DIR/profiles/swift15u-q8" && \
    ! -L "$CUSTOM_DIR/profiles/hauhau-q8-fastmtp-q4kv-xhigh" && \
-   ! -L "$CUSTOM_DIR/profiles/iq3_s-sc117-abliterated" && ! -L "$CUSTOM_DIR/profiles/iq3_s-sc117-abliterated-v0146" ]] || \
+   ! -L "$CUSTOM_DIR/profiles/iq3_s-sc117-abliterated" && ! -L "$CUSTOM_DIR/profiles/iq3_s-sc117-abliterated-v0146" && \
+   ! -L "$CUSTOM_DIR/profiles/deepseek41-abiray-iq2_xxs" ]] || \
     fail 'custom miner profile path is symlinked; refusing package update'
-for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146; do
+for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146 deepseek41-abiray-iq2_xxs; do
     for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
         [[ ! -L "$CUSTOM_DIR/profiles/$profile/$file" ]] || fail "installed profile file is symlinked: $profile/$file"
     done
@@ -302,7 +310,7 @@ if [[ "$migrate_legacy_pointer" -eq 1 ]]; then
     sync
     printf 'Migrated the obsolete .39/SC117 .39 next-start pointer to the verified standard Orca Q4_K_S .45 profile before replacing the trial profile.\n'
 fi
-for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146; do
+for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146 deepseek41-abiray-iq2_xxs; do
     install_profile_files "$profile"
 done
 install -m 755 "$SOURCE_DIR/profile-menu.sh" "$CUSTOM_DIR/profile-menu.sh"
@@ -341,6 +349,9 @@ set_var() {
 set_var "$RIG_CONF" MINER custom
 set_var "$WALLET_CONF" CUSTOM_MINER "$CUSTOM_NAME"
 set_var "$WALLET_CONF" CUSTOM_CONFIG_FILENAME "/hive/miners/custom/${CUSTOM_NAME}/llm-hosting.conf"
+# The local package is already installed. A prior miner's URL makes Hive reject
+# CUSTOM_MINER (or redownload the wrong package) before our wrapper can run.
+set_var "$WALLET_CONF" CUSTOM_INSTALL_URL ""
 
 sync
 printf '\nHiveOS LLM miner installed.\n'
@@ -349,7 +360,7 @@ printf '  CUSTOM_MINER=%s\n' "$CUSTOM_NAME"
 printf '  Profile: %s%s\n' "$initial_profile" "$([[ "$initial_profile" == orca-q4_k_s-v01441 ]] && printf ' (standard Strata default)' || printf ' (preserved selection)')"
 printf '  Switch menu: %s/profile-menu.sh\n' "$CUSTOM_DIR"
 printf '  Standard Strata: Orca .45; Orca .39, .41, and .44.1 remain available only as explicit rollback routes\n'
-printf '  Menu routes: Swift, Hauhau, Orca .45, SC117 .45 trial, and SC117 .46 trial\n'
+printf '  Menu routes: Swift, Hauhau, Orca .45, SC117 .45/.46 trials, and DeepSeek .51 native-1M BF16 vision\n'
 printf '  SC117 remains unqualified, unauthenticated on trusted-LAN 0.0.0.0:8080; use only on a trusted, firewalled LAN; dedicated trial state\n'
 printf '  No miner start/stop command was run; osn.service was not modified.\n'
 printf '\nThe profile menu refuses changes while Hive, the API, Docker, or GPU compute is active.\n'

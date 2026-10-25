@@ -26,7 +26,8 @@ class SwitchTransaction(unittest.TestCase):
         self.service = 'active'
         self.miner = True
         self.events = []
-        self.wrappers = {10: {'pid': 10}}
+        self.wrappers = {10: {'pid':10,'start_ticks':11,'exe':'/bin/bash','uid':0,
+                              'cmd':['bash','/test/h-run.sh'],'pgid':10,'sid':10}}
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
         def patch(obj, name, **kwargs):
@@ -42,6 +43,8 @@ class SwitchTransaction(unittest.TestCase):
         self.inspected = patch(switch, 'inspect_owned_workload', side_effect=lambda: self.wrappers if self.miner else {})
         patch(switch, 'owned_wrappers', side_effect=lambda: self.wrappers if self.miner else {})
         patch(switch, 'llm_processes', return_value=[])
+        patch(switch.hosting, 'gpu_jobs', return_value=[])
+        patch(switch, 'wait_owned_teardown')
         patch(switch, 'package_current', return_value=True)
         self.execute = patch(switch, 'run', side_effect=self.command)
 

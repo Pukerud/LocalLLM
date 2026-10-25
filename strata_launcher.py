@@ -36,6 +36,7 @@ import iq3_s_sc117_abliterated_assets as sc117_assets
 import iq3_s_sc117_abliterated_profile as sc117_profile
 import prepare_iq3_s_sc117_abliterated as prepare_sc117
 import strata_runtime as runtimes
+import deepseek41_profile as deepseek_profile
 
 SOURCE_COMMIT = '99f3dbd0b21d1401b3769e0c0d963913607f380b'
 MODEL_REVISION = 'ed59f92082b1e93c0e96d60a8b11aab089b52f09'
@@ -183,6 +184,10 @@ def _effective_host(profile, version, configured_host):
         if requested not in (None, '127.0.0.1', '0.0.0.0'):
             raise SafetyError(f'Q4 {version} STRATA_HOST may only be 127.0.0.1 or 0.0.0.0')
         return requested or '127.0.0.1'
+    if profile == deepseek_profile.PROFILE:
+        if requested not in (None, '127.0.0.1', '0.0.0.0'):
+            raise SafetyError('DeepSeek binding must be loopback or explicit trusted-LAN 0.0.0.0')
+        return requested or configured_host
     if profile == sc117_profile.PROFILE:
         if requested not in (None, sc117_profile.TRIAL_BIND_HOST):
             raise SafetyError(f'SC117 trial binding is fixed to trusted-LAN {sc117_profile.TRIAL_BIND_HOST}')
@@ -223,6 +228,12 @@ def ready_q4ks_v0146(root):
 
 
 def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
+    if profile == deepseek_profile.PROFILE:
+        if runtime not in ('auto', deepseek_profile.VERSION) or (parallel, batch_groups) != (1, 1):
+            raise SafetyError('DeepSeek requires its explicit 0.1.51 runtime and one serving slot/group')
+        deepseek_profile.require_state(strata_state())
+        source, path, cfg = deepseek_profile.ready(data_root())
+        return source, path, cfg, deepseek_profile.VERSION
     if profile == sc117_profile.PROFILE:
         if (parallel, batch_groups) != (1, 1):
             raise SafetyError('SC117 abliterated IQ3_S is restricted to one serving slot and one batch group')
@@ -658,7 +669,10 @@ def family(state):
             # direct child while the frontend is live, or an already recorded
             # unchanged identity during teardown. Never trust a session/group alone.
             known = recorded.get(p['pid'])
-            if (state.get('runtime_version') != '0.1.46' or
+            isolated_release = (state.get('runtime_version') == '0.1.46' or
+                                (state.get('profile') == 'deepseek41-abiray-iq2_xxs' and
+                                 state.get('runtime_version') == '0.1.51'))
+            if (not isolated_release or
                     p['pgid'] != p['pid'] or p['exe'] == leader['exe'] or p['exe'] not in allowed or
                     (known is not None and not same_process(known, p)) or
                     (known is None and (live is None or p.get('ppid') != leader['pid']))):
@@ -700,9 +714,11 @@ def guard_during_run(state):
         current = read_state()
         if not current or not same_process(current['identity'], state['identity']) or current.get('stop_requested'):
             return False
-        if (state.get('profile') == ORCA_Q4KS_PROFILE and
+        if ((state.get('profile') == ORCA_Q4KS_PROFILE and
                 state.get('runtime_version') in ('0.1.41', q4ks_v01441.RUNTIME_VERSION,
-                                                  *runtimes.PROFILE_BOUND_VERSIONS)):
+                                                  *runtimes.PROFILE_BOUND_VERSIONS)) or
+                (state.get('profile') == deepseek_profile.PROFILE and
+                 state.get('runtime_version') == deepseek_profile.VERSION)):
             if state.get('hive_launch_id_sha256'):
                 if host_lifecycle.read_lease() is not None:
                     raise SafetyError('Hive Q4 .41 session conflicts with a HostLLM pause lease')
@@ -751,6 +767,30 @@ def require_hive_launch_identity(state):
         raise SafetyError('Hive Strata launch token does not match recorded process identity; stop refused')
     identity = state.get('identity', {})
     _verified_hive_process_parent(identity, token, state.get('hive_launcher_identity'))
+
+
+def acquire_action_lock(lock, *, stopping=False, timeout=45):
+    """A Hive Ctrl+C reaches the foreground watcher and its stop CLI together.
+    Wait only for that per-state cleanup lock; never retarget a replacement
+    frontend, relax a process identity, or wait/retry ordinary model starts.
+    """
+    before = read_state() if stopping else None
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except BlockingIOError:
+            if not stopping:
+                raise
+            if time.monotonic() >= deadline:
+                raise SafetyError('Owned Strata cleanup lock did not clear; no unknown process was stopped')
+            time.sleep(.1)
+    if stopping:
+        current = read_state()
+        if current and (not before or not same_process(before['identity'], current['identity'])):
+            raise SafetyError('Strata stop target changed while waiting; replacement session was not stopped')
+        return current
 
 
 def stop(expected=None):
@@ -868,14 +908,18 @@ def verify_serving(cfg, version, port, requested_parallel=None):
     # This pinned candidate lazily loads its engine on the first chat request.
     # Tolerate only that explicit unloaded state; keep slot counts
     # strict and require an exact version whenever the API reports a loaded engine.
-    special_candidate = version in (q4ks_v01441.RUNTIME_VERSION, *runtimes.PROFILE_BOUND_VERSIONS)
+    special_candidate = version in (q4ks_v01441.RUNTIME_VERSION, *runtimes.PROFILE_BOUND_VERSIONS,
+                                    deepseek_profile.VERSION)
     lazy_unloaded = (cfg.get('lazy_load') is True and special_candidate and
                      'engine' in status and engine is None and status.get('loaded') is False)
     eager_unloaded = (special_candidate and cfg.get('lazy_load') is False and
                       status.get('loaded') is not True)
-    if ((engine != version and not lazy_unloaded) or eager_unloaded or type(count) is not int or
+    expected_engine = (deepseek_profile.ENGINE_TELEMETRY
+                       if version == '0.1.51' and cfg.get('arch') == 'deepseek41' else version)
+    if ((engine != expected_engine and not lazy_unloaded) or eager_unloaded or type(count) is not int or
             type(expected_parallel) is not int or count != expected_parallel):
-        raise SafetyError('Effective runtime/slot count differs from the request; no silent single-slot fallback')
+        raise SafetyError(f'Effective runtime/slot count differs from the request; expected {expected_engine}/{expected_parallel}, '
+                          f'got {engine}/{count}, loaded={status.get("loaded")}; no silent single-slot fallback')
     if lazy_unloaded:
         print('API frontend ready; model weights are not loaded yet. The first chat request loads them (about one minute).', flush=True)
     return count
@@ -903,7 +947,7 @@ def startup_config(cfg, version, profile=None):
 
 def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hosting_lock=None):
     api_key = consume_api_key()
-    if os.geteuid() == 0 and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE):
+    if os.geteuid() == 0 and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE):
         raise SafetyError('This Strata profile must start as the normal operator; use sudo only for identity-bound administration')
     inherited_fd = host_lifecycle.inherited_launch_reservation_fd()
     requested_lease_id = os.environ.get('HOSTLLM_LAUNCH_LEASE_ID')
@@ -936,8 +980,9 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
             data_root(), settings, host=effective_host, port=port, state_root=strata_state())
     hosting_lease_id = None
     hive_launch_id = None
-    if profile == ORCA_Q4KS_PROFILE and version in ('0.1.41', q4ks_v01441.RUNTIME_VERSION,
-                                                     *runtimes.PROFILE_BOUND_VERSIONS):
+    if ((profile == ORCA_Q4KS_PROFILE and version in ('0.1.41', q4ks_v01441.RUNTIME_VERSION,
+                                                     *runtimes.PROFILE_BOUND_VERSIONS)) or
+            profile == deepseek_profile.PROFILE):
         authorization = require_q4ks_candidate_authorization(
             port, requested_lease_id, host_launch_reserved=inherited_fd is not None)
         if authorization['authorization'] == 'hostllm':
@@ -945,6 +990,9 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         else:
             hive_launch_id = authorization['launch_id']
     launch_gate(port)
+    if profile == deepseek_profile.PROFILE:
+        deepseek_profile.capacity_gate()
+        deepseek_profile.seed_hot_profile(data_root(), strata_state())
     state_root = strata_state()
     state_root.mkdir(parents=True, exist_ok=True)
     # Keep the inspectable effective config private; API credentials never enter persistent config.
@@ -959,11 +1007,16 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     elif profile == sc117_profile.PROFILE:
         cfg['model_name'] = sc117_profile.MODEL_ID
         cfg['aliases'] = ['qwen38-iq3s-sc117-abliterated', sc117_profile.PROFILE]
+    elif profile == deepseek_profile.PROFILE:
+        cfg['model_name'] = deepseek_profile.A.MODEL_ID
+        cfg['aliases'] = [deepseek_profile.PROFILE, 'deepseek41', 'deepseek-v4.1-flash']
     else:
         cfg['model_name'] = 'qwen3.8-flash-next-iq3_s-strata'
         cfg['aliases'] = ['qwen38', 'strata']
-    cfg['sampling'] = {'temperature': 1.0, 'top_p': 0.95, 'top_k': 20,
-                       'experimental_speed_projection': False}
+    cfg['sampling'] = ({'temperature': 1.0, 'top_p': 1.0}
+                       if profile == deepseek_profile.PROFILE else
+                       {'temperature': 1.0, 'top_p': 0.95, 'top_k': 20,
+                        'experimental_speed_projection': False})
     if api_key:
         cfg['api_key'] = api_key
     run_config = state_root / 'run-config.json'
@@ -976,8 +1029,9 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     runtime_config_dir = None
     runtime_config_dir_identity = None
     api_key = None
-    if profile == ORCA_Q4KS_PROFILE and version in (q4ks_v01441.RUNTIME_VERSION,
-                                                       *runtimes.PROFILE_BOUND_VERSIONS):
+    if (profile == deepseek_profile.PROFILE or
+            (profile == ORCA_Q4KS_PROFILE and version in (q4ks_v01441.RUNTIME_VERSION,
+                                                       *runtimes.PROFILE_BOUND_VERSIONS))):
         env = _q4_v01441_launch_environment()
         env.update(runtimes.runtime_env(version, parallel))
         env.update({'STRATA_RUNTIME': version, 'STRATA_PARALLEL': str(parallel),
@@ -1052,6 +1106,9 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         else:
             print(sc117_profile.readiness_line(settings))
         print(sc117_assets.MTP_SOURCE_NOTE)
+    elif profile == deepseek_profile.PROFILE:
+        print(deepseek_profile.READY)
+        print('DeepSeek full-quality six-expert path; separate original DSpark drafter; native window configured, not populated-context qualification.')
     else:
         print('EXPERIMENTAL Strata IQ3_S | BF16 GPU vision | native 262144 | INT8 KV | MTP | high reasoning')
     if profile == ORCA_Q4KS_PROFILE and version in (q4ks_v01441.RUNTIME_VERSION,
@@ -1070,8 +1127,11 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
             raise
     try:
         with log.open('a') as out:
-            child = subprocess.Popen([str(python), '-m', 'serve.server', '--engine', 'strata', '--config', config_arg,
-                                      '--host', cfg['host'], '--port', str(port)], cwd=source, env=env,
+            server_args = [str(python), '-m', 'serve.server', '--engine', 'strata', '--config', config_arg,
+                           '--host', cfg['host'], '--port', str(port)]
+            if profile == deepseek_profile.PROFILE and not cfg.get('api_key'):
+                server_args.append('--no-api-key')  # real upstream opt-out, never a dummy token
+            child = subprocess.Popen(server_args, cwd=source, env=env,
                                      stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
     except Exception:
         if runtime_config_dir is not None:
@@ -1098,7 +1158,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
                 remove_ephemeral_auth_config({'runtime_config_dir': runtime_config_dir,
                                               'runtime_config_dir_identity': runtime_config_dir_identity})
             raise
-    source_commit = (q4ks_v01441.SOURCE_COMMIT if version == q4ks_v01441.RUNTIME_VERSION
+    source_commit = (deepseek_profile.A.SOURCE_COMMIT if profile == deepseek_profile.PROFILE else
+                     q4ks_v01441.SOURCE_COMMIT if version == q4ks_v01441.RUNTIME_VERSION
                      else runtimes.PINS[version])
     state = {'identity': identity, 'port': port, 'log': str(log),
              'source_commit': source_commit,
@@ -1136,7 +1197,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         interrupted = True
     old_handlers = {s: signal.signal(s, interrupt) for s in (signal.SIGINT, signal.SIGTERM)}
     try:
-        deadline = time.monotonic() + int(os.environ.get('STRATA_HEALTH_TIMEOUT', '600'))
+        deadline = time.monotonic() + int(os.environ.get('STRATA_HEALTH_TIMEOUT',
+                                                        '3600' if profile == deepseek_profile.PROFILE else '600'))
         next_report = 0
         next_guard = 0
         while not health(port):
@@ -1207,14 +1269,14 @@ def main():
     modes.add_argument('--enable-q4ks141-vision', action='store_true')
     modes.add_argument('--rollback-q4ks141-vision', action='store_true')
     modes.add_argument('--select-runtime', choices=runtimes.GENERIC_VERSIONS)
-    ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE, ORCA_Q4KS_PROFILE, sc117_profile.PROFILE], default=None)
-    ap.add_argument('--runtime', choices=['auto', *runtimes.VERSIONS, q4ks_v01441.RUNTIME_VERSION], default=os.environ.get('STRATA_RUNTIME', 'auto'))
+    ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE, ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE], default=None)
+    ap.add_argument('--runtime', choices=['auto', *runtimes.VERSIONS, q4ks_v01441.RUNTIME_VERSION, deepseek_profile.VERSION], default=os.environ.get('STRATA_RUNTIME', 'auto'))
     ap.add_argument('--parallel', type=int, choices=[1, 2], default=os.environ.get('STRATA_PARALLEL', '1'))
     ap.add_argument('--batch-groups', type=int, choices=[1, 2], default=os.environ.get('STRATA_BATCH_GROUPS', '1'))
     a = ap.parse_args()
     profile = a.profile or 'iq3_s'
     q4_mutation = not (a.stop or a.status or a.check_ready or a.select_runtime)
-    if os.geteuid() == 0 and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE) and q4_mutation:
+    if os.geteuid() == 0 and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE) and q4_mutation:
         print('BLOCKED: this profile must start/configure as the normal operator; use sudo only for identity-bound administration.', file=sys.stderr)
         return 1
     try:
@@ -1265,6 +1327,8 @@ def main():
             if profile == ORCA_PROFILE:
                 print('PREPARED: pinned Orca IQ3_XXS, own compatibility pack/tokenizer, F16 vision configured, native 262144, INT8 streaming KV.')
                 print('Readiness verifies assets/config only; bounded live results are separate in ORCA_IQ3XXS.md. No full-context quality claim.')
+            elif profile == deepseek_profile.PROFILE:
+                print(deepseek_profile.READY)
             elif profile == sc117_profile.PROFILE:
                 print('UNQUALIFIED TRIAL PREFLIGHT ONLY: no normal-hosting or qualification authorization is granted.')
                 print(sc117_trial_readiness_line(profile, version, a.parallel, a.batch_groups, cfg))
@@ -1379,16 +1443,18 @@ def main():
             root = strata_state()
             root.mkdir(parents=True, exist_ok=True)
             with (root / 'lifecycle.lock').open('a') as lock:
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                state = acquire_action_lock(lock, stopping=a.stop)
                 if a.stop:
-                    state = read_state()
                     if a.profile and state and state.get('profile', 'iq3_s') != profile and family(state):
                         raise SafetyError('A different Strata profile is running; profile-specific stop refused')
                     explicit_runtime = any(x == '--runtime' or x.startswith('--runtime=') for x in sys.argv[1:])
                     if (explicit_runtime and a.runtime != 'auto' and state and
                             state.get('runtime_version', '0.1.38') != a.runtime and family(state)):
                         raise SafetyError('A different Strata runtime is running; runtime-specific stop refused')
-                    stop()
+                    if state is not None:
+                        stop(expected=state)
+                    else:
+                        print('Strata is not running; any owned concurrent cleanup has completed.')
                 else:
                     with host_lifecycle.launch_reservation() as hosting_lock:
                         start(lock, profile, a.runtime, a.parallel, a.batch_groups, hosting_lock)

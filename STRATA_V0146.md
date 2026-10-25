@@ -38,7 +38,7 @@ Configured authentication, API-key validation, DNS-rebinding Host checks, and br
 ## Routes and isolation
 
 - **HostLLM [5]:** single-slot Orca Q4 .46 test. Leave the optional API-key prompt empty for no authentication. HostLLM defaults to `0.0.0.0:8080`; `STRATA_HOST=127.0.0.1` retains local-only Q4 access.
-- **HostLLM [16] / Hive profile-menu [5]:** `iq3_s-sc117-abliterated-v0146`, an unqualified SC117 .46 trial. These menu numbers are different from HostLLM [5].
+- **HostLLM [17] / Hive profile-menu [5]:** `iq3_s-sc117-abliterated-v0146`, an unqualified SC117 .46 trial. These menu numbers are different from HostLLM [5].
 - SC117 is fixed to unauthenticated trusted-LAN `0.0.0.0:8080`, CPU vision, native context 262144, INT8 KV with 32768 resident, `--spec 3 --pipeline-windows 2`, one serving slot/group, and an 8192 MiB/four-conversation-cache-slot budget.
 - SC117 state remains `/home/user/.local/state/locallm-strata/sc117-iq3s-trial`; four cache slots do **not** mean four concurrent serving slots or prove capacity for four full-context snapshots.
 - Q4 and SC117 share port 8080 exclusively. Models and vision load before the launcher reports API-ready; idle unloading is disabled.
@@ -49,6 +49,8 @@ A short successful request is only a smoke test. No .46 speed gain, broad qualit
 ## Standing preference for future upgrades
 
 The operator explicitly requires **API-key-free trusted-LAN hosting on every future upgrade**, not just .46. This is recorded in [AGENTS.md](AGENTS.md). Inspect new upstream auth/startup changes, retain previous version-specific patch/ownership contracts, and prove a real LAN request without Authorization/x-api-key headers before claiming an upgrade works. Do not substitute a dummy token or silently add mandatory auth. Keep public exposure disabled and preserve Host/Origin and workload safety checks.
+
+**Menu numbering follow-up (2026-10-25):** DeepSeek now uses HostLLM [6]/Hive [16]. The unchanged SC117 .46 profile moves to HostLLM [17], retaining low-level Hive [5]. The [16] tests below are historical evidence from before that renumbering.
 
 ## Initial direct-HostLLM live results: 2026-10-20
 

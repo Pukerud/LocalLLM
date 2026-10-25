@@ -1,6 +1,6 @@
 # HiveOS LocalLLM custom miner
 
-This package installs one Hive custom miner with an atomic next-start profile selector. The standard Strata selection is Orca Q4_K_S Strata 0.1.45 with auto prefill and trimmed `14,24,36` split; the windows-2 override is omitted. Orca .39 is rollback-only; .41 and .44.1 remain explicit rollback runtimes. Strata .46, pinned to source `90767252f420e25223c739d604145ad15911d48b`, is not the standard: HostLLM [5] is an isolated single-slot Q4 test candidate, and the Hive profile-menu [5]/HostLLM [16] select the unqualified SC117 .46 CPU-vision trial. The .46 pinned build and bounded no-key LAN text/image smoke tests passed through HostLLM; see [the patch and results](../STRATA_V0146.md). A follow-up actual root-terminal HostLLM [16] switch and .46 Hive startup also passed no-key web/text/image smoke checks after fixing the system `runuser` lookup; see [the selector results](../results/hive-option16-runuser-20261020.json). This does not qualify SC117. Hive's standard Orca profile deliberately binds `0.0.0.0:8080` for trusted-LAN serving and is unauthenticated; do not expose it to an untrusted network. HostLLM's Orca route also defaults to trusted-LAN serving (explicit `STRATA_HOST=127.0.0.1` retains local-only access). The unqualified SC117 `.45` and `.46` trials also bind trusted-LAN `0.0.0.0:8080` without authentication and share the port exclusively with Orca. The other user-facing actions are Swift, Hauhau, and those SC117 trials. The old SC117 .39 selector route is retired; shared model/native-pack assets are preserved. Strata .45 is build/provenance checked; no Q4-specific speed, quality, or 40% improvement is claimed.
+This package installs one Hive custom miner with an atomic next-start profile selector. The standard Strata selection is Orca Q4_K_S Strata 0.1.45 with auto prefill and trimmed `14,24,36` split; the windows-2 override is omitted. Orca .39 is rollback-only; .41 and .44.1 remain explicit rollback runtimes. Strata .46, pinned to source `90767252f420e25223c739d604145ad15911d48b`, is not the standard: HostLLM [5] is an isolated single-slot Q4 test candidate, and the Hive profile-menu [5]/HostLLM [17] select the unqualified SC117 .46 CPU-vision trial. The .46 pinned build and bounded no-key LAN text/image smoke tests passed through HostLLM; see [the patch and results](../STRATA_V0146.md). A follow-up actual root-terminal HostLLM [16] switch and .46 Hive startup also passed no-key web/text/image smoke checks after fixing the system `runuser` lookup; see [the selector results](../results/hive-option16-runuser-20261020.json). This does not qualify SC117. Hive's standard Orca profile deliberately binds `0.0.0.0:8080` for trusted-LAN serving and is unauthenticated; do not expose it to an untrusted network. HostLLM's Orca route also defaults to trusted-LAN serving (explicit `STRATA_HOST=127.0.0.1` retains local-only access). The unqualified SC117 `.45` and `.46` trials also bind trusted-LAN `0.0.0.0:8080` without authentication and share the port exclusively with Orca. The other user-facing actions are Swift, Hauhau, and those SC117 trials. The old SC117 .39 selector route is retired; shared model/native-pack assets are preserved. Strata .45 is build/provenance checked; no Q4-specific speed, quality, or 40% improvement is claimed.
 
 **Standing upgrade rule:** trusted-LAN routes must continue to start and serve requests without an API key after every upgrade. See [the maintenance rules](../AGENTS.md). No required key, dummy key, or client Authorization header may be introduced for normal LAN use.
 
@@ -18,13 +18,14 @@ sudo /hive/miners/custom/llm-hosting/profile-menu.sh
 [3] Orca Q4_K_S — Strata 0.1.45 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted
 [4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot; unqualified trusted-LAN trial on 8080 (no auth)
 [5] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.46 | new SM86 defaults enabled | CPU vision | one slot; unqualified trusted-LAN trial on 8080 (no auth)
+[6] DeepSeek V4.1 Flash 1017 Abiray IQ2_XXS — engine 0.1.51 | native 1M | native BF16 GPU vision | six experts | one slot
 ```
 
 The selector changes only the `current` symlink; it never starts or stops Hive,
 Strata, Docker, or `osn.service`. It checks both API ports (8080 and 18080),
 processes, Docker, GPU compute, and the HostLLM lease before changing the next
 profile. Hive profile-menu [5] selects SC117 .46; this is distinct from HostLLM [5],
-which tests Orca Q4 .46. HostLLM's [12]–[16] actions are a higher-level safe switch: they pause
+which tests Orca Q4 .46. HostLLM's [12]–[17] actions are a higher-level safe switch (DeepSeek uses [16], SC117 .46 is retained at [17]): they pause
 OctaSpace before stopping an identity/ancestry-verified Hive LLM, hold it stopped
 through readiness and any guarded package refresh, select the target, and restore
 the previous miner/OctaSpace running state. **Do not run `miner stop` first**: its
@@ -48,6 +49,14 @@ sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile iq3_s-sc117-ablit
 
 The existing Orca .45 and SC117 .45 routes load their weights and vision encoder immediately during startup, before the API opens. The launcher requires the model to be loaded before reporting ready; a blank HTTP frontend is not a successful start. Idle unloading is disabled. The .46 candidates also passed bounded eager-load/text/image smoke checks through HostLLM, with no API key. The later [16] selector follow-up exercised the real Hive wrapper as well. Its Python preflight resolves `runuser` from trusted system paths, including `/usr/sbin` on HiveOS, before any service pause.
 
+## DeepSeek profile
+
+HostLLM [6] directly hosts the separate `deepseek41-abiray-iq2_xxs` profile; HostLLM [16] selects it for Hive, while the low-level pointer-only selector uses [6]. It pins DeepSeek engine 0.1.51 (app/control 0.2.6), Abiray's four original IQ2_XXS shards, shared Engram, stock DSpark and original BF16 vision tower. The native **1,048,576-token window** is configured explicitly, not the upstream 8K setup default; one serving slot and all six experts are retained. See [pins, native-image HTTP adapter and validation scope](../DEEPSEEK41_ABIRAY.md). A configured/allocated window does not qualify a populated-1M request or sustained load. Older Qwen runtimes and profile contracts are unchanged.
+
+The DeepSeek switch accepts only the verified root Wildrig fallback in the Hive/OctaSpace cgroup or under its exact live root Hive-script parent (CLI mining can inherit a user-session cgroup), never arbitrary GPU work. When returning from mining it refreshes the LLM flight-sheet fields and clears the prior `CUSTOM_INSTALL_URL`, avoiding a wrong-miner download/name rejection. Other routes retain their original ownership gates.
+
+DeepSeek's supported native cache is explicit: four RAM-held **text** histories and an **8 GiB persisted** checkpoint target in its private state directory. This is not an 8 GiB RAM-byte cap or four serving slots. Do not forward Qwen's unsupported `--conversation-cache-mib` argument; see the [native cache controls and limitations](../DEEPSEEK41_ABIRAY.md#several-agents--conversation-cache).
+
 ## SC117 trial isolation
 
 SC117 `.45` and `.46` are **unqualified and trial-only**. Both Hive wrappers use
@@ -70,7 +79,7 @@ Split:      14,24,36 with trimmed stage weights
 Cache:      8192 MiB / four cache slots
 ```
 
-The separate `.46` route uses profile `iq3_s-sc117-abliterated-v0146`, Hive menu [5]/HostLLM [16], and Strata 0.1.46 with the same dedicated state, trusted-LAN bind, and one-slot settings. Both routes intentionally expose unauthenticated APIs on the trusted LAN;
+The separate `.46` route uses profile `iq3_s-sc117-abliterated-v0146`, Hive menu [5]/HostLLM [17], and Strata 0.1.46 with the same dedicated state, trusted-LAN bind, and one-slot settings. Both routes intentionally expose unauthenticated APIs on the trusted LAN;
 firewall it and never expose it to an untrusted network. For `.69`, open
 `http://192.168.1.69:8080/`. Orca also uses port 8080, so it cannot run
 concurrently with SC117. The trial uses a private isolated Python cache and

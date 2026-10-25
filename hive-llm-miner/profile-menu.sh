@@ -45,7 +45,7 @@ usage() {
     cat <<'EOF'
 Usage:
   profile-menu.sh                 Show the interactive selector
-  profile-menu.sh --profile NAME  Select an installed Swift, Hauhau, Orca .45, or SC117 .45/.46 trial profile
+  profile-menu.sh --profile NAME  Select Swift, Hauhau, Orca .45, SC117 .45/.46 trial, or pinned DeepSeek .51
   profile-menu.sh --list          Show installed profiles and current selection
   profile-menu.sh --help          Show this help
 
@@ -64,6 +64,7 @@ profile_label() {
         hauhau-q8-fastmtp-q4kv-xhigh) printf '%s' 'Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots' ;;
         iq3_s-sc117-abliterated) printf '%s' 'SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot; unqualified trusted-LAN trial on 8080 (no auth)' ;;
         iq3_s-sc117-abliterated-v0146) printf '%s' 'SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.46 | new SM86 defaults enabled; native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot; unqualified trusted-LAN trial on 8080 (no auth)' ;;
+        deepseek41-abiray-iq2_xxs) printf '%s' 'DeepSeek V4.1 Flash 1017 Abiray IQ2_XXS — engine 0.1.51 | native 1M | native BF16 GPU vision | six experts | one slot | LAN 8080' ;;
         *) return 1 ;;
     esac
 }
@@ -73,7 +74,7 @@ read_current_profile() {
     if [[ -L "$CURRENT_LINK" ]]; then
         target="$(readlink -- "$CURRENT_LINK")" || return 1
         case "$target" in
-            profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/hauhau-q8-fastmtp-q4kv-xhigh|profiles/iq3_s-sc117-abliterated|profiles/iq3_s-sc117-abliterated-v0146) printf '%s' "${target#profiles/}" ;;
+            profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/hauhau-q8-fastmtp-q4kv-xhigh|profiles/iq3_s-sc117-abliterated|profiles/iq3_s-sc117-abliterated-v0146|profiles/deepseek41-abiray-iq2_xxs) printf '%s' "${target#profiles/}" ;;
             *) return 1 ;;
         esac
         return
@@ -81,7 +82,7 @@ read_current_profile() {
     [[ ! -e "$CURRENT_LINK" ]] || return 1
     current_conf="$CUSTOM_DIR/llm-hosting.conf"
     [[ -f "$current_conf" && ! -L "$current_conf" ]] || return 1
-    for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146; do
+    for profile in orca-q4_k_s orca-q4_k_s-v0141 orca-q4_k_s-v0141-2slot orca-q4_k_s-v01441 swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146 deepseek41-abiray-iq2_xxs; do
         if cmp -s <(tr -d '\r' < "$current_conf") <(tr -d '\r' < "$PROFILE_ROOT/$profile/llm-hosting.conf"); then
             printf '%s' "$profile"
             return 0
@@ -132,11 +133,25 @@ show_profiles() {
     printf '  [2] %s\n' "$(profile_label hauhau-q8-fastmtp-q4kv-xhigh)"
     printf '  [3] %s\n' "$(profile_label orca-q4_k_s-v01441)"
     printf '  [4] %s\n' "$(profile_label iq3_s-sc117-abliterated)"
-  printf '  [5] %s\n' "$(profile_label iq3_s-sc117-abliterated-v0146)"
+    printf '  [5] %s\n' "$(profile_label iq3_s-sc117-abliterated-v0146)"
+    printf '  [6] %s\n' "$(profile_label deepseek41-abiray-iq2_xxs)"
 }
 
 check_selected_profile_ready() {
     case "$1" in
+        deepseek41-abiray-iq2_xxs)
+            command -v runuser >/dev/null 2>&1 || fail 'runuser is unavailable'
+            local readiness expected_readiness
+            readiness="$(runuser -u user -- env -i HOME=/home/user USER=user LOGNAME=user \
+                PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 \
+                STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata \
+                STRATA_STATE_ROOT=/home/user/.local/state/locallm-strata/deepseek41-abiray \
+                STRATA_HOST=0.0.0.0 STRATA_PORT=8080 \
+                "$LLM_ROOT/v1strata.sh" --check-ready --profile deepseek41-abiray-iq2_xxs \
+                --runtime 0.1.51 --parallel 1 --batch-groups 1)" || fail 'DeepSeek readiness failed; pointer unchanged'
+            expected_readiness='READY CONFIG: DeepSeek V4.1 Flash 1017 Abiray IQ2_XXS; Strata DeepSeek=0.1.51 (app 0.2.6); native context=1048576; native BF16 GPU vision (DSI1 bridge); one serving slot; six experts/token; DSpark auto; four GPUs; trusted-LAN 0.0.0.0:8080 without mandatory API key. Configured native window, not a populated-1M or sustained-load qualification.'
+            [[ "$(grep '^READY CONFIG:' <<< "$readiness" || true)" == "$expected_readiness" ]] || fail 'DeepSeek exact readiness mismatch; pointer unchanged'
+            ;;
         iq3_s-sc117-abliterated)
             [[ -x "$LLM_ROOT/v1strata.sh" ]] || fail "Strata launcher not found: $LLM_ROOT/v1strata.sh"
             command -v runuser >/dev/null 2>&1 || fail 'runuser is unavailable; SC117 trial readiness cannot be checked'
@@ -300,6 +315,7 @@ check_profile_files swift15u-q8 || fail 'Swift profile files are incomplete or s
 check_profile_files hauhau-q8-fastmtp-q4kv-xhigh || fail 'Hauhau profile files are incomplete or symlinked'
 check_profile_files iq3_s-sc117-abliterated || fail 'SC117 .45 trial profile files are incomplete or symlinked'
 check_profile_files iq3_s-sc117-abliterated-v0146 || fail 'SC117 .46 trial profile files are incomplete or symlinked'
+check_profile_files deepseek41-abiray-iq2_xxs || fail 'DeepSeek profile files are incomplete or symlinked'
 validate_profile_layout
 
 case "${1:-}" in
@@ -316,6 +332,7 @@ case "${1:-}" in
         printf '  [3] %s\n' "$(profile_label orca-q4_k_s-v01441)"
         printf '  [4] %s\n' "$(profile_label iq3_s-sc117-abliterated)"
         printf '  [5] %s\n' "$(profile_label iq3_s-sc117-abliterated-v0146)"
+        printf '  [6] %s\n' "$(profile_label deepseek41-abiray-iq2_xxs)"
         printf '  [q] Quit\n'
         read -r -p 'Select profile for the next Hive miner start: ' choice || exit 0
         case "${choice//[[:space:]]/}" in
@@ -324,6 +341,7 @@ case "${1:-}" in
             3|orca-q4_k_s-v01441) target='orca-q4_k_s-v01441' ;;
             4|iq3_s-sc117-abliterated) target='iq3_s-sc117-abliterated' ;;
             5|iq3_s-sc117-abliterated-v0146) target='iq3_s-sc117-abliterated-v0146' ;;
+            6|deepseek41-abiray-iq2_xxs) target='deepseek41-abiray-iq2_xxs' ;;
             q|Q|'') exit 0 ;;
             *) fail 'invalid selection; no files changed' ;;
         esac

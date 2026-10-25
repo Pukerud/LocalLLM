@@ -1,0 +1,183 @@
+{
+  "date": "2026-10-25",
+  "profile": "deepseek41-abiray-iq2_xxs",
+  "model_repository": "Abiray/DeepSeek-V4.1-Flash-1017-Uncensored-GSQ-RCO-IQ2_XXS-GGUF",
+  "model_revision": "99acb20f7c83a37d7f0ea6082e924f3d61615d72",
+  "support_repository": "unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+  "support_revision": "f924b94f19c1fea02c06a65c8475b0a45e2b88b1",
+  "verified_input_bytes": 258131348749,
+  "app_control": "0.2.6",
+  "source_commit": "4b9e05a2a806a3fe24f7b2560d98626c37dade35",
+  "engine_package_version": "0.1.51",
+  "native_api_legacy_engine": "ds4-0.1",
+  "engine_archive_sha256": "88c9c54ecc3ffce6f2ddbef281a7066146694be85e4ace99d31e5cdd691f0603",
+  "system_driver_or_toolkit_upgraded": false,
+  "routes": {
+    "direct": 6,
+    "hive": 16,
+    "retained_sc117_046_hive": 17
+  },
+  "inference_uid": 1000,
+  "context": {
+    "native": 1048576,
+    "max_positions": 1048576
+  },
+  "full_context_populated_tested": false,
+  "vision": "original BF16 native GPU, pinned DSI1 HTTP bridge",
+  "text_answer": "63",
+  "swapped_image_answers": [
+    {
+      "expected": "red",
+      "answer": "red"
+    },
+    {
+      "expected": "green",
+      "answer": "green"
+    }
+  ],
+  "web_ui_http": 200,
+  "same_origin_image_answer": "blue",
+  "sse_answer": "4",
+  "sse_done": true,
+  "sse_finish": true,
+  "no_auth_headers": true,
+  "api_key": false,
+  "host_origin_protection": "hostile Host and Origin rejected; same-origin accepted",
+  "multi_agent_cache": {
+    "passed": true,
+    "native_env": {
+      "STRATA_DS4_SLOT_KEEP": "1",
+      "STRATA_DS4_SLOT_CAP": "4",
+      "STRATA_DS4_SLOT_GB": "8",
+      "STRATA_DS4_REUSE": "1"
+    },
+    "ram_history_slots": 4,
+    "disk_target_mib": 8192,
+    "strict_ram_byte_limit": false,
+    "parked_histories": "text only",
+    "no_auth_headers": true,
+    "serving_slots": 1,
+    "native_context": 1048576,
+    "requests": [
+      {
+        "case": "alpha-initial",
+        "answer": "135791",
+        "prompt_tokens": 2570,
+        "cached_tokens": 2569,
+        "followup": false
+      },
+      {
+        "case": "bravo-initial",
+        "answer": "246802",
+        "prompt_tokens": 2801,
+        "cached_tokens": 2800,
+        "followup": false
+      },
+      {
+        "case": "charlie-initial",
+        "answer": "314159",
+        "prompt_tokens": 3031,
+        "cached_tokens": 3030,
+        "followup": false
+      },
+      {
+        "case": "delta-initial",
+        "answer": "271828",
+        "prompt_tokens": 2570,
+        "cached_tokens": 2569,
+        "followup": false
+      },
+      {
+        "case": "alpha-followup",
+        "answer": "135791",
+        "prompt_tokens": 2586,
+        "cached_tokens": 2585,
+        "followup": true
+      },
+      {
+        "case": "bravo-followup",
+        "answer": "246802",
+        "prompt_tokens": 2817,
+        "cached_tokens": 2816,
+        "followup": true
+      },
+      {
+        "case": "charlie-followup",
+        "answer": "314159",
+        "prompt_tokens": 3047,
+        "cached_tokens": 3046,
+        "followup": true
+      },
+      {
+        "case": "delta-followup",
+        "answer": "271828",
+        "prompt_tokens": 2586,
+        "cached_tokens": 2585,
+        "followup": true
+      }
+    ],
+    "native_restore_hits": 8,
+    "native_restore_token_counts": [
+      2569,
+      2800,
+      3030,
+      2569,
+      2585,
+      2816,
+      3046,
+      2585
+    ],
+    "scope": "bounded four-agent alternating histories, not full-window or sustained-load qualification",
+    "at": 1792967922.3824975
+  },
+  "direct_menu6_base_text_and_vision_passed": true,
+  "direct_menu6_final_cold_cache_test": "not run: operator started a Hive session; automation correctly refused to interrupt it",
+  "actual_sc117_046_to_root_menu16_after_lock_fix": {
+    "passed": true,
+    "actual_root_menu": 16,
+    "from_runtime": "0.1.46",
+    "to_runtime": "0.1.51",
+    "profile": "deepseek41-abiray-iq2_xxs",
+    "owned_hive_serving": true,
+    "leave_serving_per_latest_request": true,
+    "octaspace_active": true,
+    "recovery_journal_cleared": true,
+    "manual_stop_not_needed": true,
+    "api_key": false,
+    "context": {
+      "native": 1048576,
+      "max_positions": 1048576
+    },
+    "at": 1792967922.4301956
+  },
+  "cloud_interference": {
+    "first_deepseek_load_interrupted": true,
+    "rig_local_time": "23:27:42",
+    "received_cloud_custom_miner": "wildrig-multi-hiveos",
+    "explicit_deepseek_selection_reapplied_after_update": true,
+    "cloud_agent_or_rental_safeguards_disabled": false
+  },
+  "fixes": [
+    "remove unsupported sampling.top_k=0",
+    "map legacy native telemetry only for pinned DeepSeek release",
+    "separate adaptive expert profile from immutable pack input",
+    "clear stale custom install URL for installed LLM profile",
+    "bound stop-lock wait with replacement-identity refusal",
+    "drain only exact recorded Hive teardown identities"
+  ],
+  "tests": {
+    "python": 388,
+    "skipped": 1,
+    "python_runtime": "candidate private Python, normal operator",
+    "shell": 7
+  },
+  "final_state": {
+    "desired_by_latest_user": "Hive DeepSeek serving",
+    "owned_hive_serving": true,
+    "octaspace_active": true,
+    "pause_lease_absent": true,
+    "switch_recovery_journal_absent": true,
+    "original_mining_not_restarted_after_latest_request": true
+  },
+  "scope": "bounded native-window, text, image, streaming, four-agent cache and actual menu/lifecycle smoke; not populated-1M, sustained-load or broad-quality qualification"
+}
