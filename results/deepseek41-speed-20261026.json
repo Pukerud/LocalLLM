@@ -2664,9 +2664,9 @@
   },
   "hardware_and_infrastructure_changed": false,
   "power_and_clock_policy": "Observed operator limits preserved; no overclock/reset or kernel/driver/toolkit changes",
-  "normal_profile_changed": false,
+  "normal_profile_changed": true,
   "measured_preset": "full-quality-no-drafter",
-  "preset_activation": "deferred: an actual Blender rental appeared after OctaSpace restoration; rental gate refused selection",
+  "preset_activation": "applied after rental completion and explicit operator confirmation: full 1048576 context, DSpark none",
   "no_foreign_workload_stopped": true,
   "normal_hive_state_restored_before_rental": true,
   "unprivileged_adapter_sha256": "83f5304ee5397e86e68c901863a947148366f1521f5aab1cd4ed14c752801672",
@@ -2676,5 +2676,7 @@
     "skipped": 1,
     "shell": 7,
     "js_renderer": true
-  }
+  },
+  "context_262k_applied": false,
+  "final_hive_vision_stream_cache_smoke": true
 }

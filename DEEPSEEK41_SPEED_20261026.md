@@ -11,7 +11,11 @@ On this four-3090 host, **fully unloading DSpark (`--dspark none`)** was the use
 
 `none` matters: `off` still loads the drafter's weights in this engine. No drafter frees that memory for the target model's routed experts; this is not reducing six experts to five, changing quantization, disabling vision or reducing the context window. This is a modest gain, not Flash-Next-like throughput. Model quality relative to Flash-Next was not benchmarked.
 
-**Activation is deferred:** after the comparison restored canonical Hive/OctaSpace, an actual Blender rental occupied the GPUs. The explicit preset selector correctly refused with `Docker workload/rental present; starts blocked`. No rental or unknown process was interrupted. The existing normal profile remains stock-auto; the measured option and exact rollback are available for a later owned idle maintenance window.
+**Activated after the rental ended and the operator confirmed keeping 1M:** `full-quality-no-drafter` is now selected for HostLLM [6]/Hive [16], with actual Hive inference left serving at **1,048,576**, six experts and BF16 vision. The initial rental refusal was preserved; no rental/unknown process was interrupted. No 262K configuration was applied. Stock auto is retained as the exact rollback.
+
+Final real LAN smoke passed math `63`, native red/ordered red-green image inference, complete SSE `4`/finish/`[DONE]`, no API key and hostile Host/Origin 403. Two interleaved followups each reused **1708 of 1720 tokens**; browser Monitor showed enabled/four RAM slots/8192 MiB disk target and 3416 reused tokens. OctaSpace is active, no lease/switch journal remains. [Activation evidence](results/deepseek41-speed-activation-20261026.json).
+
+The actual Hive wrapper caught a stale exact readiness literal (`DSpark auto` versus `DSpark pinned preset`); it correctly refused before model startup. The literal is now synchronized, and the regression test covers all three shell entrypoints, including the runtime wrapper—not just the two menus.
 
 ## Compared settings
 
@@ -35,7 +39,7 @@ On this four-3090 host, **fully unloading DSpark (`--dspark none`)** was the use
 - Cold model start per arm (not host power cycling), the same shipped expert-placement seed per arm, and one exact newly created HostLLM pause lease. Existing leases/rentals/manual work were not borrowed or killed. Only identity-recorded families were stopped; canonical Hive and OctaSpace were restored after both experiment phases.
 - Nine requests/arm: three repetitions each of bounded code decode, prose decode and a 2075-token known-answer tail-retrieval prefill. Greedy temperature 0/top-p 1, reasoning none, 256 output cap for decode/8 for prefill. All fixture hashes and actual prompt lengths matched; API cache reuse was disabled and verified zero. SSE completion, native timings and TTFT were recorded. One-second GPU/RAM telemetry retained privately.
 - Baseline A/B bracket and two independent full-context no-drafter starts. Baseline decode drift was about 3%, so smaller one-off differences should not be treated as precise gains.
-- Native vision loaded in every arm and reported available; the final post-preset image smoke is pending the rental-free activation window. Earlier cache-Monitor E2E included actual same-origin red-image inference. This is not full-context population, broad quality, sustained-load, indefinite-stability or throughput qualification.
+- Native vision loaded in every arm and reported available; final actual-Hive post-preset red/ordered red-green image inference passed after rental-free activation. This is not full-context population, broad quality, sustained-load, indefinite-stability or throughput qualification.
 
 [Sanitized measurements](results/deepseek41-speed-20261026.json). Private raw sessions, logs, receipts and telemetry are under `/var/lib/localllm-strata/deepseek41-speed{-refine,}-20261026/`; unprivileged fixtures/adapters live in the matching calibration directories.
 

@@ -283,7 +283,7 @@ readiness="$(run_strata_user "$STRATA_LAUNCHER" --check-ready --profile "$PROFIL
     request_hive_stop
     exit 1
 }
-expected_readiness='READY CONFIG: DeepSeek V4.1 Flash 1017 Abiray IQ2_XXS; Strata DeepSeek=0.1.51 (app 0.2.6); native context=1048576; native BF16 GPU vision (DSI1 bridge); one serving slot; six experts/token; DSpark auto; four GPUs; trusted-LAN 0.0.0.0:8080 without mandatory API key. Configured native window, not a populated-1M or sustained-load qualification.'
+expected_readiness='READY CONFIG: DeepSeek V4.1 Flash 1017 Abiray IQ2_XXS; Strata DeepSeek=0.1.51 (app 0.2.6); native context=1048576; native BF16 GPU vision (DSI1 bridge); one serving slot; six experts/token; DSpark pinned preset; four GPUs; trusted-LAN 0.0.0.0:8080 without mandatory API key. Configured native window, not a populated-1M or sustained-load qualification.'
 actual_readiness="$(grep '^READY CONFIG:' <<< "$readiness" || true)"
 if [[ "$actual_readiness" != "$expected_readiness" ]]; then
     say 'DeepSeek exact preflight line is missing or mismatched; refusing start'

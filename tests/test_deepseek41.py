@@ -49,9 +49,10 @@ class DeepSeekConfigTests(unittest.TestCase):
         self.assertTrue(cfg['env']['STRATA_DS4_SLOT_DIR'].endswith('/deepseek41-abiray/ds4-slots'))
         self.assertEqual(cfg['parallel'],1,'Conversation histories are not concurrent serving slots')
 
-    def test_native_ready_header_matches_both_shell_entrypoints(self):
+    def test_native_ready_header_matches_all_shell_entrypoints(self):
         repo=Path(__file__).resolve().parents[1]
-        for relative in ['HostLLM.sh','hive-llm-miner/profile-menu.sh']:
+        for relative in ['HostLLM.sh','hive-llm-miner/profile-menu.sh',
+                         'hive-llm-miner/profiles/deepseek41-abiray-iq2_xxs/h-run.sh']:
             with self.subTest(path=relative):self.assertIn(D.READY,(repo/relative).read_text())
 
     def test_exact_model_pins_and_all_sources_are_revision_bound(self):
