@@ -149,7 +149,7 @@ check_selected_profile_ready() {
                 STRATA_HOST=0.0.0.0 STRATA_PORT=8080 \
                 "$LLM_ROOT/v1strata.sh" --check-ready --profile deepseek41-abiray-iq2_xxs \
                 --runtime 0.1.51 --parallel 1 --batch-groups 1)" || fail 'DeepSeek readiness failed; pointer unchanged'
-            expected_readiness='READY CONFIG: DeepSeek V4.1 Flash 1017 Abiray IQ2_XXS; Strata DeepSeek=0.1.51 (app 0.2.6); native context=1048576; native BF16 GPU vision (DSI1 bridge); one serving slot; six experts/token; DSpark auto; four GPUs; trusted-LAN 0.0.0.0:8080 without mandatory API key. Configured native window, not a populated-1M or sustained-load qualification.'
+            expected_readiness='READY CONFIG: DeepSeek V4.1 Flash 1017 Abiray IQ2_XXS; Strata DeepSeek=0.1.51 (app 0.2.6); native context=1048576; native BF16 GPU vision (DSI1 bridge); one serving slot; six experts/token; DSpark pinned preset; four GPUs; trusted-LAN 0.0.0.0:8080 without mandatory API key. Configured native window, not a populated-1M or sustained-load qualification.'
             [[ "$(grep '^READY CONFIG:' <<< "$readiness" || true)" == "$expected_readiness" ]] || fail 'DeepSeek exact readiness mismatch; pointer unchanged'
             ;;
         iq3_s-sc117-abliterated)

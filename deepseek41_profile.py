@@ -15,7 +15,7 @@ VERSION=A.RUNTIME_VERSION
 ENGINE_TELEMETRY='ds4-0.1'  # upstream INFO engine identifier; package --version is 0.1.51
 READY=('READY CONFIG: DeepSeek V4.1 Flash 1017 Abiray IQ2_XXS; Strata DeepSeek=0.1.51 (app 0.2.6); '
        'native context=1048576; native BF16 GPU vision (DSI1 bridge); one serving slot; six experts/token; '
-       'DSpark auto; four GPUs; trusted-LAN 0.0.0.0:8080 without mandatory API key. '
+       'DSpark pinned preset; four GPUs; trusted-LAN 0.0.0.0:8080 without mandatory API key. '
        'Configured native window, not a populated-1M or sustained-load qualification.')
 
 
@@ -24,7 +24,8 @@ def profile_root(root):return Path(root)/'profiles'/PROFILE
 def runtime_root(root):return Path(root)/'runtimes'/'dsv41-0.1.51'
 
 
-def canonical_config(root, runtime):
+def canonical_config(root, runtime, *, draft_mode='auto'):
+    if draft_mode not in ('none','auto'):raise SafetyError('Unsupported DeepSeek draft preset')
     pack=profile_root(root)/'pack'
     state=owner_home()/'.local/state/locallm-strata'/A.STATE_NAME
     return {'exe':runtime['engine'],'cwd':runtime['source'],'_launcher_python':runtime['python'],
@@ -32,7 +33,7 @@ def canonical_config(root, runtime):
             'model_name':A.MODEL_ID,'aliases':[PROFILE,'deepseek41','deepseek-v4.1-flash'],
             'host':'0.0.0.0','port':8080,'gpu':[0,1,2,3],'gpu_order':'as_given',
             'args':['--pack',str(pack),'--max-context',str(A.NATIVE_CONTEXT),'--eos','1',
-                    '--reserve-mib','1536','--experts','6','--dspark','auto','--dspark-conf','0.65','--vision','on',
+                    '--reserve-mib','1536','--experts','6','--dspark',draft_mode,'--dspark-conf','0.65','--vision','on',
                     '--expert-profile',str(state/'expert-profile.bin')],
             'parallel':1,'lib_dirs':[str(Path(runtime['engine']).parent)],'cuda':13,'engine_ready_s':3600,
             'lazy_load':False,'idle_unload_s':0,'fit_max_tokens':False,'reasoning_effort':'high',
@@ -78,7 +79,7 @@ def ready(root):
         raise SafetyError('DeepSeek model/runtime provenance mismatch')
     commit=subprocess.check_output(['git','-c',f'safe.directory={source}','-C',str(source),'rev-parse','HEAD'],text=True).strip()
     changed=subprocess.check_output(['git','-c',f'safe.directory={source}','-C',str(source),'diff','--name-only','HEAD'],text=True).splitlines()
-    if commit!=A.SOURCE_COMMIT or set(changed)!={'serve/server.py'}:raise SafetyError('DeepSeek source checkout changed outside its exact image hook')
+    if commit!=A.SOURCE_COMMIT or set(changed)!={'serve/server.py','serve/web/app.js'}:raise SafetyError('DeepSeek source checkout changed outside its exact image/Monitor patches')
     if runtime.get('server_upstream_sha256')!=SERVER_UPSTREAM_SHA or runtime.get('server_sha256')!=SERVER_PATCHED_SHA or digest(source/'serve/server.py')!=SERVER_PATCHED_SHA:
         raise SafetyError('DeepSeek exact native-image hook changed')
     expected_exe=rt/'engine-packages'/'0.1.51-linux-x86_64-cuda-cuda13'/'strata-dsv41'
@@ -86,6 +87,15 @@ def ready(root):
     verify_records(runtime['assets'],full=True);verify_records(runtime['python_metadata'],full=True)
     helper=Path(__file__).with_name('deepseek41_native_vision.py')
     if runtime.get('native_vision_helper_sha256')!=digest(helper):raise SafetyError('Installed native-image helper differs from this reviewed launcher')
+    from deepseek41_cache_ui import WEB_UPSTREAM_SHA,WEB_PATCHED_SHA
+    monitor=Path(__file__).with_name('deepseek41_cache_monitor.py')
+    if (runtime.get('native_cache_monitor_version')!=1 or
+            runtime.get('native_cache_monitor_helper_sha256')!=digest(monitor) or
+            digest(source/'serve/deepseek41_cache_monitor.py')!=digest(monitor) or
+            runtime.get('monitor_web_upstream_sha256')!=WEB_UPSTREAM_SHA or
+            runtime.get('monitor_web_sha256')!=WEB_PATCHED_SHA or
+            digest(source/'serve/web/app.js')!=WEB_PATCHED_SHA):
+        raise SafetyError('DeepSeek native cache Monitor provenance mismatch; explicit stopped-session update required')
     wanted={str(pr/'models'/name):(size,checksum) for name,size,checksum,_ in A.asset_sources()}
     if {row['path'] for row in model['assets']}!=set(wanted):raise SafetyError('DeepSeek model asset set incomplete')
     for row in model['assets']:
@@ -94,7 +104,10 @@ def ready(root):
     validate_geometry(pr/'pack/ds4.txt')
     config=pr/'config.json';verify_records([model['config']],full=True)
     cfg=json.loads(config.read_text())
-    if cfg!=canonical_config(root,runtime):raise SafetyError('DeepSeek native context/vision/quality/ownership configuration differs')
+    # Stock auto remains the unchanged default; the measured no-drafter option
+    # requires an explicit stopped-session selection (never an arbitrary override).
+    if cfg not in [canonical_config(root,runtime),canonical_config(root,runtime,draft_mode='none')]:
+        raise SafetyError('DeepSeek native context/vision/quality/ownership configuration differs')
     return source,config,cfg
 
 

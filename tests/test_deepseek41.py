@@ -32,6 +32,14 @@ class DeepSeekConfigTests(unittest.TestCase):
         self.assertNotIn('api_key',cfg);self.assertNotIn('--skip-tensors',args)
         self.assertNotIn(D.VERSION,R.PINS,'DeepSeek must not become an older Qwen runtime/default')
 
+    def test_no_drafter_is_explicit_and_stock_auto_remains_the_default(self):
+        rt={'engine':'/data/dsv41/strata-dsv41','source':'/data/dsv41/source','python':'/data/dsv41/python'}
+        stock=D.canonical_config(Path('/data'),rt)
+        self.assertEqual(stock['args'][stock['args'].index('--dspark')+1],'auto')
+        cfg=D.canonical_config(Path('/data'),rt,draft_mode='none')
+        self.assertEqual(cfg['args'][cfg['args'].index('--dspark')+1],'none')
+        with self.assertRaises(SafetyError):D.canonical_config(Path('/data'),rt,draft_mode='off')
+
     def test_native_multi_agent_cache_uses_supported_controls_not_qwen_flags(self):
         cfg=D.canonical_config(Path('/data'),{'engine':'/data/dsv41/strata-dsv41','source':'/data/dsv41/source','python':'/data/dsv41/python'})
         self.assertNotIn('--conversation-cache-mib',cfg['args'])
@@ -117,10 +125,12 @@ class NativePictureTests(unittest.TestCase):
               'Vision':SimpleNamespace(load=lambda source:raw),'IMAGE_URL_MAX':64<<20,'CTX_SLACK':16,
               'EngineStarting':ValueError,'ClientGone':ValueError})
         svc=SimpleNamespace(family='deepseek41',engine=SimpleNamespace(max_context=1048576,
-             info={'vision':'ds4','image_token':129264,'vision_patch':14,'vision_merge':3,'vision_min_pixels':295936,'vision_max_tokens':1024}),
+             info={'engine_kind':'ds4','vision':'ds4','image_token':129264,'vision_patch':14,'vision_merge':3,'vision_min_pixels':295936,'vision_max_tokens':1024}),
              embeddings=threading.local(),offline=False,fit_max_tokens=False,
              encode_prompt=lambda *args:[7]+[129264]*count+[8])
-        svc.prepare=MethodType(original,svc);V.enable(svc);self.addCleanup(svc.vision.shutdown)
+        svc.prepare=MethodType(original,svc)
+        svc.metrics=MethodType(lambda self: {'conversation_cache':{}},svc)
+        V.enable(svc);self.addCleanup(svc.vision.shutdown)
         return svc
 
     @unittest.skipUnless(importlib.util.find_spec('PIL'), 'requires candidate private Pillow; rerun with its Python')

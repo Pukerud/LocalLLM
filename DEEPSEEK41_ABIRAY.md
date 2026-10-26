@@ -17,7 +17,7 @@
 
 ## Native context, quality and vision
 
-The base model's native window is **1,048,576 tokens** (reference config pin `1bae0e1088993b9b82de08f59de5be5a34e42170`). This profile explicitly requests that native context, not upstream setup's tested 8192-token default. It retains the model's native positional geometry, **six experts per token** (not the faster reduced-five-expert option), one serving slot, DSpark `auto`, all four GPUs, and temperature 1.0 / top-p 1.0 (the engine's supported native top-k default, 64). No output cap is silently substituted for a context-size configuration, and `fit_max_tokens=false` refuses overlong requests instead of truncating them.
+The base model's native window is **1,048,576 tokens** (reference config pin `1bae0e1088993b9b82de08f59de5be5a34e42170`). This profile explicitly requests that native context, not upstream setup's tested 8192-token default. It retains the model's native positional geometry, **six experts per token** (not the faster reduced-five-expert option), one serving slot, stock DSpark `auto` (or the explicitly selected measured no-drafter preset), all four GPUs, and temperature 1.0 / top-p 1.0 (the engine's supported native top-k default, 64). No output cap is silently substituted for a context-size configuration, and `fit_max_tokens=false` refuses overlong requests instead of truncating them.
 
 A native window configured/allocated at startup does **not** establish populated-1M capacity, retrieval/quality at that length, sustained load, multi-user capacity or a speed gain. These require separate tests. The preset refuses a smaller-than-four-24GB-GPU host or less than 64 GiB available RAM at launch.
 
@@ -39,7 +39,7 @@ Original whole-file SHA-256: `c9e6d3e382fa521f8469d60c28a701db4417da5dcadea9a131
 
 ## Several agents / conversation cache
 
-DeepSeek **0.1.51 does not accept** Qwen's `--conversation-cache-mib 8192` or `--conversation-cache-slots` arguments; forwarding them stops native startup. The web UI's generic `docs/DETAILS.md` tooltip is not a DeepSeek cache-status test. Its own native cache is already enabled by upstream's frontend; this profile makes the requested policy explicit:
+DeepSeek **0.1.51 does not accept** Qwen's `--conversation-cache-mib 8192` or `--conversation-cache-slots` arguments; forwarding them stops native startup. The unpatched 0.2.6 web UI's generic `docs/DETAILS.md` tooltip is not a DeepSeek cache-status test. Its own native cache is already enabled by upstream's frontend; this profile makes the requested policy explicit:
 
 ```json
 "env": {
@@ -56,6 +56,29 @@ DeepSeek **0.1.51 does not accept** Qwen's `--conversation-cache-mib 8192` or `-
 - Prefix/checkpoint reuse and reload after restart are native. The upstream default minimum for parking is 1024 tokens and expiry is seven days; smaller side requests do not evict expensive histories.
 - Parked multi-history snapshots are **text-only** in this release. Vision remains available, but an image history displaced by another agent is not parked/restored by this cache.
 - Four history snapshots are **not four concurrent serving slots**: serving remains one slot/group, six experts, native context 1048576.
+
+### Native Monitor telemetry (2026-10-26 fix)
+
+The original Monitor inferred `enabled=false` from missing **Qwen** `INFO conversation_cache_mib`, even while DeepSeek was restoring histories. `deepseek41_cache_monitor.py` now wraps only this DeepSeek service's metrics: it reads the actual native process spawn environment and incrementally parses bounded `ds4 slots:` stderr events. Real API reuse counters are preserved. Unknown policy is shown as unknown, runtime folder failures are reported, and incomplete/truncated event history is labeled observed rather than invented totals.
+
+The pinned `serve/web/app.js` patch renders a DeepSeek-specific card: **enabled**, four RAM-history slots, **8192 MiB disk target (not a RAM limit)**, native saves/restores, and actual last-request reuse. The generic Qwen renderer is unchanged. No `conversation_cache_mib` INFO value, RAM bytes, hard RAM cap or fake cache hit is manufactured. Native single-slot and text-only parked-history limitations remain visible. The existing three-line server hook is unchanged; it installs the observer before `set_family()`, using native `engine_kind=ds4` at registration and the actual family when handling metrics.
+
+Exact frontend hashes: upstream `09031e89035b33d322f144e4b88c594e6d33ae76917779fd0b2cb77abe3540ab`; patched `df77352df1dc145a089d27713271295b300c00389d4d03d207fbdef85080cb53`. The deployed observer/vision helper hashes and refreshed runtime/model binding are recorded in preparation metadata and checked at readiness. Only `serve/server.py` and `serve/web/app.js` may have these exact tracked changes in this isolated runtime; older runtime contracts remain unchanged.
+
+For an already prepared legacy .51 installation, after stopping its **owned** session and with no other maintenance lease, run as the normal operator:
+
+```bash
+STRATA_STATE_ROOT="$HOME/.local/state/locallm-strata/deepseek41-abiray" \
+  ./v1strata.sh --prepare-deepseek41 --upgrade-monitor
+```
+
+The explicit upgrader validates existing provenance, backs up small files, and changes only the adapter/UI and their bound records—not the signed engine, model tensors, pack, sampling, context or cache settings. It refuses root, live target families, foreign leases, unknown source edits and altered configuration. New preparations include the observer automatically.
+
+## Measured speed option (2026-10-26)
+
+[Matched comparisons and activation/rollback instructions](DEEPSEEK41_SPEED_20261026.md) found that fully unloading the drafter (`--dspark none`) at the unchanged **1M context** improved median decode by **8.08%** and 2075-token prefill by **19.53%** on this host. Six target experts, model tensors and loaded vision remain unchanged; this is not a five-expert preset. `off` is not equivalent because it still loads draft weights. 262K alone was only a modest improvement, and SMT/mmap did not help.
+
+**Stock auto remains the unchanged normal default.** The explicit `full-quality-no-drafter` preset is saved alongside `stock-auto` rollback, but activation and final image smoke are deferred: a real Blender rental began after the tests restored OctaSpace, and the rental gate correctly blocked selection. No rental was interrupted and no forced background activation is scheduled. Do not confuse output/reasoning limits with context size; long thinking can dominate latency independently of the measured throughput gain.
 
 ## LAN and ownership
 

@@ -128,4 +128,9 @@ def enable(service):
         self.embeddings.keys=keys
         return ids,kwargs.get('enable_thinking',True) is not False,max_new
     service.prepare=MethodType(prepare,service)
+    if __package__:
+        from .deepseek41_cache_monitor import enable as enable_cache_monitor
+    else:  # local CPU-only tests; deployed runtime always uses the pinned serve package
+        from deepseek41_cache_monitor import enable as enable_cache_monitor
+    enable_cache_monitor(service)
     print('[LocalLLM] Native DeepSeek BF16 vision bridge enabled (DSI1, max 1024 tokens/image; one serving slot).',flush=True)

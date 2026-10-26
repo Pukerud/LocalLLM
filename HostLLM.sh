@@ -330,7 +330,7 @@ run_selected() {
             [[ -z "${HOSTLLM_STATE_ROOT:-}" ]] || candidate_env+=("HOSTLLM_STATE_ROOT=$HOSTLLM_STATE_ROOT")
             readiness="$(/usr/bin/env -i "${candidate_env[@]}" "$SCRIPT_DIR/$launcher" "${check_args[@]}")" || return 1
             printf '%s\n' "$readiness"
-            expected_readiness='READY CONFIG: DeepSeek V4.1 Flash 1017 Abiray IQ2_XXS; Strata DeepSeek=0.1.51 (app 0.2.6); native context=1048576; native BF16 GPU vision (DSI1 bridge); one serving slot; six experts/token; DSpark auto; four GPUs; trusted-LAN 0.0.0.0:8080 without mandatory API key. Configured native window, not a populated-1M or sustained-load qualification.'
+            expected_readiness='READY CONFIG: DeepSeek V4.1 Flash 1017 Abiray IQ2_XXS; Strata DeepSeek=0.1.51 (app 0.2.6); native context=1048576; native BF16 GPU vision (DSI1 bridge); one serving slot; six experts/token; DSpark pinned preset; four GPUs; trusted-LAN 0.0.0.0:8080 without mandatory API key. Configured native window, not a populated-1M or sustained-load qualification.'
             [[ "$(grep '^READY CONFIG:' <<< "$readiness" || true)" == "$expected_readiness" ]] || {
                 echo 'DeepSeek exact readiness failed before service pause.' >&2; return 1;
             }

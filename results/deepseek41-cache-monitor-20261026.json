@@ -1,0 +1,72 @@
+{
+  "passed": true,
+  "text": "63",
+  "same_origin_vision": "red",
+  "host_origin_403": true,
+  "no_auth_headers": true,
+  "monitor_cache": {
+    "enabled": true,
+    "budget_mib": null,
+    "slots": 4,
+    "parked": null,
+    "bytes": null,
+    "evictions": 0,
+    "parks": 3,
+    "restores": 2,
+    "last_event": "restored",
+    "last_tokens": 1709,
+    "last_at": 1793006124.099908,
+    "requests": 5,
+    "requests_reused": 2,
+    "reused_tokens": 3418,
+    "prompt_tokens": 6870,
+    "last_reused": 1709,
+    "last_prompt": 1720,
+    "implementation": "deepseek-native",
+    "ram_byte_limit_mib": null,
+    "text_histories_only": true,
+    "policy_source": "native process spawn environment",
+    "statistics_source": "native stderr events; API request reuse counters",
+    "configured_enabled": true,
+    "ram_slots_limit": 4,
+    "disk_target_mib": 8192,
+    "prefix_reuse_enabled": true,
+    "min_park_tokens": 1024,
+    "parked_ram": 2,
+    "parked_disk": 8,
+    "last_restore_source": "RAM",
+    "counts_complete": true,
+    "native_disabled_reason": null
+  },
+  "interleaved_agent_followups": [
+    {
+      "agent": "maple",
+      "usage": {
+        "prompt_tokens": 1720,
+        "completion_tokens": 3,
+        "total_tokens": 1723,
+        "prompt_tokens_details": {
+          "cached_tokens": 1709
+        }
+      }
+    },
+    {
+      "agent": "cedar",
+      "usage": {
+        "prompt_tokens": 1720,
+        "completion_tokens": 3,
+        "total_tokens": 1723,
+        "prompt_tokens_details": {
+          "cached_tokens": 1709
+        }
+      }
+    }
+  ],
+  "native_context": 1048576,
+  "engine_model_config_unchanged": true,
+  "at": 1793006134.6345208,
+  "browser_dom_verified": true,
+  "display": "DeepSeek native conversation cache enabled; 4 RAM history slots, 8192 MiB disk checkpoint target; native save/restore counts",
+  "frontend_hash_upstream": "09031e89035b33d322f144e4b88c594e6d33ae76917779fd0b2cb77abe3540ab",
+  "frontend_hash_patched": "df77352df1dc145a089d27713271295b300c00389d4d03d207fbdef85080cb53"
+}

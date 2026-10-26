@@ -92,7 +92,7 @@ def prepare_runtime():
     if state.exists():raise SafetyError('DeepSeek state exists; inspect/stop its owned session before preparation')
     if subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip()!=A.SOURCE_COMMIT:raise SafetyError('DeepSeek source pin mismatch')
     changed=subprocess.check_output(['git','-C',str(source),'diff','--name-only','HEAD'],text=True).splitlines()
-    if set(changed)-{'serve/server.py'}:raise SafetyError('Unreviewed DeepSeek tracked edits')
+    if set(changed)-{'serve/server.py','serve/web/app.js'}:raise SafetyError('Unreviewed DeepSeek tracked edits')
     server=source/'serve/server.py';data=server.read_bytes()
     if hashlib.sha256(data).hexdigest()==SERVER_UPSTREAM_SHA:
         if data.count(PATCH_OLD)!=1:raise SafetyError('Native image hook differs from reviewed source')
@@ -104,6 +104,13 @@ def prepare_runtime():
     target=source/'serve/deepseek41_native_vision.py'
     if target.exists() and digest(target)!=digest(helper):raise SafetyError('Existing native image helper differs; not overwritten')
     if not target.exists():shutil.copyfile(helper,target)
+    from deepseek41_cache_ui import install as install_monitor_ui, WEB_UPSTREAM_SHA, WEB_PATCHED_SHA
+    monitor=Path(__file__).with_name('deepseek41_cache_monitor.py')
+    monitor_target=source/'serve/deepseek41_cache_monitor.py'
+    if monitor_target.is_symlink() or (monitor_target.exists() and digest(monitor_target)!=digest(monitor)):
+        raise SafetyError('Existing native cache Monitor helper differs; not overwritten')
+    if not monitor_target.exists():shutil.copyfile(monitor,monitor_target)
+    install_monitor_ui(source)
     if not (venv/'bin/python').exists():subprocess.run(['python3','-m','venv',str(venv)],check=True)
     env={k:v for k,v in os.environ.items() if not k.startswith(('PIP_','PYTHON'))}
     env.update(PYTHONDONTWRITEBYTECODE='1',PIP_CONFIG_FILE='/dev/null')
@@ -120,7 +127,7 @@ def prepare_runtime():
     exe=engines[0]
     subprocess.run([str(exe),'--version'],env=dict(env,LD_LIBRARY_PATH=str(exe.parent)),check=True)
     assets=[file_record(p) for p in sorted(exe.parent.iterdir()) if p.is_file()]
-    assets+=[file_record(server),file_record(target),file_record(venv/'pyvenv.cfg'),file_record(source/'requirements.txt')]
+    assets+=[file_record(server),file_record(target),file_record(source/'serve/web/app.js'),file_record(venv/'pyvenv.cfg'),file_record(source/'requirements.txt')]
     for base in [source/'serve',source/'strata_control',source/'tools']:
         assets += [file_record(p) for p in sorted(base.rglob('*.py')) if '__pycache__' not in p.parts and p not in (server,target)]
     atomic_json(rt/'prepared.json',{'profile':A.PROFILE,'version':A.RUNTIME_VERSION,'app_version':A.APP_VERSION,
@@ -128,10 +135,99 @@ def prepare_runtime():
                 'package_sha256':A.ENGINE_SHA256,'package_signed_and_full_hash_verified':True,
                 'server_upstream_sha256':SERVER_UPSTREAM_SHA,'server_sha256':SERVER_PATCHED_SHA,
                 'native_vision_helper_sha256':digest(helper),'assets':assets,
+                'native_cache_monitor_version':1,'native_cache_monitor_helper_sha256':digest(monitor),
+                'monitor_web_upstream_sha256':WEB_UPSTREAM_SHA,'monitor_web_sha256':WEB_PATCHED_SHA,
                 'python_metadata':[file_record(p) for p in sorted(venv.glob('lib/python*/site-packages/*.dist-info/METADATA'))],
                 'key_free_lan':'upstream optional key; explicit --no-api-key when none supplied; Host/Origin unchanged',
                 'system_toolkit_changed':False,'inference_tested':False})
     print('DeepSeek engine 0.1.51 signed package/private Python prepared; old runtimes untouched.',flush=True)
+
+
+def upgrade_monitor():
+    """Explicit stopped-session update for an already prepared .51 profile.
+    The signed engine, weights, pack and run config are never replaced.
+    """
+    from engine_safety import docker_empty
+    import strata_launcher as launcher
+    import hosting_lifecycle as lifecycle
+    import deepseek41_profile as D
+    import deepseek41_cache_ui as U
+    if os.geteuid()==0:raise SafetyError('Upgrade as the unprivileged runtime owner')
+    docker_empty()
+    if lifecycle.read_lease() is not None:raise SafetyError('Another maintenance lease exists; Monitor upgrade refused')
+    expected=owner_home()/'.local/state/locallm-strata'/A.STATE_NAME
+    if launcher.strata_state()!=expected:raise SafetyError('Explicit DeepSeek state root required for Monitor upgrade')
+    state=launcher.read_state()
+    if state and launcher.family(state):raise SafetyError('Stop the owned DeepSeek session before updating its Monitor')
+    pr=profile_root();rt=runtime_root();source=rt/'source'
+    runtime=json.loads((rt/'prepared.json').read_text());model=json.loads((pr/'prepared.json').read_text())
+    if (runtime.get('version')!='0.1.51' or runtime.get('source_commit')!=A.SOURCE_COMMIT or
+            runtime.get('package_sha256')!=A.ENGINE_SHA256 or
+            runtime.get('package_signed_and_full_hash_verified') is not True or
+            model.get('runtime_manifest_sha256')!=digest(rt/'prepared.json')):
+        raise SafetyError('Existing DeepSeek runtime/model binding differs; not upgraded')
+    D.verify_records(runtime['assets'],full=True);D.verify_records(runtime['python_metadata'],full=True)
+    D.verify_records(model['pack_assets'],full=True);D.verify_records([model['config']],full=True)
+    if json.loads((pr/'config.json').read_text()) not in [D.canonical_config(data_root(),runtime),D.canonical_config(data_root(),runtime,draft_mode='none')]:
+        raise SafetyError('Model configuration changed; not overwritten by a UI upgrade')
+    commit=subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip()
+    changed=subprocess.check_output(['git','-C',str(source),'diff','--name-only','HEAD'],text=True).splitlines()
+    if commit!=A.SOURCE_COMMIT or set(changed)-{'serve/server.py','serve/web/app.js'} or digest(source/'serve/server.py')!=SERVER_PATCHED_SHA:
+        raise SafetyError('Unexpected source changes; Monitor upgrade refused')
+    legacy='4d5dfb68c7aeef23271a53b2ac5806dc5e4f7562a8b3fe3a9a38670288597705'
+    helper=Path(__file__).with_name('deepseek41_native_vision.py')
+    if runtime.get('native_vision_helper_sha256') not in (legacy,digest(helper)):
+        raise SafetyError('Unknown old image adapter; not overwritten')
+    if (runtime.get('native_cache_monitor_version')==1 and
+            runtime.get('native_vision_helper_sha256')==digest(helper) and
+            runtime.get('native_cache_monitor_helper_sha256')==digest(Path(__file__).with_name('deepseek41_cache_monitor.py')) and
+            runtime.get('monitor_web_sha256')==U.WEB_PATCHED_SHA):
+        D.ready(data_root());print('Native DeepSeek cache Monitor is already current; no files changed.',flush=True);return
+    backup=pr/('monitor-before-'+str(time.time_ns()));backup.mkdir(mode=0o700)
+    files=[source/'serve/deepseek41_native_vision.py',source/'serve/deepseek41_cache_monitor.py',source/'serve/web/app.js',
+           rt/'prepared.json',pr/'prepared.json']
+    for i,path in enumerate(files):
+        if path.is_symlink():raise SafetyError('Monitor update target is symlinked')
+        if path.exists():shutil.copyfile(path,backup/(str(i)+'-'+path.name))
+    for name in ['deepseek41_native_vision.py','deepseek41_cache_monitor.py']:
+        shutil.copyfile(Path(__file__).with_name(name),source/'serve'/name)
+    U.install(source)
+    updated={str(p):p for p in files[:3]}
+    runtime['assets']=[file_record(updated[row['path']]) if row['path'] in updated else row for row in runtime['assets']]
+    known={row['path'] for row in runtime['assets']}
+    runtime['assets'] += [file_record(p) for p in updated.values() if str(p) not in known]
+    runtime.update(native_cache_monitor_version=1,native_vision_helper_sha256=digest(helper),
+                   native_cache_monitor_helper_sha256=digest(source/'serve/deepseek41_cache_monitor.py'),
+                   monitor_web_upstream_sha256=U.WEB_UPSTREAM_SHA,monitor_web_sha256=U.WEB_PATCHED_SHA)
+    atomic_json(rt/'prepared.json',runtime);model['runtime_manifest_sha256']=digest(rt/'prepared.json')
+    atomic_json(pr/'prepared.json',model);D.ready(data_root())
+    print('Native DeepSeek cache Monitor upgraded; original inputs backed up at '+str(backup),flush=True)
+
+
+def select_performance_preset(name):
+    """Exact stopped-session selection; stock-auto is retained as a rollback."""
+    from engine_safety import docker_empty
+    import hosting_lifecycle as lifecycle
+    import strata_launcher as launcher
+    import deepseek41_profile as D
+    modes={'stock-auto':'auto','full-quality-no-drafter':'none'}
+    if name not in modes:raise SafetyError('Unknown DeepSeek performance preset')
+    if os.geteuid()==0:raise SafetyError('Select the preset as the unprivileged runtime owner')
+    docker_empty()
+    if lifecycle.read_lease() is not None:raise SafetyError('Another maintenance lease exists; preset unchanged')
+    expected=owner_home()/'.local/state/locallm-strata'/A.STATE_NAME
+    if launcher.strata_state()!=expected:raise SafetyError('Explicit DeepSeek state root required')
+    state=launcher.read_state()
+    if state and launcher.family(state):raise SafetyError('Stop the owned DeepSeek session before selecting a preset')
+    _,path,cfg=D.ready(data_root());pr=profile_root();rt=runtime_root()
+    runtime=json.loads((rt/'prepared.json').read_text());model=json.loads((pr/'prepared.json').read_text())
+    wanted=D.canonical_config(data_root(),runtime,draft_mode=modes[name])
+    if cfg==wanted:print('DeepSeek preset is already '+name+'; no files changed.',flush=True);return
+    backup=pr/('preset-before-'+str(time.time_ns()));backup.mkdir(mode=0o700)
+    shutil.copyfile(path,backup/'config.json');shutil.copyfile(pr/'prepared.json',backup/'prepared.json')
+    atomic_json(path,wanted);model['config']=file_record(path);model['performance_preset']=name
+    atomic_json(pr/'prepared.json',model);D.ready(data_root())
+    print('DeepSeek preset selected: '+name+'; same 1M context, six experts, vision/cache/weights; rollback stock-auto retained.',flush=True)
 
 
 def prepare_pack():
@@ -174,9 +270,13 @@ def main():
     group.add_argument('--download-only',action='store_true')
     group.add_argument('--prepare-runtime',action='store_true')
     group.add_argument('--prepare-pack',action='store_true')
+    group.add_argument('--upgrade-monitor',action='store_true')
+    group.add_argument('--select-performance-preset',choices=['stock-auto','full-quality-no-drafter'])
     args=ap.parse_args()
     if args.download_only:download()
     elif args.prepare_runtime:prepare_runtime()
+    elif args.upgrade_monitor:upgrade_monitor()
+    elif args.select_performance_preset:select_performance_preset(args.select_performance_preset)
     else:prepare_pack()
 
 
