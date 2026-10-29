@@ -1,0 +1,261 @@
+{
+  "date": "2026-10-29",
+  "passed": true,
+  "profile": "swift15-heretic-re",
+  "model_repository": "trubisky/Swift-1.5-Flash-Next-Heretic-ReverseEngineer",
+  "model_revision": "a7a90ef46b79b746c484d094fd5814c359543d77",
+  "publisher_shards": 8,
+  "publisher_shard_bytes": 108893664096,
+  "all_publisher_assets_full_sha256_verified": true,
+  "publisher_pack": {
+    "file": "strata-pack-heretic-v2-70g-fix.zip",
+    "bytes": 1527244892,
+    "sha256": "0dd16206360250679997ed007ba095e5b53083b4658d1d3da0ca1da19028818c",
+    "code_executed_from_archive": false,
+    "pack_bytes_modified": false
+  },
+  "native_layout": {
+    "layers": 48,
+    "experts_per_layer": 512,
+    "all_tensor_bounds_and_expert_offsets_checked": true
+  },
+  "runtime": {
+    "version": "0.1.46",
+    "source_commit": "90767252f420e25223c739d604145ad15911d48b",
+    "heretic_only_compatibility": true,
+    "shared_sc117_runtime_unchanged": true,
+    "purpose": "Heretic-only BF16 L0 attention gate",
+    "engine_sha256": "351ee5736842f3baf34db15f251bedd7e56c0fb67a71e92310a5666c1ba47bc5",
+    "implementation_sha256": "b47bc88dd27722c314210858e89c628f73d1bde8871803b9b768e42e9332e20f",
+    "source_patches": [
+      {
+        "relative": "src/core/layer.cpp",
+        "original_sha256": "f284c2ad8d48e82a658dbebfd24357943aba35e96237759d1765472dbe9bda2e",
+        "sha256": "939d74a3ba45c97c6b83beb29022cfd754c7b12c39f4b07b1bf4476f55d5a47c"
+      },
+      {
+        "relative": "src/core/verify.cpp",
+        "original_sha256": "db798abe2f2e77289d82cdc45d983c5ccf50a3de99fc4b5699ef02c32bb6b47c",
+        "sha256": "17d9f91b1ec6312359fedc7b05d5ccfead2d681ae87696e97f8b528ab21b408d"
+      },
+      {
+        "relative": "src/prefill/prefill.cpp",
+        "original_sha256": "a0890f6184c20fcb1729e7fa6ce79df8b5d42b710b310baac21974674208b6ad",
+        "sha256": "6ae58b430f793532349389fe191416babba7fe01ada4016b2f496caf0beb4397"
+      }
+    ]
+  },
+  "gate_bit_identity": {
+    "gate": "blk.0.attn_gate.weight",
+    "shape": [
+      2560,
+      6144
+    ],
+    "type": "BF16",
+    "dense_offset": 27033984,
+    "bytes": 31457280,
+    "sha256": "2bce627de1b1aca8725741bb4ce7c2986230ab38de5288b90ffbd488ebe4dda5",
+    "publisher_pack_equals_actual_gguf": true,
+    "requantized": false,
+    "parity_executable_sha256": "78448270e690f9f421ce7b4b4e8e4dddc4d4fb129e7249b99f60bc6f7103dd9c"
+  },
+  "gate_numerical_parity": {
+    "passed": true,
+    "actual_gate_shape": [
+      6144,
+      2560
+    ],
+    "rows": 4,
+    "mmvf_multi_single_bitwise": true,
+    "mmvf_relative_rms": 9.50032e-08,
+    "prefill_relative_rms": 3.61762e-06,
+    "mmvf_max_abs": 4.40527e-07,
+    "prefill_max_abs": 1.6711e-05
+  },
+  "serving": {
+    "passed": true,
+    "actual_root_choice": 14,
+    "profile": "swift15-heretic-re",
+    "native_context": 262144,
+    "BF16_CPU_vision": true,
+    "thinking_default": "high",
+    "spec": 3,
+    "pipeline_windows": 2,
+    "serving_slots": 1,
+    "conversation_cache_mib": 8192,
+    "conversation_cache_slots": 4,
+    "no_mandatory_key": true,
+    "hive_token_identity_bound": true,
+    "octaspace_restored_active": true,
+    "no_lease_or_journal": true,
+    "leave_heretic_hive_serving": true,
+    "at": 1793315621.720049
+  },
+  "checks": {
+    "actual_root_direct_choice": 3,
+    "actual_root_hive_choice": 14,
+    "math": "63",
+    "thinking_high": "2099",
+    "thinking_text_observed": true,
+    "red_green_and_ordered_images": true,
+    "same_origin": true,
+    "host_and_origin_rejected_http": 403,
+    "web_monitor_verified": true,
+    "SSE_and_declared_tool_format": {
+      "passed": true,
+      "SSE_answer": "4",
+      "finish_and_DONE": true,
+      "declared_tool_only": "add_integers",
+      "arguments": {
+        "a": 20,
+        "b": 22
+      },
+      "no_tool_executed": true
+    },
+    "four_agent_cache": [
+      {
+        "agent": "alpha",
+        "initial_prompt": 4727
+      },
+      {
+        "agent": "bravo",
+        "initial_prompt": 4727
+      },
+      {
+        "agent": "charlie",
+        "initial_prompt": 5127
+      },
+      {
+        "agent": "delta",
+        "initial_prompt": 4727
+      },
+      {
+        "agent": "alpha",
+        "followup_prompt": 4760,
+        "cached_tokens": 4736
+      },
+      {
+        "agent": "bravo",
+        "followup_prompt": 4760,
+        "cached_tokens": 4736
+      },
+      {
+        "agent": "charlie",
+        "followup_prompt": 5160,
+        "cached_tokens": 5136
+      },
+      {
+        "agent": "delta",
+        "followup_prompt": 4760,
+        "cached_tokens": 4736
+      }
+    ],
+    "native_cache_counters": {
+      "enabled": true,
+      "budget_mib": 8192,
+      "slots": 4,
+      "parked": 4,
+      "bytes": 1641566424,
+      "evictions": 7,
+      "parks": 15,
+      "restores": 4,
+      "last_event": "restored",
+      "last_tokens": 4736,
+      "last_at": 1793315610.5871458,
+      "requests": 16,
+      "requests_reused": 4,
+      "reused_tokens": 19344,
+      "prompt_tokens": 40054,
+      "last_reused": 4736,
+      "last_prompt": 4760
+    },
+    "near_native_context": {
+      "passed": true,
+      "prompt_tokens": 259835,
+      "counted_tokens": 259835,
+      "max_context": 262144,
+      "tail_answer": "271828",
+      "elapsed_s": 190.67234841996105,
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 259835,
+        "prompt_ms": 190444.1,
+        "prompt_per_token_ms": 0.733,
+        "prompt_per_second": 1364.4,
+        "predicted_n": 7,
+        "predicted_ms": 64.5,
+        "predicted_per_token_ms": 9.214,
+        "predicted_per_second": 108.5,
+        "draft_n": 4,
+        "draft_n_accepted": 4
+      },
+      "sample_count": 182,
+      "scope": "One synthetic near-native populated-window retrieval, not broad context/quality/stability qualification"
+    },
+    "native_context_telemetry": {
+      "samples": 182,
+      "gpu_peak_mib": [
+        20962.0,
+        19748.0,
+        18836.0,
+        23894.0
+      ],
+      "gpu_max_temp_c": [
+        70.0,
+        71.0,
+        66.0,
+        72.0
+      ],
+      "min_MemAvailable_kib": 38242288
+    },
+    "direct_owned_shutdown_lease_released": true,
+    "direct_restored_actual_prior_inactive_admission_state": true,
+    "final_original_octaspace_active_restored": true,
+    "retained_sc117_cold_after_retirement": {
+      "passed": true,
+      "cold_hive_restart_after_original_stop": true,
+      "retired_weights_absent": true,
+      "engine": "0.1.46",
+      "text": "63",
+      "at": 1793313738.2881103
+    }
+  },
+  "retirement": {
+    "authorized_targets": [
+      "data/models/orca-q4_k_s",
+      "data/packs/orca-q4_k_s",
+      "profiles/orca-q4_k_s-v0141/assets",
+      "profiles/deepseek41-abiray-iq2_xxs"
+    ],
+    "logical_bytes": 373291543291,
+    "files": 71,
+    "no_process_stopped": true,
+    "at": 1793312781.3746588,
+    "applied": true,
+    "weights_absent": true
+  },
+  "operator_approved_exact_orphaned_sc117_stop": true,
+  "other_manual_sessions_or_rentals_stopped": false,
+  "protected_pi_files_modified": false,
+  "system_driver_toolkit_kernel_clock_policy_changed": false,
+  "tests": {
+    "python": 418,
+    "skipped": 1,
+    "shell": 7,
+    "actual_gate_cpp_parity": true
+  },
+  "scope": "Bounded actual-menu text/vision/thinking/tool/cache and one 259835-token retrieval; no broad quality, optimal-tuning, sustained-load or comparative throughput qualification.",
+  "diagnostic_decode_only": {
+    "generated_tokens": 192,
+    "tok_s": 148.8,
+    "drafted": 140,
+    "accepted": 125,
+    "not_a_matched_performance_comparison": true
+  },
+  "retained_failures": [
+    "Initial direct start safely blocked by independently bootstrapped retained Hive SC117; admission then held closed for maintenance.",
+    "Unmodified .46 loaded but first request rejected the publisher BF16 L0 gate; isolated existing-BF16-kernel overlay added without changing target bytes.",
+    "Exact No miner screens found after already-completed owned teardown returned 1; actual idle/RUN state was verified before continuation.",
+    "Retirement paused on hardlink-count change caused by earlier recorded deletions; only proven internal unlink counts accepted; full original inventory retained."
+  ]
+}

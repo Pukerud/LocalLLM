@@ -1,5 +1,7 @@
 # SC117 abliterated IQ3_S on Strata — isolated route and qualification plan
 
+> **Current menu update (2026-10-29):** direct .45 [4] and Hive .46 [17] remain unqualified trials; the high-level Hive .45 [15] row was removed. Startup now reads the exact audited preset metadata and SC117's own verified inputs/runtime without requiring retired Orca weights. See the current [menu](README.md); the older preparation/qualification history below is not a new qualification.
+
 **Status: unqualified; the isolated `.45` trial profile is the only permitted start, and no qualification has passed.** It binds SC117 to trusted-LAN `0.0.0.0:8080` without API authentication. Do not read its readiness or inference behavior as a quality or production qualification claim. The documented tuning sweep was measured on `.44.1`; it is not a `.45` speed comparison.
 
 The route uses HostLLM choice **[4]** and Hive profile `iq3_s-sc117-abliterated`. It is a distinct model/profile, not the older base IQ3_S route documented in [STRATA_IQ3S.md](STRATA_IQ3S.md). SC117 remains unqualified: its legacy `.39` normal-start path is retired, and no qualified/production start is enabled. Only the explicit `.45` trusted-LAN trial on port 8080 is permitted.

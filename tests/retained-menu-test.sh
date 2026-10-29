@@ -192,22 +192,19 @@ if [[ "$EUID" -ne 0 ]]; then
 fi
 grep -q '\[1\] Swift 1.5 Uncensored Q8_K_XL — DEFAULT' "$root/HostLLM.sh"
 grep -q '\[2\] Hauhau Q8_K_P — BF16 vision' "$root/HostLLM.sh"
-grep -q '\[3\] Orca Q4_K_S — Strata 0.1.45 | auto prefill + trimmed 14,24,36 split | windows-2 override omitted' "$root/HostLLM.sh"
+grep -q '\[3\] Swift 1.5 Heretic RE' "$root/HostLLM.sh"
 grep -q '\[4\] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot' "$root/HostLLM.sh"
-grep -q '\[5\] TEST Orca Q4_K_S — Strata 0.1.46 pinned test candidate' "$root/HostLLM.sh"
+! grep -q '^ *echo .*\[5\] TEST Orca' "$root/HostLLM.sh"
 grep -q '\[12\] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL' "$root/HostLLM.sh"
 grep -q '\[13\] Set next Hive miner - Hauhau Q8_K_P' "$root/HostLLM.sh"
-grep -q '\[14\] Set next Hive miner - Orca Q4_K_S .45' "$root/HostLLM.sh"
-grep -q '\[15\] Set next Hive miner - SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot' "$root/HostLLM.sh"
-grep -q '\[6\] DeepSeek V4.1 Flash 1017 Abiray IQ2_XXS' "$root/HostLLM.sh"
-grep -q '\[16\] Set next Hive miner - DeepSeek V4.1 Flash 1017 Abiray IQ2_XXS' "$root/HostLLM.sh"
+grep -q '\[14\] Set next Hive miner - Swift 1.5 Heretic RE' "$root/HostLLM.sh"
+! grep -qE '^ *echo .*\[(5|6|15|16)\]' "$root/HostLLM.sh"
 ! grep -qE '^ *echo .*\[(6|7)\] Orca Q4_K_S — Strata 0\.1\.(41|44\.1)' "$root/HostLLM.sh"
 ! grep -q '\[3\] SC117.*0.1.39' "$root/HostLLM.sh"
 grep -q '\[17\].*SC117.*0.1.46' "$root/HostLLM.sh"
-grep -q 'local candidate_runtime=0.1.45' "$root/HostLLM.sh"
-grep -q '\[\[ "$choice" == 5 \]\] && candidate_runtime=0.1.46' "$root/HostLLM.sh"
+grep -q 'candidate_heretic=1' "$root/HostLLM.sh"
 grep -q 'SC117.*0.0.0.0:8080' "$root/HostLLM.sh"
-grep -q 'windows-2 override omitted' "$root/HostLLM.sh"
+grep -q 'spec 3 + windows 2' "$root/HostLLM.sh"
 grep -q -- '--prepare-q4ks141' "$root/HostLLM.sh"
 grep -q -- '--run-q4ks141-32k-validation' "$root/HostLLM.sh"
 grep -q 'Q4KS_V0141_VALIDATION_ONLY=1 STRATA_HOST=127.0.0.1' "$root/HostLLM.sh"
@@ -235,23 +232,21 @@ trace="$scratch/maintrace"
 )
 grep -qx 'v1qwen38.sh --quickstart --profile swift15u-q8' "$trace"
 grep -qx 'v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q4kv-xhigh' "$trace"
-grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.45 --parallel 1 --batch-groups 1' "$trace"
+grep -qx 'v1strata.sh --quickstart --profile swift15-heretic-re --runtime 0.1.46 --parallel 1 --batch-groups 1' "$trace"
 grep -qx 'v1strata.sh --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.45 --parallel 1 --batch-groups 1' "$trace"
-grep -qx 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.46 --parallel 1 --batch-groups 1' "$trace"
 grep -qx 'unset|0.0.0.0|unset' "$trace.env"
 grep -qx '1|0.0.0.0|8080' "$trace.env"
-grep -qx 'v1strata.sh --quickstart --profile deepseek41-abiray-iq2_xxs --runtime 0.1.51 --parallel 1 --batch-groups 1' "$trace"
-[[ "$(wc -l < "$trace")" -eq 6 ]]
-# DeepSeek gets [16]; the separately isolated SC117 .46 route remains at [17].
+[[ "$(wc -l < "$trace")" -eq 4 ]]
+# Heretic gets [14]; the separately isolated SC117 .46 route remains at [17].
 hive_target_trace="$scratch/hive-target-trace"
 (
   detect_engine() { echo none; }
   show_workload_status() { :; }
   host_gpu_summary() { :; }
   set_next_hive_profile() { printf '%s\n' "$1" >> "$hive_target_trace"; }
-  main < <(printf '16\n17\n11\n') > /dev/null
+  main < <(printf '14\n17\n11\n') > /dev/null
 )
-grep -qx 'deepseek41-abiray-iq2_xxs' "$hive_target_trace"
+grep -qx 'swift15-heretic-re' "$hive_target_trace"
 grep -qx 'iq3_s-sc117-abliterated-v0146' "$hive_target_trace"
 # Exercise the inner package/pointer stage with inert installed files. The
 # transaction's owned-stop/OctaSpace ordering has dedicated Python tests.
@@ -262,7 +257,7 @@ hive_fake_bin="$scratch/fake-bin"
 hive_pkg_source="$scratch/hive-pkg-source"
 hive_pkg_root="$scratch/hive-pkg-installed"
 hive_menu_installed="$hive_pkg_root/profile-menu.sh"
-hive_profiles=(orca-q4_k_s-v01441 iq3_s-sc117-abliterated)
+hive_profiles=(swift15-heretic-re iq3_s-sc117-abliterated-v0146)
 mkdir -p "$hive_fake_bin" "$hive_pkg_source/profiles" "$hive_pkg_root/profiles"
 printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "%s"\n' "$hive_menu_trace" > "$hive_pkg_source/profile-menu.sh"
 chmod +x "$hive_pkg_source/profile-menu.sh"
@@ -297,10 +292,10 @@ done
   detect_engine() { echo none; }
   show_workload_status() { :; }
   host_gpu_summary() { :; }
-  main < <(printf '%s\n' 14 15 11) > /dev/null
+  main < <(printf '%s\n' 14 17 11) > /dev/null
 )
-grep -qx -- '--profile orca-q4_k_s-v01441' "$hive_menu_trace"
-grep -qx -- '--profile iq3_s-sc117-abliterated' "$hive_menu_trace"
+grep -qx -- '--profile swift15-heretic-re' "$hive_menu_trace"
+grep -qx -- '--profile iq3_s-sc117-abliterated-v0146' "$hive_menu_trace"
 [[ "$(wc -l < "$hive_menu_trace")" -eq 2 ]]
 [[ "$(wc -l < "$hive_install_trace")" -eq 1 ]]
 if [[ "$EUID" -eq 0 ]]; then
@@ -316,9 +311,9 @@ fi
   run_selected() { printf '%s\n' "$*" >> "$trace"; }
   main < <(printf '3\n11\n') > /dev/null
 )
-[[ "$(tail -n1 "$trace")" == 'v1strata.sh --quickstart --profile orca-q4_k_s --runtime 0.1.45 --parallel 1 --batch-groups 1' ]]
-[[ "$(wc -l < "$trace")" -eq 7 ]]
-# Choosing Orca while Strata runs must not call the launch/pause/stop path.
+[[ "$(tail -n1 "$trace")" == 'v1strata.sh --quickstart --profile swift15-heretic-re --runtime 0.1.46 --parallel 1 --batch-groups 1' ]]
+[[ "$(wc -l < "$trace")" -eq 5 ]]
+# Choosing Heretic while Strata runs must not call the launch/pause/stop path.
 (
   SCRIPT_DIR="$scratch/live-menu"
   mkdir -p "$SCRIPT_DIR"
@@ -331,8 +326,8 @@ fi
   run_selected() { echo 'unexpected-start' >> "$trace"; }
   main < <(printf '3\n11\n') > /dev/null
 )
-[[ "$(wc -l < "$trace")" -eq 7 ]]
-# An unprepared Q4 request must use its readiness gate, before any service/engine mutation.
+[[ "$(wc -l < "$trace")" -eq 5 ]]
+# An unprepared historical explicit Q4 request must use its readiness gate, before any service/engine mutation.
 ready_trace="$scratch/readiness.trace"
 export ready_trace
 (

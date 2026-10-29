@@ -51,7 +51,7 @@ class DeepSeekConfigTests(unittest.TestCase):
 
     def test_native_ready_header_matches_all_shell_entrypoints(self):
         repo=Path(__file__).resolve().parents[1]
-        for relative in ['HostLLM.sh','hive-llm-miner/profile-menu.sh',
+        for relative in ['HostLLM.sh',  # historical explicit launcher, no current menu route
                          'hive-llm-miner/profiles/deepseek41-abiray-iq2_xxs/h-run.sh']:
             with self.subTest(path=relative):self.assertIn(D.READY,(repo/relative).read_text())
 

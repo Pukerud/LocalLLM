@@ -23,12 +23,10 @@ WRAPPER = Path('/hive/miners/custom/llm-hosting/h-run.sh')
 CURRENT = WRAPPER.parent / 'current'
 CUR_MINER = Path('/run/hive/cur_miner')
 JOURNAL = hosting.ROOT / 'hive-profile-switch.json'
-PROFILES = ('swift15u-q8', 'hauhau-q8-fastmtp-q4kv-xhigh', 'orca-q4_k_s-v01441',
-            'iq3_s-sc117-abliterated', 'iq3_s-sc117-abliterated-v0146',
-            'orca-q4_k_s', 'orca-q4_k_s-v0141',
-            'orca-q4_k_s-v0141-2slot')
-DEEPSEEK_PROFILE = 'deepseek41-abiray-iq2_xxs'
-PROFILES = (*PROFILES, DEEPSEEK_PROFILE)
+HERETIC_PROFILE = 'swift15-heretic-re'
+PROFILES = ('swift15u-q8', 'hauhau-q8-fastmtp-q4kv-xhigh', HERETIC_PROFILE,
+            'iq3_s-sc117-abliterated', 'iq3_s-sc117-abliterated-v0146')
+DEEPSEEK_PROFILE = 'deepseek41-abiray-iq2_xxs'  # retained historical recovery/readiness implementation only
 SC117_V0146_PROFILE = 'iq3_s-sc117-abliterated-v0146'
 SC117_V0146_READINESS = (
     'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.46; trusted-LAN=0.0.0.0:8080 (unauthenticated); '
@@ -281,6 +279,19 @@ def package_current(profile):
 
 def preflight_profile(profile):
     """Run the new SC117 route's exact readiness check before pausing Hive/OctaSpace."""
+    if profile == HERETIC_PROFILE:
+        from heretic_profile import READY
+        runuser=shutil.which('runuser',path='/usr/sbin:/usr/bin:/sbin:/bin')
+        if runuser is None:raise SafetyError('runuser is unavailable; Heretic preflight failed before pause')
+        command=[runuser,'-u','user','--','/usr/bin/env','-i','HOME=/home/user','USER=user','LOGNAME=user',
+                 'PATH=/usr/local/bin:/usr/bin:/bin','PYTHONDONTWRITEBYTECODE=1','SETUPTOOLS_USE_DISTUTILS=stdlib',
+                 'STRATA_STATE_ROOT=/home/user/.local/state/locallm-strata/swift15-heretic-re',
+                 '/home/user/LocalLLM/v1strata.sh','--check-ready','--profile',profile,
+                 '--runtime','0.1.46','--parallel','1','--batch-groups','1']
+        result=subprocess.run(command,capture_output=True,text=True,timeout=600)
+        if result.returncode or [line for line in result.stdout.splitlines() if line.startswith('READY CONFIG:')]!=[READY]:
+            raise SafetyError('Heretic exact context/vision/cache readiness failed before any pause')
+        say('Heretic exact readiness passed before service/miner pause.');return
     if profile == DEEPSEEK_PROFILE:
         from deepseek41_profile import READY
         runuser = shutil.which('runuser', path='/usr/sbin:/usr/bin:/sbin:/bin')
@@ -333,7 +344,7 @@ def preflight_profile(profile):
 def switch_profile(profile):
     if JOURNAL.exists() or JOURNAL.is_symlink():
         raise SafetyError(f'An earlier switch needs recovery: {recovery_command()}')
-    inspection = {'allow_fallback_miner': True} if profile == DEEPSEEK_PROFILE else {}
+    inspection = {'allow_fallback_miner': True} if profile in (DEEPSEEK_PROFILE, HERETIC_PROFILE) else {}
     wrappers = inspect_owned_workload(**inspection)
     fallback = verified_fallback_miner_jobs(hosting.gpu_jobs()) if inspection and not wrappers else []
     preflight_profile(profile)

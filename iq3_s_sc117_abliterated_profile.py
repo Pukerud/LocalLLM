@@ -1305,12 +1305,26 @@ def _verify_trial_artifacts(root, settings, state_root):
     fingerprint(root, settings, verify_content=True, allow_inactive_bytecode=True)
 
 
+def pinned_trial_template(root):
+    """Read the exact audited preset, without requiring unrelated retired Orca weights.
+
+    This is only a configuration template for the separately verified SC117 model;
+    it is NOT an Orca readiness path. The selected .45/.46 build is checked separately.
+    """
+    import orca_q4ks_v01441_assets as q4_assets
+    import orca_q4ks_v01441_profile as q4_profile
+    path=q4_assets.config_path(Path(root))
+    cfg=q4_profile._json(path,'retained SC117 preset template',q4_assets.CONFIG_SHA256)
+    q4_profile._validate_config(Path(root),cfg)
+    return path,q4_profile._selected_runtime_config(cfg)
+
+
 def _verify_v01441_trial_artifacts(root, state_root):
-    """Verify SC117 data plus the independently pinned .44.1 candidate for this trial only."""
+    """Verify SC117 data, exact preset and selected runtime, independently of Orca weights."""
     _verify_trial_environment(state_root)
     prepare_sc117.verify_readiness(Path(root), full_hash=True)
-    from orca_q4ks_v01441_profile import ready_q4ks_v01441
-    ready_q4ks_v01441(Path(root))
+    strata_runtime.prepared_runtime(Path(root),os.environ.get('STRATA_RUNTIME'))
+    pinned_trial_template(root)
 
 
 def build_v01441_trial_config(root, candidate_config):

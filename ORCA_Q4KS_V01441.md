@@ -1,4 +1,6 @@
-# Orca Q4_K_S / Strata 0.1.45 — standard profile
+# Orca Q4_K_S / Strata 0.1.45 — historical standard profile
+
+> **Retired 2026-10-29:** the operator removed the Orca Q4_K_S weights/routes. “Standard” and rollback instructions below describe the historical deployment, not the current menu. The exact preset metadata is retained for SC117 independently of the deleted model files. See [README.md](README.md).
 
 ## Status and scope
 

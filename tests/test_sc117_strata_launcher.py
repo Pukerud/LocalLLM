@@ -63,9 +63,11 @@ class LauncherModule:
                 TRIAL_EXPERIMENT_ENV={'STRATA_SC117_IQ3S_TRIAL_GPU_ORDER'},
                 settings_for_start=lambda **_: {}, authorize_start=lambda *_a, **_k: 'trial',
                 require_trial_binding=lambda host: None,
-                build_effective_config=lambda *_: {}, build_v01441_trial_config=lambda *_: {}),
+                build_effective_config=lambda *_: {}, build_v01441_trial_config=lambda *_: {},
+                pinned_trial_template=lambda *_: None),
             'prepare_iq3_s_sc117_abliterated': module(
                 'prepare_iq3_s_sc117_abliterated', verify_readiness=lambda *_a, **_k: None),
+            'heretic_profile': module('heretic_profile',PROFILE='swift15-heretic-re',VERSION='0.1.46'),
             'strata_runtime': module('strata_runtime', LEGACY_VERSION='0.1.39', VERSION='0.1.41',
                                      NEXT_VERSION='0.1.45', TEST_VERSION='0.1.46',
                                      PROFILE_BOUND_VERSIONS=('0.1.45','0.1.46'),
@@ -187,7 +189,7 @@ class SC117LauncherSecretTests(unittest.TestCase):
                     LAUNCHER.sc117_trial_readiness_line(profile.PROFILE, '0.1.45', 1, 1,
                                                         {'vision': {'gpu': True}})
 
-    def test_sc117_045_route_is_explicit_trial_and_uses_q4_preset(self):
+    def test_sc117_045_uses_exact_retained_template_without_orca_weights(self):
         profile = LAUNCHER.sc117_profile
         candidate = (Path('/q4-preset'), Path('/q4-preset/config.json'),
                      {'args': ['--trim-stage-weights'], 'vision': {'gpu': False}})
@@ -196,7 +198,8 @@ class SC117LauncherSecretTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {'STRATA_SC117_IQ3S_TRIAL': '1'}, clear=True), \
                 mock.patch.object(LAUNCHER, 'data_root', return_value=Path('/data')), \
                 mock.patch.object(LAUNCHER.prepare_sc117, 'verify_readiness') as assets_ready, \
-                mock.patch.object(LAUNCHER.q4ks_v01441, 'ready_q4ks_v01441', return_value=candidate) as q4_ready, \
+                mock.patch.object(profile, 'pinned_trial_template', return_value=candidate[1:]) as q4_ready, \
+                mock.patch.object(LAUNCHER.q4ks_v01441,'ready_q4ks_v01441',side_effect=AssertionError('Retired Orca weights accessed')), \
                 mock.patch.object(LAUNCHER.runtimes, 'prepared_runtime', return_value=(runtime_source, {})) as prepared, \
                 mock.patch.object(profile, 'build_v01441_trial_config', return_value=effective) as build:
             result = LAUNCHER.ready_runtime(profile.PROFILE, '0.1.45', 1, 1)
@@ -222,7 +225,8 @@ class SC117LauncherSecretTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {'STRATA_SC117_IQ3S_TRIAL':'1','STRATA_RUNTIME':'0.1.46'}, clear=True), \
                 mock.patch.object(LAUNCHER, 'data_root', return_value=Path('/data')), \
                 mock.patch.object(LAUNCHER.prepare_sc117, 'verify_readiness'), \
-                mock.patch.object(LAUNCHER.q4ks_v01441, 'ready_q4ks_v01441', return_value=candidate), \
+                mock.patch.object(profile, 'pinned_trial_template', return_value=candidate[1:]), \
+                mock.patch.object(LAUNCHER.q4ks_v01441,'ready_q4ks_v01441',side_effect=AssertionError('Retired Orca weights accessed')), \
                 mock.patch.object(LAUNCHER.runtimes, 'prepared_runtime', return_value=(runtime_source, {})) as prepared, \
                 mock.patch.object(profile, 'build_v01441_trial_config', return_value=effective):
             result=LAUNCHER.ready_runtime(profile.PROFILE, '0.1.46', 1, 1)

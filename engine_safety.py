@@ -222,12 +222,19 @@ def stop_qwen(from_owner=False):
 
 
 def active_engine():
-    s = strata_state() / 'server.json'
-    if s.exists():
-        state = json.loads(s.read_text())
-        p = proc(state['identity']['pid'])
-        if same_process(state['identity'], p):
-            return 'strata'
+    # The picker must recognize the isolated owned profiles without relying on
+    # whichever STRATA_STATE_ROOT happened to be inherited by its shell.
+    base = owner_home() / '.local/state/locallm-strata'
+    roots = dict.fromkeys((strata_state(), base / 'sc117-iq3s-trial', base / 'swift15-heretic-re',
+                          base / 'deepseek41-abiray'))
+    for root in roots:
+        s = root / 'server.json'
+        if s.is_symlink():raise SafetyError('Strata state is symlinked; active engine cannot be trusted')
+        if s.exists():
+            state = json.loads(s.read_text())
+            p = proc(state['identity']['pid'])
+            if same_process(state['identity'], p):
+                return 'strata'
     try:
         if qwen_record():
             return 'qwen38'

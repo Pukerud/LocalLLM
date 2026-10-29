@@ -1,5 +1,7 @@
 # DeepSeek V4.1 Flash 1017 — isolated Abiray IQ2_XXS profile
 
+> **Historical — retired 2026-10-29:** the operator removed this model's weights and [6]/[16] menu rows. It is no longer an installed/runnable rollback. Earlier configuration/tests below are retained as evidence; see the current [menu](README.md) and [Heretic profile](HERETIC_RE.md).
+
 **New routes:** HostLLM **[6]** (direct hosting) and **[16]** (Hive). The prior SC117 .46 Hive route moves to **[17]**; its low-level Hive selector remains [5]. Older profiles, Qwen runtimes and default selection are retained. This is a separate DeepSeek engine upgrade, not promotion of the existing .46 Qwen candidate.
 
 ## Exact assets and runtime

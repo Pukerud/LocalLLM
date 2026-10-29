@@ -38,6 +38,10 @@ if [[ "${1:-}" == --validate-orca-q4ks-141-native ]]; then
     [[ "$#" == 1 ]] || { echo '--validate-orca-q4ks-141-native takes no extra flags' >&2; exit 1; }
     exec python3 "$root/orca_q4ks_v0141_native_validation.py"
 fi
+if [[ "${1:-}" == --prepare-heretic ]]; then
+    shift
+    exec nice -n 19 ionice -c 3 python3 "$root/prepare_heretic.py" "$@"
+fi
 if [[ "${1:-}" == --prepare-deepseek41 ]]; then
     shift
     exec nice -n 19 ionice -c 3 python3 "$root/prepare_deepseek41.py" "$@"

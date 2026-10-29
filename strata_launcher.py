@@ -37,6 +37,7 @@ import iq3_s_sc117_abliterated_profile as sc117_profile
 import prepare_iq3_s_sc117_abliterated as prepare_sc117
 import strata_runtime as runtimes
 import deepseek41_profile as deepseek_profile
+import heretic_profile
 
 SOURCE_COMMIT = '99f3dbd0b21d1401b3769e0c0d963913607f380b'
 MODEL_REVISION = 'ed59f92082b1e93c0e96d60a8b11aab089b52f09'
@@ -184,9 +185,9 @@ def _effective_host(profile, version, configured_host):
         if requested not in (None, '127.0.0.1', '0.0.0.0'):
             raise SafetyError(f'Q4 {version} STRATA_HOST may only be 127.0.0.1 or 0.0.0.0')
         return requested or '127.0.0.1'
-    if profile == deepseek_profile.PROFILE:
+    if profile in (deepseek_profile.PROFILE, heretic_profile.PROFILE):
         if requested not in (None, '127.0.0.1', '0.0.0.0'):
-            raise SafetyError('DeepSeek binding must be loopback or explicit trusted-LAN 0.0.0.0')
+            raise SafetyError('Pinned profile binding must be loopback or explicit trusted-LAN 0.0.0.0')
         return requested or configured_host
     if profile == sc117_profile.PROFILE:
         if requested not in (None, sc117_profile.TRIAL_BIND_HOST):
@@ -228,6 +229,12 @@ def ready_q4ks_v0146(root):
 
 
 def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
+    if profile == heretic_profile.PROFILE:
+        if runtime not in ('auto',heretic_profile.VERSION) or (parallel,batch_groups)!=(1,1):
+            raise SafetyError('Heretic requires pinned .46 and one serving slot/group')
+        heretic_profile.require_state(strata_state())
+        source,path,cfg=heretic_profile.ready(data_root())
+        return source,path,cfg,heretic_profile.VERSION
     if profile == deepseek_profile.PROFILE:
         if runtime not in ('auto', deepseek_profile.VERSION) or (parallel, batch_groups) != (1, 1):
             raise SafetyError('DeepSeek requires its explicit 0.1.51 runtime and one serving slot/group')
@@ -243,7 +250,7 @@ def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
             raise SafetyError(f'SC117 Strata {runtime} is available only through its explicit unqualified trusted-LAN trial')
         root = data_root()
         prepare_sc117.verify_readiness(root, full_hash=False)
-        _base_source, path, base_cfg = q4ks_v01441.ready_q4ks_v01441(root)
+        path, base_cfg = sc117_profile.pinned_trial_template(root)
         runtime_source, _manifest = runtimes.prepared_runtime(root, runtime)
         cfg = sc117_profile.build_v01441_trial_config(root, base_cfg)
         return runtime_source, path, _apply_candidate_runtime_paths(cfg, runtime_source, runtime), runtime
@@ -718,7 +725,9 @@ def guard_during_run(state):
                 state.get('runtime_version') in ('0.1.41', q4ks_v01441.RUNTIME_VERSION,
                                                   *runtimes.PROFILE_BOUND_VERSIONS)) or
                 (state.get('profile') == deepseek_profile.PROFILE and
-                 state.get('runtime_version') == deepseek_profile.VERSION)):
+                 state.get('runtime_version') == deepseek_profile.VERSION) or
+                (state.get('profile') == heretic_profile.PROFILE and
+                 state.get('runtime_version') == heretic_profile.VERSION)):
             if state.get('hive_launch_id_sha256'):
                 if host_lifecycle.read_lease() is not None:
                     raise SafetyError('Hive Q4 .41 session conflicts with a HostLLM pause lease')
@@ -940,14 +949,14 @@ def startup_config(cfg, version, profile=None):
     """Load retained Q4/SC117 candidate models before opening the API."""
     effective = dict(cfg)
     if (version == q4ks_v01441.RUNTIME_VERSION or
-            (version in runtimes.PROFILE_BOUND_VERSIONS and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE))):
+            (version in runtimes.PROFILE_BOUND_VERSIONS and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, heretic_profile.PROFILE))):
         effective.update(lazy_load=False, idle_unload_s=0)
     return effective
 
 
 def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hosting_lock=None):
     api_key = consume_api_key()
-    if os.geteuid() == 0 and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE):
+    if os.geteuid() == 0 and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE, heretic_profile.PROFILE):
         raise SafetyError('This Strata profile must start as the normal operator; use sudo only for identity-bound administration')
     inherited_fd = host_lifecycle.inherited_launch_reservation_fd()
     requested_lease_id = os.environ.get('HOSTLLM_LAUNCH_LEASE_ID')
@@ -982,7 +991,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     hive_launch_id = None
     if ((profile == ORCA_Q4KS_PROFILE and version in ('0.1.41', q4ks_v01441.RUNTIME_VERSION,
                                                      *runtimes.PROFILE_BOUND_VERSIONS)) or
-            profile == deepseek_profile.PROFILE):
+            profile in (deepseek_profile.PROFILE, heretic_profile.PROFILE)):
         authorization = require_q4ks_candidate_authorization(
             port, requested_lease_id, host_launch_reserved=inherited_fd is not None)
         if authorization['authorization'] == 'hostllm':
@@ -990,6 +999,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         else:
             hive_launch_id = authorization['launch_id']
     launch_gate(port)
+    if profile == heretic_profile.PROFILE:
+        heretic_profile.seed_profile(data_root(), strata_state())
     if profile == deepseek_profile.PROFILE:
         deepseek_profile.capacity_gate()
         deepseek_profile.seed_hot_profile(data_root(), strata_state())
@@ -1007,6 +1018,9 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     elif profile == sc117_profile.PROFILE:
         cfg['model_name'] = sc117_profile.MODEL_ID
         cfg['aliases'] = ['qwen38-iq3s-sc117-abliterated', sc117_profile.PROFILE]
+    elif profile == heretic_profile.PROFILE:
+        cfg['model_name'] = heretic_profile.A.MODEL_ID
+        cfg['aliases'] = [heretic_profile.PROFILE, 'heretic-re']
     elif profile == deepseek_profile.PROFILE:
         cfg['model_name'] = deepseek_profile.A.MODEL_ID
         cfg['aliases'] = [deepseek_profile.PROFILE, 'deepseek41', 'deepseek-v4.1-flash']
@@ -1029,7 +1043,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     runtime_config_dir = None
     runtime_config_dir_identity = None
     api_key = None
-    if (profile == deepseek_profile.PROFILE or
+    if (profile in (deepseek_profile.PROFILE, heretic_profile.PROFILE) or
             (profile == ORCA_Q4KS_PROFILE and version in (q4ks_v01441.RUNTIME_VERSION,
                                                        *runtimes.PROFILE_BOUND_VERSIONS))):
         env = _q4_v01441_launch_environment()
@@ -1043,7 +1057,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     else:
         env = dict(os.environ)
         env.update(runtimes.runtime_env(version, parallel))
-    if sc117_authorization == 'trial':
+    if sc117_authorization == 'trial' or profile == heretic_profile.PROFILE:
         cache_prefix = state_root / 'pycache'
         cache_prefix.mkdir(mode=0o700, parents=True, exist_ok=True)
         cache_info = cache_prefix.lstat()
@@ -1106,6 +1120,10 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         else:
             print(sc117_profile.readiness_line(settings))
         print(sc117_assets.MTP_SOURCE_NOTE)
+    elif profile == heretic_profile.PROFILE:
+        print(heretic_profile.READY)
+        print('Heretic-only BF16 L0-gate compatibility engine; publisher gate bytes and shared SC117 .46 runtime unchanged.')
+        print('Publisher mixed-IQ4_NL target; verified stock Flash-Next MTP drafts, not a Heretic-trained drafter.')
     elif profile == deepseek_profile.PROFILE:
         print(deepseek_profile.READY)
         print('DeepSeek full-quality six-expert path; separate original DSpark drafter; native window configured, not populated-context qualification.')
@@ -1269,14 +1287,14 @@ def main():
     modes.add_argument('--enable-q4ks141-vision', action='store_true')
     modes.add_argument('--rollback-q4ks141-vision', action='store_true')
     modes.add_argument('--select-runtime', choices=runtimes.GENERIC_VERSIONS)
-    ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE, ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE], default=None)
+    ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE, ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE, heretic_profile.PROFILE], default=None)
     ap.add_argument('--runtime', choices=['auto', *runtimes.VERSIONS, q4ks_v01441.RUNTIME_VERSION, deepseek_profile.VERSION], default=os.environ.get('STRATA_RUNTIME', 'auto'))
     ap.add_argument('--parallel', type=int, choices=[1, 2], default=os.environ.get('STRATA_PARALLEL', '1'))
     ap.add_argument('--batch-groups', type=int, choices=[1, 2], default=os.environ.get('STRATA_BATCH_GROUPS', '1'))
     a = ap.parse_args()
     profile = a.profile or 'iq3_s'
     q4_mutation = not (a.stop or a.status or a.check_ready or a.select_runtime)
-    if os.geteuid() == 0 and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE) and q4_mutation:
+    if os.geteuid() == 0 and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE, heretic_profile.PROFILE) and q4_mutation:
         print('BLOCKED: this profile must start/configure as the normal operator; use sudo only for identity-bound administration.', file=sys.stderr)
         return 1
     try:
@@ -1327,6 +1345,8 @@ def main():
             if profile == ORCA_PROFILE:
                 print('PREPARED: pinned Orca IQ3_XXS, own compatibility pack/tokenizer, F16 vision configured, native 262144, INT8 streaming KV.')
                 print('Readiness verifies assets/config only; bounded live results are separate in ORCA_IQ3XXS.md. No full-context quality claim.')
+            elif profile == heretic_profile.PROFILE:
+                print(heretic_profile.READY)
             elif profile == deepseek_profile.PROFILE:
                 print(deepseek_profile.READY)
             elif profile == sc117_profile.PROFILE:
