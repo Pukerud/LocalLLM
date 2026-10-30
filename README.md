@@ -9,16 +9,16 @@ HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s, approximately 
 [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots
 [3] Swift 1.5 Heretic RE — IQ4_NL n-gram | Strata .46 | native 262K | BF16 CPU vision | spec 3 + windows 2 | one slot
 [4] SC117 GSQ-RCO IQ3_S — IQ4_NL n-gram | Strata .45 | unqualified CPU-vision trial | native 262K | one slot
-[5] Swift 1.5 Heretic RE — Q8_0 n-gram | same .46/runtime/tuning | isolated state/cache | NOT inference-tested
-[6] SC117 GSQ-RCO IQ3_S — Q8_0 n-gram | same .45/runtime/tuning | isolated trial state/cache | NOT inference-tested
+[5] Swift 1.5 Heretic RE — Q8_0 n-gram | same .46/runtime/tuning | isolated state/cache | bounded smoke passed
+[6] SC117 GSQ-RCO IQ3_S — Q8_0 n-gram | same .45/runtime/tuning | isolated trial state/cache | bounded smoke passed
 
 [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit
 [12] Set next Hive miner — Swift 1.5 Uncensored Q8_K_XL
 [13] Set next Hive miner — Hauhau Q8_K_P
 [14] Set next Hive miner — Heretic RE | IQ4_NL n-gram | Strata .46
 [15] Set next Hive miner — SC117 | IQ4_NL n-gram | Strata .46 unqualified trial
-[16] Set next Hive miner — Heretic RE | Q8_0 n-gram | same .46 | NOT inference-tested
-[17] Set next Hive miner — SC117 | Q8_0 n-gram | same .46 | NOT inference-tested
+[16] Set next Hive miner — Heretic RE | Q8_0 n-gram | same .46 | bounded smoke passed; A/B pending
+[17] Set next Hive miner — SC117 | Q8_0 n-gram | same .46 | bounded smoke passed; A/B pending
 ```
 
 The 2026-10-29 Orca/DeepSeek retirement remains in force; reused numbers do not restore those models. On **2026-10-30**, existing SC117 .46 Hive **[17] moved to [15]**, and new Q8_0 PLE-only variants use direct **[5]/[6]** and Hive **[16]/[17]**. Existing IQ4_NL routes keep their engines/settings. The lower-level Hive selector adds [6] Heretic Q8_0 and [7] SC117 .46 Q8_0; its retained [5] now corresponds to high-level [15].
@@ -27,7 +27,7 @@ The 2026-10-29 Orca/DeepSeek retirement remains in force; reused numbers do not 
 
 See **[PLE_Q8.md](PLE_Q8.md)** for immutable data pins, preparation, no-stop installation and validation limits. Both original model PLE tensors were fully hashed and are bit-identical IQ4_NL. The new options share one checksum-verified **54.4-GB original-Qwen Q8_0 PLE shard**; they do not download/load a Q6 model, requantize the existing IQ4_NL table, change expert/dense weights, or upgrade Strata. KV remains INT8/32768 resident; native 262K, BF16 CPU vision, thinking, MTP, spec 3/windows 2 and 8-GiB/four-history cache policies are retained.
 
-Each candidate has a **separate state/cache and adaptive expert profile**. Original routes/configuration are untouched. Source/header and offline readiness tests do **not** establish improved answer quality, unchanged speed, image correctness or populated-context behavior. No Q8 inference was run during this no-interruption update.
+Each candidate has a **separate state/cache and adaptive expert profile**. Initial publication preserved the live miner. Later explicit authorization allowed actual **[5]/[6]/[16]/[17]** tests: key-free LAN text/high thinking, swapped/ordered images, SSE/tools, four-history cache reuse and owned cleanup passed; both Hive variants retrieved a marker from **259835 input tokens**. [Live results](results/ple-q8-live-menus-20261030.json) disclose initial fixture/handoff/driver corrections. **441 Python tests OK/one skipped; seven shell suites passed.** Original SC117 .46/IQ4_NL, unchanged configuration and active OctaSpace were restored. This is bounded functional evidence, **not** a matched IQ4_NL/Q8 quality/speed A/B or production qualification.
 
 To add only the new inactive Hive profiles and updated selector while the current miner remains running, after operator-owned preparation:
 

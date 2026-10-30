@@ -759,7 +759,9 @@ def guard_during_run(state):
 def _verified_hive_process_parent(identity, token, expected_parent=None):
     server = proc(identity.get('pid'))
     if not same_process(identity, server):
-        raise SafetyError('Hive Strata server identity changed; stop refused')
+        fields = [key for key in ('pid', 'start_ticks', 'exe', 'uid', 'cmd', 'pgid', 'sid')
+                  if not server or identity.get(key) != server.get(key)]
+        raise SafetyError('Hive Strata server identity changed (' + ','.join(fields) + '); stop refused')
     parent_pid = identity.get('ppid')
     if type(parent_pid) is not int or server.get('ppid') != parent_pid:
         raise SafetyError('Hive Strata launcher parent changed; stop refused')
@@ -963,6 +965,51 @@ def verify_batch_groups(state, version, parallel, groups):
         raise SafetyError('Native batching must receive the explicit requested groups; automatic grouping refused')
 
 
+def capture_spawn_identity(child, python, argv, *, timeout=2):
+    """Record only a complete, stable exec of our still-unreaped Popen child.
+
+    This is startup-only, not adoption/recovery: PID birth, parent, exact argv,
+    executable, operator UID and the newly-created session/group all remain fixed.
+    In particular, never record a transient procfs UID during exec as serving state.
+    """
+    deadline = time.monotonic() + timeout
+    birth = None
+    previous = None
+    while child.poll() is None:
+        current = proc(child.pid)
+        if current is not None:
+            if birth is None:
+                birth = current['start_ticks']
+            if current['start_ticks'] != birth:
+                raise SafetyError('Spawned child birth identity changed; replacement was not adopted')
+            complete = (current['pid'] == child.pid and current.get('ppid') == os.getpid() and
+                        current['exe'] == str(Path(python).resolve()) and current['cmd'] == argv and
+                        current['uid'] == os.geteuid() and current['sid'] == child.pid and current['pgid'] == child.pid)
+            if complete and same_process(previous, current):
+                return current
+            previous = current if complete else None
+        else:
+            previous = None
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(.05)
+    raise SafetyError('Spawned frontend did not expose its exact stable exec identity; no replacement was adopted')
+
+
+def cleanup_failed_handoff(child, identity, launch_error, receipt_path, receipt):
+    """Best-effort diagnostics cannot block exact-identity cleanup or hide its first cause."""
+    try:
+        write_private_run_config(receipt_path, dict(receipt, observed_identity=proc(child.pid),
+            launcher_identity=proc(os.getpid()), error=str(launch_error), grants_stop_authorization=False))
+    except Exception:
+        pass  # Disk/procfs/diagnostic errors must not prevent the existing strict cleanup attempt.
+    try:
+        signal_identity(identity, signal.SIGTERM)
+        child.wait(timeout=10)
+    except Exception as cleanup_error:
+        raise SafetyError(f'Hive startup handoff failed: {launch_error}; exact spawned-identity cleanup also refused: {cleanup_error}') from launch_error
+
+
 def startup_config(cfg, version, profile=None):
     """Load retained Q4/SC117 candidate models before opening the API."""
     effective = dict(cfg)
@@ -1157,7 +1204,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         print('EXPERIMENTAL Strata IQ3_S | BF16 GPU vision | native 262144 | INT8 KV | MTP | high reasoning')
     if ple_q8:
         print('Q8_0 PLE-only candidate: separate cache/state; original model/expert quantization, runtime and tuning retained.')
-        print('No inference/quality/speed qualification was performed during the no-interruption menu deployment.')
+        print('Bounded Q8 live-menu smoke passed after operator authorization; matched quality/speed A/B and production qualification remain pending.')
     if profile == ORCA_Q4KS_PROFILE and version in (q4ks_v01441.RUNTIME_VERSION,
                                                        *runtimes.PROFILE_BOUND_VERSIONS):
         print(f'Strata {version} note: pipeline-windows is omitted from this serving baseline.', flush=True)
@@ -1185,7 +1232,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
             remove_ephemeral_auth_config({'runtime_config_dir': runtime_config_dir,
                                           'runtime_config_dir_identity': runtime_config_dir_identity})
         raise
-    identity = proc(child.pid)
+    identity = (capture_spawn_identity(child, python, server_args) if ple_q8 else proc(child.pid))
     if not identity or identity['exe'] != str(python.resolve()) or identity['sid'] != child.pid:
         # Popen's exec handshake plus retained child identity, never a guessed global process name.
         child.terminate()
@@ -1198,9 +1245,12 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     if hive_launch_id:
         try:
             hive_parent_identity = _verified_hive_process_parent(identity, hive_launch_id)
-        except Exception:
-            signal_identity(identity, signal.SIGTERM)
-            child.wait(timeout=10)
+        except Exception as launch_error:
+            # Diagnostic receipt only: never normal serving state or stop authorization.
+            # Retain the original handoff failure if strict identity-bound cleanup also refuses.
+            cleanup_failed_handoff(child, identity, launch_error, state_root / 'failed-start-identity.json', {
+                'profile': profile, 'runtime_version': version, 'spawn_identity': identity,
+                'hive_launch_id_sha256': hashlib.sha256(hive_launch_id.encode()).hexdigest(), 'log': str(log)})
             if runtime_config_dir is not None:
                 remove_ephemeral_auth_config({'runtime_config_dir': runtime_config_dir,
                                               'runtime_config_dir_identity': runtime_config_dir_identity})

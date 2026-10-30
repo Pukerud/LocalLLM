@@ -61,8 +61,8 @@ profile_label() {
         iq3_s-sc117-abliterated) printf '%s' 'SC117 GSQ-RCO IQ3_S (abliterated) — IQ4_NL n-gram | Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot; unqualified trusted-LAN trial on 8080 (no auth)' ;;
         iq3_s-sc117-abliterated-v0146) printf '%s' 'SC117 GSQ-RCO IQ3_S (abliterated) — IQ4_NL n-gram | Strata 0.1.46 | new SM86 defaults enabled; native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot; unqualified trusted-LAN trial on 8080 (no auth)' ;;
         swift15-heretic-re) printf '%s' 'Swift 1.5 Heretic RE — IQ4_NL n-gram | Strata .46 | native 262K | BF16 CPU vision | spec 3 + windows 2 | 8192 MiB / four-history cache | one slot' ;;
-        swift15-heretic-re-ple-q8) printf '%s' 'Swift 1.5 Heretic RE — Q8_0 n-gram | Strata .46 | same context/vision/tuning | isolated cache | NOT inference-tested' ;;
-        iq3_s-sc117-abliterated-ple-q8-v0146) printf '%s' 'SC117 IQ3_S — Q8_0 n-gram | Strata .46 | same context/CPU vision/tuning | isolated trial cache | NOT inference-tested' ;;
+        swift15-heretic-re-ple-q8) printf '%s' 'Swift 1.5 Heretic RE — Q8_0 n-gram | Strata .46 | same context/vision/tuning | isolated cache | bounded smoke passed; quality/speed A/B pending' ;;
+        iq3_s-sc117-abliterated-ple-q8-v0146) printf '%s' 'SC117 IQ3_S — Q8_0 n-gram | Strata .46 | same context/CPU vision/tuning | isolated trial cache | bounded smoke passed; quality/speed A/B pending' ;;
         *) return 1 ;;
     esac
 }
@@ -137,7 +137,7 @@ show_profiles() {
 }
 
 check_selected_profile_ready() {
-    local effective="$1" q8_state='' q8_suffix=' PLE OVERRIDE: original-Qwen Q8_0 n-gram; mmap; separate Q8_0 state/cache; inference and quality A/B pending.'
+    local effective="$1" q8_state='' q8_suffix=' PLE OVERRIDE: original-Qwen Q8_0 n-gram; mmap; separate Q8_0 state/cache; bounded live smoke passed; matched quality/speed A/B pending.'
     local -a ple_args=()
     case "$effective" in
         swift15-heretic-re-ple-q8)

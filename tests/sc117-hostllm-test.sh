@@ -25,7 +25,7 @@ if [[ "${1:-}" == --check-ready ]]; then
     if [[ "$variant" == trial-q8-exact || "$variant" == trial46-q8-exact ]]; then
         [[ "$variant" != trial-q8-exact ]] || variant=trial-exact
         [[ "$variant" != trial46-q8-exact ]] || variant=trial46-exact
-        ple_suffix=' PLE OVERRIDE: original-Qwen Q8_0 n-gram; mmap; separate Q8_0 state/cache; inference and quality A/B pending.'
+        ple_suffix=' PLE OVERRIDE: original-Qwen Q8_0 n-gram; mmap; separate Q8_0 state/cache; bounded live smoke passed; matched quality/speed A/B pending.'
     fi
     output="$(
     case "$variant" in

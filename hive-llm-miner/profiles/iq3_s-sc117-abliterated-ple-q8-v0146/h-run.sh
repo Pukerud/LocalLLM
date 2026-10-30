@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HiveOS custom miner: SC117 .46 Q8_0 PLE-only trial; inference/quality A/B pending.
+# HiveOS custom miner: SC117 .46 Q8_0 PLE-only trial; bounded smoke passed, matched quality/speed A/B pending.
 # Hive supervises this wrapper; the model launcher runs as unprivileged user.
 # Keep osn.service running as the prior Qwen Hive miner does.
 set -Eeuo pipefail
@@ -286,7 +286,7 @@ readiness="$(run_strata_user "$STRATA_LAUNCHER" --check-ready --ple-q8 --profile
     exit 1
 }
 expected_readiness='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.46; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2; new SM86 release defaults enabled. This is not qualification.'
-expected_readiness+=' PLE OVERRIDE: original-Qwen Q8_0 n-gram; mmap; separate Q8_0 state/cache; inference and quality A/B pending.'
+expected_readiness+=' PLE OVERRIDE: original-Qwen Q8_0 n-gram; mmap; separate Q8_0 state/cache; bounded live smoke passed; matched quality/speed A/B pending.'
 actual_readiness="$(grep '^TRIAL CONFIG:' <<< "$readiness" || true)"
 if [[ "$actual_readiness" != "$expected_readiness" || "$readiness" == *'READY CONFIG:'* ]]; then
     say 'SC117 isolated trial preflight line is missing or mismatched; refusing start'

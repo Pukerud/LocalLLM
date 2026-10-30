@@ -15,7 +15,7 @@ STATES = {'swift15-heretic-re': 'swift15-heretic-re-ple-q8',
 HIVE_PROFILES = {'swift15-heretic-re-ple-q8': 'swift15-heretic-re',
                  'iq3_s-sc117-abliterated-ple-q8-v0146': 'iq3_s-sc117-abliterated'}
 READY_SUFFIX = (' PLE OVERRIDE: original-Qwen Q8_0 n-gram; mmap; separate Q8_0 state/cache; '
-                'inference and quality A/B pending.')
+                'bounded live smoke passed; matched quality/speed A/B pending.')
 
 
 def folder(root):

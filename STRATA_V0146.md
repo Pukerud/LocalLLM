@@ -1,6 +1,6 @@
 # Strata 0.1.46: isolated trusted-LAN test
 
-**Current scope (2026-10-30):** Orca Q4/DeepSeek weights and menu routes were retired on 2026-10-29; they are not installed-model rollbacks. The pinned .46 runtime below remains unchanged for SC117/Heretic. Original IQ4_NL PLE routes are Heretic [3]/Hive [14] and SC117 .45 [4]/.46 Hive [15]; opt-in Q8_0 PLE adds [5]/[6]/Hive [16]/[17] with separate state/cache, not a runtime upgrade. See [PLE_Q8.md](PLE_Q8.md). SC117 remains an **unqualified trial**. Earlier Orca-standard/menu/rollback statements below describe dated historical tests, not current installation policy. Keep the retained runtimes/preset evidence without silently redownloading retired weights.
+**Current scope (2026-10-30):** Orca Q4/DeepSeek weights and menu routes were retired on 2026-10-29; they are not installed-model rollbacks. The pinned .46 runtime below remains unchanged for SC117/Heretic. Original IQ4_NL PLE routes are Heretic [3]/Hive [14] and SC117 .45 [4]/.46 Hive [15]; opt-in Q8_0 PLE adds [5]/[6]/Hive [16]/[17] with separate state/cache, not a runtime upgrade. See [PLE_Q8.md](PLE_Q8.md) and [the later authorized Q8 live-menu smoke](results/ple-q8-live-menus-20261030.json). All four new routes passed bounded functional checks; original SC117 was restored. SC117 remains an **unqualified trial**. Earlier Orca-standard/menu/rollback statements below describe dated historical tests, not current installation policy. Keep the retained runtimes/preset evidence without silently redownloading retired weights.
 
 ## Pins and build
 

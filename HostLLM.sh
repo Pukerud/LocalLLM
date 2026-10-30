@@ -268,7 +268,7 @@ run_selected() {
     if [[ "$launcher" == v1strata.sh ]]; then
         local arg previous='' i candidate_041=0 candidate_0441=0 candidate_045=0 candidate_046=0 candidate_sc117_iq3s=0 candidate_sc117_trial=0 candidate_deepseek=0 candidate_heretic=0
         local requested_profile='' requested_runtime='' requested_parallel=1 requested_groups=1 candidate_ple_q8=0
-        local ple_q8_suffix=' PLE OVERRIDE: original-Qwen Q8_0 n-gram; mmap; separate Q8_0 state/cache; inference and quality A/B pending.'
+        local ple_q8_suffix=' PLE OVERRIDE: original-Qwen Q8_0 n-gram; mmap; separate Q8_0 state/cache; bounded live smoke passed; matched quality/speed A/B pending.'
         local requested_host readiness expected_readiness actual_readiness
         local requested_profile_count=0 requested_runtime_count=0 requested_parallel_count=0 requested_groups_count=0
         local -a check_args=(--check-ready) candidate_env=()
@@ -671,8 +671,8 @@ main() {
         echo '  [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
         echo '  [3] Swift 1.5 Heretic RE — IQ4_NL n-gram | Strata 0.1.46 | native 262K | BF16 CPU vision | spec 3 + windows 2 | 8 GiB / 4-history cache | one slot'
         echo '  [4] SC117 GSQ-RCO IQ3_S (abliterated) — IQ4_NL n-gram | Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot | LAN 8080'
-        echo '  [5] Swift 1.5 Heretic RE — Q8_0 n-gram | Strata 0.1.46 | same native context/vision/tuning | isolated cache | NOT inference-tested'
-        echo '  [6] SC117 GSQ-RCO IQ3_S (abliterated) — Q8_0 n-gram | Strata 0.1.45 | same native context/vision/tuning | isolated trial cache | NOT inference-tested'
+        echo '  [5] Swift 1.5 Heretic RE — Q8_0 n-gram | Strata 0.1.46 | same native context/vision/tuning | isolated cache | bounded smoke passed; quality/speed A/B pending'
+        echo '  [6] SC117 GSQ-RCO IQ3_S (abliterated) — Q8_0 n-gram | Strata 0.1.45 | same native context/vision/tuning | isolated trial cache | bounded smoke passed; quality/speed A/B pending'
         echo ''
         printf '  Strata slots: %s (STRATA_PARALLEL; default 1), batch groups: %s. Runtime override: %s.\n' "${STRATA_PARALLEL:-1}" "${STRATA_BATCH_GROUPS:-1}" "${STRATA_RUNTIME:-selected default}"
         echo '  Starting hosting pauses the miner and OctaSpace automatically (never an active rental).'
@@ -685,8 +685,8 @@ main() {
         echo '  [13] Set next Hive miner - Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
         echo '  [14] Set next Hive miner - Swift 1.5 Heretic RE | IQ4_NL n-gram | Strata 0.1.46 | native 262K | BF16 CPU vision | spec 3 + windows 2 | 8 GiB / 4-history cache | one slot'
         echo '  [15] Set next Hive miner - SC117 IQ3_S | IQ4_NL n-gram | Strata 0.1.46 unqualified CPU-vision trial | --spec 3 + pipeline-windows 2 | one slot | trusted-LAN 8080'
-        echo '  [16] Set next Hive miner - Swift 1.5 Heretic RE | Q8_0 n-gram | Strata 0.1.46 | isolated cache | NOT inference-tested'
-        echo '  [17] Set next Hive miner - SC117 IQ3_S | Q8_0 n-gram | Strata 0.1.46 unqualified trial | isolated cache | NOT inference-tested'
+        echo '  [16] Set next Hive miner - Swift 1.5 Heretic RE | Q8_0 n-gram | Strata 0.1.46 | isolated cache | bounded smoke passed; quality/speed A/B pending'
+        echo '  [17] Set next Hive miner - SC117 IQ3_S | Q8_0 n-gram | Strata 0.1.46 unqualified trial | isolated cache | bounded smoke passed; quality/speed A/B pending'
         echo '  Hive selections safely pause OctaSpace, switch the owned Hive LLM, then restore its running state.'
         echo '  No manual miner stop is needed; rentals and manual hosting sessions are never stopped.'
         read -r -p '  Select: ' choice || return 0

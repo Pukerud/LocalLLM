@@ -10,7 +10,7 @@ Preferred high-level, ownership-checked switch:
 cd /home/user/LocalLLM
 ./HostLLM.sh
 # [12] Swift; [13] Hauhau; [14] Heretic IQ4_NL PLE; [15] SC117 .46 IQ4_NL PLE.
-# [16] Heretic Q8_0 PLE; [17] SC117 .46 Q8_0 PLE (new candidates; inference A/B pending).
+# [16] Heretic Q8_0 PLE; [17] SC117 .46 Q8_0 PLE (bounded smoke passed; quality/speed A/B pending).
 ```
 
 The low-level root-only selector changes a pointer, **not services**. Use it only when hosting/mining is safely stopped and no rental/manual session is active:
@@ -25,8 +25,8 @@ sudo /hive/miners/custom/llm-hosting/profile-menu.sh
 [3] Heretic RE — IQ4_NL n-gram | Strata .46 + isolated BF16-gate compatibility
 [4] SC117 .45 — IQ4_NL n-gram | unqualified CPU-vision trial
 [5] SC117 .46 — IQ4_NL n-gram | unqualified CPU-vision trial
-[6] Heretic RE — Q8_0 n-gram | same .46 | NOT inference-tested
-[7] SC117 .46 — Q8_0 n-gram | same runtime/tuning | NOT inference-tested
+[6] Heretic RE — Q8_0 n-gram | same .46 | bounded smoke passed; A/B pending
+[7] SC117 .46 — Q8_0 n-gram | same runtime/tuning | bounded smoke passed; A/B pending
 ```
 
 Low-level [3]/[5] correspond to HostLLM Hive **[14]/[15]**; new low-level [6]/[7] correspond to high-level **[16]/[17]**. HostLLM direct [3]/[4] retain the original IQ4_NL PLE; [5]/[6] add Q8_0 PLE. Direct SC117 remains .45, Hive SC117 remains .46. The old high-level SC117 .46 [17] number moved to [15]; the selected profile itself is not changed by this menu update.
@@ -62,7 +62,7 @@ SC117 .45/.46 remain **unqualified trials**, fixed to unauthenticated trusted-LA
 
 [PLE_Q8.md](../PLE_Q8.md) pins the shared 54.4-GB original-Qwen Q8_0 table and documents full file/header checks and original-model table identity. These candidates keep expert/dense weights, native 262K, CPU vision, INT8/32768 KV, spec 3/windows 2 and 8192-MiB/four-history cache policy unchanged. They use separate state/adaptive profiles at `swift15-heretic-re-ple-q8` and `sc117-iq3s-ple-q8-trial`; original configs/cache are not rewritten. API model IDs add `-ple-q8_0`, while existing aliases remain accepted.
 
-**Not inference-tested:** no Q8 text/image/tool/cache/context or speed/quality qualification was run while preserving the current miner. Higher PLE precision is not a guaranteed answer-quality or speed improvement. No Strata upgrade is involved.
+Initial no-stop publication did not run inference. Later operator-authorized **[5]/[6]/[16]/[17]** live functional smoke passed: key-free text/high thinking, swapped/ordered images, SSE/tool formatting, real four-history cache restoration, owned shutdown and both Hive 259835-token retrievals. [The live receipt](../results/ple-q8-live-menus-20261030.json) records scope and initial corrections; original SC117 .46/IQ4_NL and active OctaSpace were restored. This is **not matched quality/speed A/B or production qualification**. Higher PLE precision is not a guaranteed answer-quality or speed improvement. No Strata upgrade is involved.
 
 ## Install and lifecycle
 

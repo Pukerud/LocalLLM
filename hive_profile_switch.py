@@ -307,7 +307,7 @@ def preflight_profile(profile):
         lines = [line for line in result.stdout.splitlines() if line.startswith(('READY CONFIG:', 'TRIAL CONFIG:'))]
         if result.returncode or lines != [expected]:
             raise SafetyError('Q8_0 PLE exact isolated readiness failed before any pause')
-        say('Q8_0 PLE data/config readiness passed; inference/quality/speed testing is still pending.')
+        say('Q8_0 PLE data/config readiness passed; bounded live smoke recorded; matched quality/speed A/B remains pending.')
         return
     if profile == HERETIC_PROFILE:
         from heretic_profile import READY

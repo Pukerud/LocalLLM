@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HiveOS custom miner: Heretic RE Q8_0 PLE-only candidate; inference/quality A/B pending.
+# HiveOS custom miner: Heretic RE Q8_0 PLE-only candidate; bounded smoke passed, matched quality/speed A/B pending.
 # Hive supervises this wrapper; the model launcher runs as unprivileged user.
 # Keep osn.service running as the prior Qwen Hive miner does.
 set -Eeuo pipefail
@@ -278,7 +278,7 @@ if (( available_mib < 65536 )); then
 fi
 abort_if_stopping
 
-say 'checking Q8_0 PLE-only Heretic RE candidate; inference not tested: pinned 0.1.46: native 262144, native BF16 CPU vision, spec 3 + windows 2, one slot, trusted-LAN 8080'
+say 'checking Q8_0 PLE-only Heretic RE candidate; bounded smoke passed, not qualification: pinned 0.1.46: native 262144, native BF16 CPU vision, spec 3 + windows 2, one slot, trusted-LAN 8080'
 readiness="$(run_strata_user "$STRATA_LAUNCHER" --check-ready --ple-q8 --profile "$PROFILE" \
         --runtime "$RUNTIME" --parallel 1 --batch-groups 1)" || {
     say 'Heretic RE preflight failed; no existing service was stopped'
@@ -286,7 +286,7 @@ readiness="$(run_strata_user "$STRATA_LAUNCHER" --check-ready --ple-q8 --profile
     exit 1
 }
 expected_readiness='READY CONFIG: Swift 1.5 Heretic RE; Strata=0.1.46; native context=262144; BF16 CPU vision; one serving slot/group; --spec 3; prefill auto; split 14,24,36; trim-stage-weights; pipeline-windows 2; conversation cache=8192 MiB / 4 slots; thinking high; trusted-LAN 0.0.0.0:8080 without mandatory API key. Bounded test, not qualification.'
-expected_readiness+=' PLE OVERRIDE: original-Qwen Q8_0 n-gram; mmap; separate Q8_0 state/cache; inference and quality A/B pending.'
+expected_readiness+=' PLE OVERRIDE: original-Qwen Q8_0 n-gram; mmap; separate Q8_0 state/cache; bounded live smoke passed; matched quality/speed A/B pending.'
 actual_readiness="$(grep '^READY CONFIG:' <<< "$readiness" || true)"
 if [[ "$actual_readiness" != "$expected_readiness" ]]; then
     say 'Heretic RE exact preflight line is missing or mismatched; refusing start'

@@ -1,6 +1,6 @@
-# Flash-Next Q8_0 PLE-only candidates — no-interruption preparation
+# Flash-Next Q8_0 PLE-only variants
 
-2026-10-30, `.69`. The operator normally runs **SC117 .46**. This update prepares opt-in higher-precision n-gram tables for both retained Flash-Next models **without stopping, switching, reloading or reconfiguring the running miner**. Existing IQ4_NL PLE routes remain available.
+2026-10-30, `.69`. The operator normally runs **SC117 .46**. Initial preparation/publication added the options **without stopping, switching, reloading or reconfiguring the running miner**. After explicit live-test authorization, all four new menu routes passed bounded functional checks; the original SC117 .46/IQ4_NL Hive selection and active OctaSpace were restored. Existing IQ4_NL routes remain available. This is not quality/speed or production qualification.
 
 ## Menu map
 
@@ -34,7 +34,7 @@ Local preparation verifies the full published file checksum, exact one-tensor he
 
 ## Same serving policy, separate state/cache
 
-The only numerical model input changed is `--ple-gguf`. Keep the original expert/dense weights, pack, tokenizer, MTP, projector, engine and tuning:
+The only numerical model input changed is `--ple-gguf`. The overlay also explicitly binds all **original** model shards through `--native-dense-gguf` (Heretic eight, SC117 two), preventing the table-only shard's unrelated six-shard metadata from triggering model-shard auto-discovery. No Q6 model weights are loaded. Keep the original expert/dense weights, pack, tokenizer, MTP, projector, engine and tuning:
 
 - Native **262144** context; no silent fit/truncation or RoPE extension.
 - Four GPUs, split **14,24,36**, one serving slot/group.
@@ -77,8 +77,14 @@ The ordinary full installer still refuses active workloads and is **not** the no
 
 ## What was and was not tested
 
-Completed preparation scope: full sidecar checksum/header checks, full original-table identity comparison, actual offline readiness for Heretic .46 and SC117 .45/.46 Q8 variants, unit tests, shell dispatch/safety tests and no-stop package publication. Final counts and preservation receipts are in [the sanitized results](results/ple-q8-no-interruption-20261030.json).
+Initial no-stop preparation: full sidecar checksum/header checks, full original-table identity comparison, actual offline readiness for Heretic .46 and SC117 .45/.46, unit/shell checks and add-only publication. [The original receipt](results/ple-q8-no-interruption-20261030.json) remains historical; no inference occurred during that stage.
 
-**Not performed:** Q8 model loading/inference, text/image/tool output tests, cache reuse with Q8, long-context Q8 retrieval, throughput/latency measurements or a matched IQ4_NL-versus-Q8 quality A/B. These require a later explicitly authorized model switch; the running SC117 was deliberately left alone. Earlier IQ4_NL smoke/near-native-context evidence does not qualify these Q8 variants.
+**Later authorized live window:** actual root HostLLM **[5], [6], [16], [17]** loaded the intended runtimes as UID 1000. All passed key-free LAN UI/models/status/health, known text, high-thinking arithmetic, swapped/ordered real images, complete SSE, tool-call formatting (no tool execution), Host/Origin 403, same-origin requests and genuine restoration of all four parked histories. Direct Ctrl+C released the exact owned family/lease; Hive switches stopped only their owned launches. Both Hive variants retrieved `271828` from **259835 actual input tokens** with zero cached prompt tokens. Direct variants also passed approximately 14K-token retrieval. A further cold Heretic Hive startup passed after handoff hardening.
+
+Live work corrected explicit native-shard selection and made new Q8 starts wait for two identical complete identities of their still-unreaped spawned child: exact birth, parent, argv, executable, UID, session and group. Stop/recovery identity checks were not relaxed. The first handoff refusal, ambiguous initial retrieval fixture and asynchronous-start test-driver correction are disclosed in [the sanitized live results](results/ple-q8-live-menus-20261030.json); diagnostic receipts do not authorize adoption or stopping another session.
+
+**441 Python tests OK/one skipped; seven shell suites passed.** Final original SC117 .46/IQ4_NL configuration, rig/wallet hashes and GPU limits matched the baseline; OctaSpace active, no lease/journal. No host reboot or driver/runtime change occurred. Only version-matched inactive Q8 metadata and the selector were refreshed afterward.
+
+**Not established:** a matched IQ4_NL-versus-Q8 quality/speed A/B, demanding-task equivalence, broad near-native-context quality, sustained stability/concurrency, or cold persisted-cache recovery. Native per-request timings in the receipt are observations, not comparative benchmarks. Optional-auth support was preserved, not separately reconfigured or retested. SC117 remains trial-only.
 
 Higher table precision may improve fidelity, but does not guarantee smarter answers or unchanged speed. SSD access, cold/warm page cache, available RAM, long prompts and the remaining expert quantization still matter. Strata also supports BF16 PLE; Q8_0 is an opt-in precision/storage compromise, not full-BF16 inference or a performance promotion.

@@ -54,8 +54,19 @@ def identity(cfg, profile):
     cfg['aliases'] = list(dict.fromkeys([profile + '-ple-q8', original, *cfg.get('aliases', [])]))
 
 
+def dense_sources(root, profile):
+    """Keep native projections on the original complete model, never the unrelated PLE split."""
+    if profile == 'swift15-heretic-re':
+        import heretic_assets as H
+        return [H.profile_root(root) / 'models' / H.local_name(name) for name, _size, _sha in H.SHARDS]
+    if profile == 'iq3_s-sc117-abliterated':
+        import iq3_s_sc117_abliterated_assets as S
+        return [S.shard1_path(root), S.shard2_path(root)]
+    raise SafetyError('Unknown Q8_0 PLE native-dense model')
+
+
 def overlay(root, profile, cfg):
-    """Change only the PLE input, adaptive-profile location and API identity."""
+    """Change PLE only; explicitly retain original dense sources to avoid split auto-discovery."""
     require_state(profile, state_root(profile))
     table = ready_asset(root)
     cfg = copy.deepcopy(cfg)
@@ -65,8 +76,16 @@ def overlay(root, profile, cfg):
             raise SafetyError('Q8_0 PLE requires exactly one ' + flag)
     if args[args.index('--ple-io') + 1] != 'mmap':
         raise SafetyError('Q8_0 PLE must remain memory-mapped; whole-table RAM locking is not allowed')
+    sources = dense_sources(root, profile)
+    if (args.count('--native') != 1 or args[args.index('--native') + 1] != str(sources[0]) or
+            any(arg == '--native-dense-gguf' or arg.startswith('--native-dense-gguf=') for arg in args)):
+        raise SafetyError('Q8_0 PLE native-dense inputs must be the exact original model shards')
     args[args.index('--ple-gguf') + 1] = str(table)
     args[args.index('--expert-profile') + 1] = str(state_root(profile) / 'expert-profile.bin')
+    # Without this, .45/.46 appends --ple-gguf to native-dense auto-discovery;
+    # the standalone Q8 shard belongs to a different six-shard split and is rejected.
+    for source in sources:
+        args.extend(['--native-dense-gguf', str(source)])
     identity(cfg, profile)
     return cfg
 

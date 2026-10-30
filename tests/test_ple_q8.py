@@ -64,9 +64,11 @@ class Contracts(unittest.TestCase):
     def test_overlay_changes_only_ple_adaptive_location_and_api_identity(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(Q, 'owner_home', return_value=Path(tmp)), \
              mock.patch.object(Q, 'ready_asset', return_value=Path('/verified/Q8_0.gguf')):
-            original = H.canonical_config(Path('/data'), Path('/runtime'))
+            template = H.canonical_config(Path('/data'), Path('/runtime'))
             for profile in A.STATES:
-                baseline = copy.deepcopy(original)
+                baseline = copy.deepcopy(template)
+                baseline['args'][baseline['args'].index('--native') + 1] = str(Q.dense_sources('/data', profile)[0])
+                original = copy.deepcopy(baseline)
                 result = Q.overlay('/data', profile, baseline)
                 self.assertEqual(baseline, original)
                 for key in original:
@@ -77,7 +79,11 @@ class Contracts(unittest.TestCase):
                     i = before.index(flag) + 1
                     self.assertNotEqual(before[i], after[i])
                     before[i] = after[i]
-                self.assertEqual(before, after)
+                dense = Q.dense_sources('/data', profile)
+                self.assertEqual(after[len(before):], [item for path in dense for item in ('--native-dense-gguf', str(path))])
+                self.assertNotIn('/verified/Q8_0.gguf', [str(p) for p in dense])
+                self.assertEqual(before, after[:len(before)])
+                self.assertEqual(len(dense), 8 if profile == H.PROFILE else 2)
                 self.assertIn('-ple-q8_0', result['model_name'])
                 self.assertIn(profile + '-ple-q8', result['aliases'])
                 self.assertFalse(result['vision']['gpu'])
@@ -86,12 +92,16 @@ class Contracts(unittest.TestCase):
     def test_bad_baseline_flags_and_whole_table_ram_lock_are_rejected(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(Q, 'owner_home', return_value=Path(tmp)), \
              mock.patch.object(Q, 'ready_asset', return_value=Path('/table')):
-            for mutation in ('duplicate', 'ram'):
+            for mutation in ('duplicate', 'ram', 'dense-override', 'wrong-native'):
                 cfg = H.canonical_config('/data', '/runtime')
                 if mutation == 'duplicate':
                     cfg['args'] += ['--ple-gguf', '/other']
-                else:
+                elif mutation == 'ram':
                     cfg['args'][cfg['args'].index('--ple-io') + 1] = 'ram'
+                elif mutation == 'dense-override':
+                    cfg['args'] += ['--native-dense-gguf', '/unreviewed/table']
+                else:
+                    cfg['args'][cfg['args'].index('--native') + 1] = '/wrong/model'
                 with self.subTest(mutation=mutation), self.assertRaises(E.SafetyError):
                     Q.overlay('/data', H.PROFILE, cfg)
 
@@ -179,6 +189,41 @@ class Contracts(unittest.TestCase):
         self.assertIn('sc117_trial_command --stop --ple-q8', text)
         self.assertIn('heretic_profile_command --stop --ple-q8', text)
         self.assertIn('--prepare-ple-q8', (REPO / 'v1strata.sh').read_text())
+
+    def test_spawn_handoff_requires_complete_stable_owned_exec_and_never_accepts_replacement(self):
+        child = mock.Mock(pid=123456)
+        child.poll.return_value = None
+        argv = ['/usr/bin/python3', '-m', 'serve.server']
+        expected = {'pid':child.pid, 'start_ticks':987654, 'exe':str(Path(argv[0]).resolve()),
+                    'ppid':os.getpid(), 'uid':os.geteuid(), 'cmd':argv, 'sid':child.pid, 'pgid':child.pid}
+        transient = dict(expected, uid=expected['uid'] + 1)
+        with mock.patch.object(L, 'proc', side_effect=[transient, expected, expected]), mock.patch.object(L.time, 'sleep'):
+            self.assertEqual(L.capture_spawn_identity(child, argv[0], argv), expected)
+        for field, value in [('uid',expected['uid'] + 1),('cmd',['unexpected']),('ppid',1),('sid',1),('pgid',1),('exe','/wrong/python')]:
+            with self.subTest(field=field), mock.patch.object(L, 'proc', return_value=dict(expected, **{field:value})), \
+                 mock.patch.object(L.time, 'sleep'), self.assertRaises(E.SafetyError):
+                L.capture_spawn_identity(child, argv[0], argv, timeout=0)
+        with mock.patch.object(L, 'proc', side_effect=[transient, dict(expected,start_ticks=987655)]), \
+             mock.patch.object(L.time, 'sleep'), self.assertRaises(E.SafetyError):
+            L.capture_spawn_identity(child, argv[0], argv)
+
+    def test_handoff_diagnostics_never_mask_primary_error_or_grant_stop_authorization(self):
+        child=mock.Mock(pid=123456);identity={'pid':child.pid};primary=E.SafetyError('original parent proof failure')
+        with mock.patch.object(L,'proc',return_value=identity), \
+             mock.patch.object(L,'write_private_run_config',side_effect=OSError('disk full')), \
+             mock.patch.object(L,'signal_identity') as stop:
+            L.cleanup_failed_handoff(child,identity,primary,Path('/private/receipt.json'),{'spawn_identity':identity})
+            stop.assert_called_once_with(identity,L.signal.SIGTERM)
+            child.wait.assert_called_once_with(timeout=10)
+        with mock.patch.object(L,'proc',return_value=identity), \
+             mock.patch.object(L,'write_private_run_config') as write, \
+             mock.patch.object(L,'signal_identity',side_effect=E.SafetyError('cleanup identity mismatch')), \
+             self.assertRaises(E.SafetyError) as failure:
+            L.cleanup_failed_handoff(child,identity,primary,Path('/private/receipt.json'),{'spawn_identity':identity})
+        self.assertIn(str(primary),str(failure.exception))
+        self.assertIn('cleanup identity mismatch',str(failure.exception))
+        self.assertIs(failure.exception.__cause__,primary)
+        self.assertIs(write.call_args.args[1]['grants_stop_authorization'],False)
 
     def test_start_rehashes_q8_data_before_any_frontend_or_gpu_spawn(self):
         with mock.patch.object(L.os, 'geteuid', return_value=1000), \

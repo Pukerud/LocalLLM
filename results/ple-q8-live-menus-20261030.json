@@ -1,0 +1,347 @@
+{
+  "date": "2026-10-30",
+  "scope": "Operator-authorized bounded live Q8_0 PLE menu tests after the earlier no-stop preparation",
+  "passed": true,
+  "production_qualified": false,
+  "matched_iq4_vs_q8_quality_or_speed_ab": false,
+  "host_rebooted_for_this_test": false,
+  "rental_and_active_request_checks": true,
+  "model_and_inference_uid": 1000,
+  "routes": [
+    {
+      "passed": true,
+      "choice": 5,
+      "runtime": "0.1.46",
+      "q8_ple": true,
+      "ple_sha256": "34efd79a80a1ce540a517a5d56171924b66ce1c38b04c904f17ad6d8ef17cf20",
+      "native_context": 262144,
+      "uid": 1000,
+      "api_key_required": false,
+      "text": "63",
+      "vision_swapped": [
+        {
+          "expected": "red",
+          "answer": "red"
+        },
+        {
+          "expected": "green",
+          "answer": "green"
+        }
+      ],
+      "ordered_images": true,
+      "thinking_high_answer": "2099",
+      "reasoning_observed": true,
+      "host_origin_403": [
+        403,
+        403
+      ],
+      "same_origin": true,
+      "sse_answer": "4",
+      "sse_finished_and_done": true,
+      "tool_format_only_no_execution": true,
+      "four_history_cache_reuse": [
+        {
+          "history": "alpha",
+          "cached_tokens": 4734
+        },
+        {
+          "history": "bravo",
+          "cached_tokens": 4734
+        },
+        {
+          "history": "charlie",
+          "cached_tokens": 5134
+        },
+        {
+          "history": "delta",
+          "cached_tokens": 4734
+        }
+      ],
+      "cache_policy": {
+        "mib": 8192,
+        "histories": 4
+      },
+      "long_context": {
+        "actual_prompt_tokens": 14432,
+        "answer": "271828",
+        "near_native": false
+      },
+      "actual_root_menu_choice": 5,
+      "owned_shutdown_verified": true,
+      "direct_ctrl_c_and_lease_release": true
+    },
+    {
+      "passed": true,
+      "choice": 6,
+      "runtime": "0.1.45",
+      "q8_ple": true,
+      "ple_sha256": "34efd79a80a1ce540a517a5d56171924b66ce1c38b04c904f17ad6d8ef17cf20",
+      "native_context": 262144,
+      "uid": 1000,
+      "api_key_required": false,
+      "text": "63",
+      "vision_swapped": [
+        {
+          "expected": "red",
+          "answer": "red"
+        },
+        {
+          "expected": "green",
+          "answer": "green"
+        }
+      ],
+      "ordered_images": true,
+      "thinking_high_answer": "2099",
+      "reasoning_observed": true,
+      "host_origin_403": [
+        403,
+        403
+      ],
+      "same_origin": true,
+      "sse_answer": "4",
+      "sse_finished_and_done": true,
+      "tool_format_only_no_execution": true,
+      "four_history_cache_reuse": [
+        {
+          "history": "alpha",
+          "cached_tokens": 4736
+        },
+        {
+          "history": "bravo",
+          "cached_tokens": 4736
+        },
+        {
+          "history": "charlie",
+          "cached_tokens": 5136
+        },
+        {
+          "history": "delta",
+          "cached_tokens": 4736
+        }
+      ],
+      "cache_policy": {
+        "mib": 8192,
+        "histories": 4
+      },
+      "long_context": {
+        "actual_prompt_tokens": 14432,
+        "answer": "271828",
+        "near_native": false
+      },
+      "actual_root_menu_choice": 6,
+      "owned_shutdown_verified": true,
+      "direct_ctrl_c_and_lease_release": true
+    },
+    {
+      "passed": true,
+      "choice": 16,
+      "runtime": "0.1.46",
+      "q8_ple": true,
+      "ple_sha256": "34efd79a80a1ce540a517a5d56171924b66ce1c38b04c904f17ad6d8ef17cf20",
+      "native_context": 262144,
+      "uid": 1000,
+      "api_key_required": false,
+      "text": "63",
+      "vision_swapped": [
+        {
+          "expected": "red",
+          "answer": "red"
+        },
+        {
+          "expected": "green",
+          "answer": "green"
+        }
+      ],
+      "ordered_images": true,
+      "thinking_high_answer": "2099",
+      "reasoning_observed": true,
+      "host_origin_403": [
+        403,
+        403
+      ],
+      "same_origin": true,
+      "sse_answer": "4",
+      "sse_finished_and_done": true,
+      "tool_format_only_no_execution": true,
+      "four_history_cache_reuse": [
+        {
+          "history": "alpha",
+          "cached_tokens": 4734
+        },
+        {
+          "history": "bravo",
+          "cached_tokens": 4734
+        },
+        {
+          "history": "charlie",
+          "cached_tokens": 5134
+        },
+        {
+          "history": "delta",
+          "cached_tokens": 4734
+        }
+      ],
+      "cache_policy": {
+        "mib": 8192,
+        "histories": 4
+      },
+      "long_context": {
+        "counted_tokens": 259835,
+        "actual_prompt_tokens": 259835,
+        "answer": "271828",
+        "elapsed_s": 193.50569636997534,
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 259835,
+          "prompt_ms": 193274.7,
+          "prompt_per_token_ms": 0.744,
+          "prompt_per_second": 1344.4,
+          "predicted_n": 7,
+          "predicted_ms": 73.9,
+          "predicted_per_token_ms": 10.557,
+          "predicted_per_second": 94.7,
+          "draft_n": 6,
+          "draft_n_accepted": 4
+        }
+      },
+      "actual_root_menu_choice": 16,
+      "owned_shutdown_verified": true
+    },
+    {
+      "passed": true,
+      "choice": 17,
+      "runtime": "0.1.46",
+      "q8_ple": true,
+      "ple_sha256": "34efd79a80a1ce540a517a5d56171924b66ce1c38b04c904f17ad6d8ef17cf20",
+      "native_context": 262144,
+      "uid": 1000,
+      "api_key_required": false,
+      "text": "63",
+      "vision_swapped": [
+        {
+          "expected": "red",
+          "answer": "red"
+        },
+        {
+          "expected": "green",
+          "answer": "green"
+        }
+      ],
+      "ordered_images": true,
+      "thinking_high_answer": "2099",
+      "reasoning_observed": true,
+      "host_origin_403": [
+        403,
+        403
+      ],
+      "same_origin": true,
+      "sse_answer": "4",
+      "sse_finished_and_done": true,
+      "tool_format_only_no_execution": true,
+      "four_history_cache_reuse": [
+        {
+          "history": "alpha",
+          "cached_tokens": 4736
+        },
+        {
+          "history": "bravo",
+          "cached_tokens": 4736
+        },
+        {
+          "history": "charlie",
+          "cached_tokens": 5136
+        },
+        {
+          "history": "delta",
+          "cached_tokens": 4736
+        }
+      ],
+      "cache_policy": {
+        "mib": 8192,
+        "histories": 4
+      },
+      "long_context": {
+        "counted_tokens": 259835,
+        "actual_prompt_tokens": 259835,
+        "answer": "271828",
+        "elapsed_s": 39.296968872018624,
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 259835,
+          "prompt_ms": 39081.2,
+          "prompt_per_token_ms": 0.15,
+          "prompt_per_second": 6648.6,
+          "predicted_n": 7,
+          "predicted_ms": 64.6,
+          "predicted_per_token_ms": 9.229,
+          "predicted_per_second": 108.4,
+          "draft_n": 4,
+          "draft_n_accepted": 4
+        }
+      },
+      "actual_root_menu_choice": 17,
+      "owned_shutdown_verified": true
+    }
+  ],
+  "preserved_policy": {
+    "native_context": 262144,
+    "serving_slots": 1,
+    "split": "14,24,36",
+    "vision": "BF16 CPU",
+    "kv": "INT8",
+    "kv_resident": 32768,
+    "spec": 3,
+    "pipeline_windows": 2,
+    "cache_mib": 8192,
+    "cache_histories": 4,
+    "main_weights_runtime_and_shared_sc117_engine_unchanged": true,
+    "gpu_power_limits_w": [
+      300,
+      300,
+      300,
+      280
+    ]
+  },
+  "fixes": [
+    "Q8 overlay explicitly binds all original native dense GGUF shards (Heretic eight, SC117 two); table-only six-shard metadata must not trigger unrelated model-shard auto-discovery.",
+    "New Q8 starts require two identical complete exec snapshots of the still-unreaped spawned child: fixed birth, exact argv/executable/parent/operator UID/new session and group. Stop/recovery identity requirements are not relaxed.",
+    "Hive handoff diagnostics preserve the first failure if strict identity-bound cleanup also refuses; private failure receipts grant no stop authorization."
+  ],
+  "initial_attempts": [
+    "First Heretic direct retrieval assertion was ambiguous. The prompt was clarified to ask for the marker value; the rerun passed. Both receipts retained privately.",
+    "First Hive16 startup proof refused before serving state was committed, and cleanup refused a changed snapshot. Only this test-created frontend/descendants were subsequently stopped using captured birth/command/log-inode/per-run-token and exact pidfd identities; no normal serving state was adopted. The original primary error was masked, so its differing field is not proven. A full retry and an additional cold startup with stable exec capture passed.",
+    "The Hive17 switch correctly started its owned miner asynchronously. The test driver initially mistook the checksum/loading interval for inactivity and refused a second start. It was corrected to observe the already-owned startup; no extra model start or ownership bypass occurred."
+  ],
+  "additional_cold_hive16_startup_passed": true,
+  "browser_ui": "Fresh browser session rendered the key-free Q8 Heretic UI and native Monitor with 256K context and four-history/8-GB cache budget; no shared settings were applied.",
+  "restoration": {
+    "passed": true,
+    "profile": "iq3_s-sc117-abliterated-v0146",
+    "ple": "original IQ4_NL",
+    "runtime": "0.1.46",
+    "native_context": 262144,
+    "octaspace_active": true,
+    "no_lease_or_journal": true,
+    "rig_wallet_hashes_unchanged": true,
+    "baseline_semantic_run_config_unchanged": true
+  },
+  "inactive_metadata_refresh": {
+    "passed": true,
+    "running_original_frontend_unchanged": true,
+    "active_pointer_and_profile_files_unchanged": true,
+    "only_version_matched_inactive_q8_files_and_selector_updated": true
+  },
+  "regression": {
+    "python_tests": 441,
+    "python_result": "OK",
+    "skipped": 1,
+    "shell_suites": 7,
+    "shell_result": "PASS"
+  },
+  "limitations": [
+    "Functional smoke and one synthetic near-native retrieval per Hive variant, not broad reasoning/vision/tools quality, populated-context quality, concurrency or sustained stability qualification.",
+    "Recorded native request timings are observations, not matched IQ4_NL/Q8 or Heretic/SC117 speed benchmarks; no comparative speed or intelligence gain claimed.",
+    "Tool-call formatting only; no generated tool was executed. Optional-auth code/runtime was preserved, not separately reconfigured/retested.",
+    "Four-history reuse was real process-local restoration. No cross-PLE KV was used; cold persisted-cache recovery is not established."
+  ]
+}
