@@ -1,23 +1,41 @@
 # LocalLLM — Swift, Hauhau and Flash-Next Strata
 
-HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s, approximately 128 GB RAM. **Swift remains the default; Hauhau remains the retained fallback.** The Flash-Next Heretic model below is separate from the smaller dense Swift/Hauhau models, despite sharing the Swift name.
+HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s, approximately 128 GB RAM. **Swift remains the default; Hauhau remains the retained fallback.** The operator normally runs **SC117 .46**; maintenance must preserve that actual selection unless explicitly asked to switch. The Flash-Next Heretic model below is separate from the smaller dense Swift/Hauhau models, despite sharing the Swift name.
 
 ## Current menu
 
 ```text
 [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots
 [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots
-[3] Swift 1.5 Heretic RE — Strata .46 | native 262K | BF16 CPU vision | spec 3 + windows 2 | one slot
-[4] SC117 GSQ-RCO IQ3_S — Strata .45 | unqualified CPU-vision trial | native 262K | one slot
+[3] Swift 1.5 Heretic RE — IQ4_NL n-gram | Strata .46 | native 262K | BF16 CPU vision | spec 3 + windows 2 | one slot
+[4] SC117 GSQ-RCO IQ3_S — IQ4_NL n-gram | Strata .45 | unqualified CPU-vision trial | native 262K | one slot
+[5] Swift 1.5 Heretic RE — Q8_0 n-gram | same .46/runtime/tuning | isolated state/cache | NOT inference-tested
+[6] SC117 GSQ-RCO IQ3_S — Q8_0 n-gram | same .45/runtime/tuning | isolated trial state/cache | NOT inference-tested
 
 [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit
 [12] Set next Hive miner — Swift 1.5 Uncensored Q8_K_XL
 [13] Set next Hive miner — Hauhau Q8_K_P
-[14] Set next Hive miner — Swift 1.5 Heretic RE
-[17] Set next Hive miner — SC117 .46 unqualified CPU-vision trial
+[14] Set next Hive miner — Heretic RE | IQ4_NL n-gram | Strata .46
+[15] Set next Hive miner — SC117 | IQ4_NL n-gram | Strata .46 unqualified trial
+[16] Set next Hive miner — Heretic RE | Q8_0 n-gram | same .46 | NOT inference-tested
+[17] Set next Hive miner — SC117 | Q8_0 n-gram | same .46 | NOT inference-tested
 ```
 
-The requested old Orca [3]/[5]/[14], DeepSeek [6]/[16], and SC117 .45 Hive [15] rows were removed. [3]/[14] now name **Heretic**, not Orca. SC117 .45 direct [4] and SC117 .46 Hive [17] are retained. The lower-level Hive menu lists only active model choices; retired Orca/DeepSeek names cannot be selected there.
+The 2026-10-29 Orca/DeepSeek retirement remains in force; reused numbers do not restore those models. On **2026-10-30**, existing SC117 .46 Hive **[17] moved to [15]**, and new Q8_0 PLE-only variants use direct **[5]/[6]** and Hive **[16]/[17]**. Existing IQ4_NL routes keep their engines/settings. The lower-level Hive selector adds [6] Heretic Q8_0 and [7] SC117 .46 Q8_0; its retained [5] now corresponds to high-level [15].
+
+## Higher-precision Q8_0 n-gram candidates
+
+See **[PLE_Q8.md](PLE_Q8.md)** for immutable data pins, preparation, no-stop installation and validation limits. Both original model PLE tensors were fully hashed and are bit-identical IQ4_NL. The new options share one checksum-verified **54.4-GB original-Qwen Q8_0 PLE shard**; they do not download/load a Q6 model, requantize the existing IQ4_NL table, change expert/dense weights, or upgrade Strata. KV remains INT8/32768 resident; native 262K, BF16 CPU vision, thinking, MTP, spec 3/windows 2 and 8-GiB/four-history cache policies are retained.
+
+Each candidate has a **separate state/cache and adaptive expert profile**. Original routes/configuration are untouched. Source/header and offline readiness tests do **not** establish improved answer quality, unchanged speed, image correctness or populated-context behavior. No Q8 inference was run during this no-interruption update.
+
+To add only the new inactive Hive profiles and updated selector while the current miner remains running, after operator-owned preparation:
+
+```bash
+sudo ./install-hive-llm-miner.sh --add-ple-q8-profiles
+```
+
+This narrow mode does not stop/restart/switch anything or rewrite the current profile, stable entrypoints, rig/wallet config or live model settings. The ordinary full installer still requires an idle host. Reopen HostLLM to see the new rows; **deployment itself never selects [16]/[17]**.
 
 ## Heretic RE
 
@@ -80,7 +98,7 @@ cd /home/user/LocalLLM
 - Root menus hand Strata inference to unprivileged `user`. No inference/preparation as root, process-name kills, driver resets or clock/power changes.
 - Hive selections use a serialized ownership-checked transaction and atomic profile pointer. Hive-owned sessions may be switched; rentals, unidentified jobs and another manual hosting session are never adopted or stopped. A pending transaction can be recovered only after inspecting its exact identity/journal: `sudo python3 hive_profile_switch.py --recover`.
 - Hive hosting keeps OctaSpace active and yields its own model if a rental arrives. Do not disable the cloud agent, rental guards or process-ownership checks to force hosting.
-- [9] controls the retained isolated states as well as the ordinary Qwen state. Exiting an unrelated menu never releases someone else's lease. Reopen the menu after updates; old shells retain old functions.
+- [9] controls the retained isolated IQ4_NL and Q8_0 states as well as the ordinary Qwen state; wrong-variant stops are refused. Exiting an unrelated menu never releases someone else's lease. Reopen the menu after updates; old shells retain old functions.
 - New package installs default to Swift and preserve recognized active selections. A selected retired model is refused rather than silently loaded/migrated from missing weights.
 
 Trusted-LAN endpoints:

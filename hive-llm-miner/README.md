@@ -9,7 +9,8 @@ Preferred high-level, ownership-checked switch:
 ```bash
 cd /home/user/LocalLLM
 ./HostLLM.sh
-# [12] Swift; [13] Hauhau; [14] Heretic RE; [17] SC117 .46 trial.
+# [12] Swift; [13] Hauhau; [14] Heretic IQ4_NL PLE; [15] SC117 .46 IQ4_NL PLE.
+# [16] Heretic Q8_0 PLE; [17] SC117 .46 Q8_0 PLE (new candidates; inference A/B pending).
 ```
 
 The low-level root-only selector changes a pointer, **not services**. Use it only when hosting/mining is safely stopped and no rental/manual session is active:
@@ -21,18 +22,22 @@ sudo /hive/miners/custom/llm-hosting/profile-menu.sh
 ```text
 [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT
 [2] Hauhau Q8_K_P
-[3] Swift 1.5 Heretic RE — Strata .46 + isolated BF16-gate compatibility
-[4] SC117 .45 unqualified CPU-vision trial
-[5] SC117 .46 unqualified CPU-vision trial
+[3] Heretic RE — IQ4_NL n-gram | Strata .46 + isolated BF16-gate compatibility
+[4] SC117 .45 — IQ4_NL n-gram | unqualified CPU-vision trial
+[5] SC117 .46 — IQ4_NL n-gram | unqualified CPU-vision trial
+[6] Heretic RE — Q8_0 n-gram | same .46 | NOT inference-tested
+[7] SC117 .46 — Q8_0 n-gram | same runtime/tuning | NOT inference-tested
 ```
 
-Low-level [3] corresponds to HostLLM Hive **[14]**; low-level [5] corresponds to HostLLM Hive **[17]**. HostLLM direct [3] starts Heretic's foreground server. SC117 .45 direct [4] remains, but its former high-level Hive [15] row was explicitly removed.
+Low-level [3]/[5] correspond to HostLLM Hive **[14]/[15]**; new low-level [6]/[7] correspond to high-level **[16]/[17]**. HostLLM direct [3]/[4] retain the original IQ4_NL PLE; [5]/[6] add Q8_0 PLE. Direct SC117 remains .45, Hive SC117 remains .46. The old high-level SC117 .46 [17] number moved to [15]; the selected profile itself is not changed by this menu update.
 
 ```bash
 sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile swift15-heretic-re
 sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile swift15u-q8
 sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile hauhau-q8-fastmtp-q4kv-xhigh
 sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile iq3_s-sc117-abliterated-v0146
+sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile swift15-heretic-re-ple-q8
+sudo /hive/miners/custom/llm-hosting/profile-menu.sh --profile iq3_s-sc117-abliterated-ple-q8-v0146
 ```
 
 Retired Orca/DeepSeek names are rejected by the active selector. The high-level switch refuses another manual/unowned server, unknown GPU work, a maintenance lease, or any possible Docker rental before a stop. An orphaned recorded server is **not automatically adopted as Hive-owned**; the operator must explicitly authorize/control that separate session.
@@ -51,9 +56,23 @@ Profile **`swift15-heretic-re`** uses all eight checksum-pinned publisher mixed-
 
 Endpoints are `http://192.168.1.69:8080/` and `/v1`. **No mandatory API key**, dummy token, secret environment or Authorization header. Host/DNS-rebinding and browser Origin checks remain; this is only for a trusted, firewalled LAN. Never expose it publicly. The original .46 no-key patch remains exact/version-pinned. Configured optional auth is not bypassed.
 
-SC117 .45/.46 remain **unqualified trials**, fixed to unauthenticated trusted-LAN `0.0.0.0:8080`, dedicated `sc117-iq3s-trial` state, CPU vision, spec 3/windows 2, four history slots and one serving slot. No normal/production qualification is granted. SC117 now verifies its own inputs plus exact retained preset metadata independently of deleted Orca weight files.
+SC117 .45/.46 remain **unqualified trials**, fixed to unauthenticated trusted-LAN `0.0.0.0:8080`, dedicated `sc117-iq3s-trial` state (Q8 variants use `sc117-iq3s-ple-q8-trial`), CPU vision, spec 3/windows 2, four history slots and one serving slot. No normal/production qualification is granted. SC117 now verifies its own inputs plus exact retained preset metadata independently of deleted Orca weight files.
+
+## Q8_0 PLE-only candidates
+
+[PLE_Q8.md](../PLE_Q8.md) pins the shared 54.4-GB original-Qwen Q8_0 table and documents full file/header checks and original-model table identity. These candidates keep expert/dense weights, native 262K, CPU vision, INT8/32768 KV, spec 3/windows 2 and 8192-MiB/four-history cache policy unchanged. They use separate state/adaptive profiles at `swift15-heretic-re-ple-q8` and `sc117-iq3s-ple-q8-trial`; original configs/cache are not rewritten. API model IDs add `-ple-q8_0`, while existing aliases remain accepted.
+
+**Not inference-tested:** no Q8 text/image/tool/cache/context or speed/quality qualification was run while preserving the current miner. Higher PLE precision is not a guaranteed answer-quality or speed improvement. No Strata upgrade is involved.
 
 ## Install and lifecycle
+
+After operator-owned Q8 data preparation, this narrow mode may add **only the two inactive Q8 profiles and selector while the current miner stays running**:
+
+```bash
+sudo ./install-hive-llm-miner.sh --add-ple-q8-profiles
+```
+
+It holds the existing selection/lifecycle reservations but creates no pause lease, performs no stop/start/switch, and preserves `current`, active profile files, stable entrypoints, miner markers, service state and rig/wallet configuration. Differing existing Q8 profiles, rentals or pending leases/journals cause refusal. **Do not use the full installer below for a live update.**
 
 Prepare the selected model explicitly as the normal operator first; ordinary starts never download/upgrade. See the [main README](../README.md) and [Heretic preparation](../HERETIC_RE.md#preparation).
 

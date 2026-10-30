@@ -193,12 +193,15 @@ fi
 grep -q '\[1\] Swift 1.5 Uncensored Q8_K_XL — DEFAULT' "$root/HostLLM.sh"
 grep -q '\[2\] Hauhau Q8_K_P — BF16 vision' "$root/HostLLM.sh"
 grep -q '\[3\] Swift 1.5 Heretic RE' "$root/HostLLM.sh"
-grep -q '\[4\] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot' "$root/HostLLM.sh"
+grep -q '\[4\] SC117 GSQ-RCO IQ3_S (abliterated) — IQ4_NL n-gram | Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot' "$root/HostLLM.sh"
 ! grep -q '^ *echo .*\[5\] TEST Orca' "$root/HostLLM.sh"
 grep -q '\[12\] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL' "$root/HostLLM.sh"
 grep -q '\[13\] Set next Hive miner - Hauhau Q8_K_P' "$root/HostLLM.sh"
 grep -q '\[14\] Set next Hive miner - Swift 1.5 Heretic RE' "$root/HostLLM.sh"
-! grep -qE '^ *echo .*\[(5|6|15|16)\]' "$root/HostLLM.sh"
+grep -q '\[5\] Swift 1.5 Heretic RE — Q8_0 n-gram' "$root/HostLLM.sh"
+grep -q '\[6\] SC117.*Q8_0 n-gram' "$root/HostLLM.sh"
+grep -q '\[15\].*SC117.*IQ4_NL n-gram' "$root/HostLLM.sh"
+grep -q '\[16\].*Heretic RE.*Q8_0 n-gram' "$root/HostLLM.sh"
 ! grep -qE '^ *echo .*\[(6|7)\] Orca Q4_K_S — Strata 0\.1\.(41|44\.1)' "$root/HostLLM.sh"
 ! grep -q '\[3\] SC117.*0.1.39' "$root/HostLLM.sh"
 grep -q '\[17\].*SC117.*0.1.46' "$root/HostLLM.sh"
@@ -236,18 +239,23 @@ grep -qx 'v1strata.sh --quickstart --profile swift15-heretic-re --runtime 0.1.46
 grep -qx 'v1strata.sh --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.45 --parallel 1 --batch-groups 1' "$trace"
 grep -qx 'unset|0.0.0.0|unset' "$trace.env"
 grep -qx '1|0.0.0.0|8080' "$trace.env"
-[[ "$(wc -l < "$trace")" -eq 4 ]]
-# Heretic gets [14]; the separately isolated SC117 .46 route remains at [17].
+grep -qx 'v1strata.sh --quickstart --profile swift15-heretic-re --runtime 0.1.46 --parallel 1 --batch-groups 1 --ple-q8' "$trace"
+grep -qx 'v1strata.sh --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.45 --parallel 1 --batch-groups 1 --ple-q8' "$trace"
+[[ "$(wc -l < "$trace")" -eq 6 ]]
+# Original Hive routes are [14]/[15]; Q8_0 PLE variants are [16]/[17].
 hive_target_trace="$scratch/hive-target-trace"
 (
   detect_engine() { echo none; }
   show_workload_status() { :; }
   host_gpu_summary() { :; }
   set_next_hive_profile() { printf '%s\n' "$1" >> "$hive_target_trace"; }
-  main < <(printf '14\n17\n11\n') > /dev/null
+  main < <(printf '14\n15\n16\n17\n11\n') > /dev/null
 )
 grep -qx 'swift15-heretic-re' "$hive_target_trace"
 grep -qx 'iq3_s-sc117-abliterated-v0146' "$hive_target_trace"
+grep -qx 'swift15-heretic-re-ple-q8' "$hive_target_trace"
+grep -qx 'iq3_s-sc117-abliterated-ple-q8-v0146' "$hive_target_trace"
+[[ "$(wc -l < "$hive_target_trace")" -eq 4 ]]
 # Exercise the inner package/pointer stage with inert installed files. The
 # transaction's owned-stop/OctaSpace ordering has dedicated Python tests.
 hive_menu_trace="$scratch/hive-menu.trace"
@@ -257,7 +265,7 @@ hive_fake_bin="$scratch/fake-bin"
 hive_pkg_source="$scratch/hive-pkg-source"
 hive_pkg_root="$scratch/hive-pkg-installed"
 hive_menu_installed="$hive_pkg_root/profile-menu.sh"
-hive_profiles=(swift15-heretic-re iq3_s-sc117-abliterated-v0146)
+hive_profiles=(swift15-heretic-re iq3_s-sc117-abliterated-v0146 swift15-heretic-re-ple-q8 iq3_s-sc117-abliterated-ple-q8-v0146)
 mkdir -p "$hive_fake_bin" "$hive_pkg_source/profiles" "$hive_pkg_root/profiles"
 printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "%s"\n' "$hive_menu_trace" > "$hive_pkg_source/profile-menu.sh"
 chmod +x "$hive_pkg_source/profile-menu.sh"
@@ -292,16 +300,18 @@ done
   detect_engine() { echo none; }
   show_workload_status() { :; }
   host_gpu_summary() { :; }
-  main < <(printf '%s\n' 14 17 11) > /dev/null
+  main < <(printf '%s\n' 14 15 16 17 11) > /dev/null
 )
 grep -qx -- '--profile swift15-heretic-re' "$hive_menu_trace"
 grep -qx -- '--profile iq3_s-sc117-abliterated-v0146' "$hive_menu_trace"
-[[ "$(wc -l < "$hive_menu_trace")" -eq 2 ]]
+grep -qx -- '--profile swift15-heretic-re-ple-q8' "$hive_menu_trace"
+grep -qx -- '--profile iq3_s-sc117-abliterated-ple-q8-v0146' "$hive_menu_trace"
+[[ "$(wc -l < "$hive_menu_trace")" -eq 4 ]]
 [[ "$(wc -l < "$hive_install_trace")" -eq 1 ]]
 if [[ "$EUID" -eq 0 ]]; then
   [[ ! -e "$hive_sudo_trace" ]]
 else
-  [[ "$(wc -l < "$hive_sudo_trace")" -eq 3 ]]
+  [[ "$(wc -l < "$hive_sudo_trace")" -eq 5 ]]
   grep -Fq -- '-- ' "$hive_sudo_trace"
 fi
 # Root-side lifecycle identity can prove a Qwen session managed even if user-side /proc reports unmanaged.
@@ -312,7 +322,7 @@ fi
   main < <(printf '3\n11\n') > /dev/null
 )
 [[ "$(tail -n1 "$trace")" == 'v1strata.sh --quickstart --profile swift15-heretic-re --runtime 0.1.46 --parallel 1 --batch-groups 1' ]]
-[[ "$(wc -l < "$trace")" -eq 5 ]]
+[[ "$(wc -l < "$trace")" -eq 7 ]]
 # Choosing Heretic while Strata runs must not call the launch/pause/stop path.
 (
   SCRIPT_DIR="$scratch/live-menu"
@@ -326,7 +336,7 @@ fi
   run_selected() { echo 'unexpected-start' >> "$trace"; }
   main < <(printf '3\n11\n') > /dev/null
 )
-[[ "$(wc -l < "$trace")" -eq 5 ]]
+[[ "$(wc -l < "$trace")" -eq 7 ]]
 # An unprepared historical explicit Q4 request must use its readiness gate, before any service/engine mutation.
 ready_trace="$scratch/readiness.trace"
 export ready_trace
@@ -489,4 +499,4 @@ grep -qx -- '--check-ready --profile iq3_s --runtime 0.1.39 --parallel 2 --batch
 )
 grep -qx -- '--check-ready --profile orca-iq3_xxs' "$ready_trace"
 [[ "$(wc -l < "$ready_trace")" -eq 5 ]]
-echo 'HostLLM [1]–[4]/[12]–[15] menu dispatch, SC117 trusted-LAN trial gate, preflight-before-hosting, and running-Strata preservation: PASS'
+echo 'HostLLM [1]–[6]/[12]–[17] IQ4_NL/Q8_0 PLE dispatch, SC117 trusted-LAN trial gate, preflight-before-hosting, and running-Strata preservation: PASS'

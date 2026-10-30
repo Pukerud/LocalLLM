@@ -13,16 +13,18 @@ for script in "$HOST" "$MENU" "$INSTALL" "$UNINSTALL" "$HERETIC/h-run.sh" "$SC11
 # Only the user-requested retired rows disappear; stable controls/retained routes remain.
 for expected in '[1] Swift 1.5 Uncensored' '[2] Hauhau' '[3] Swift 1.5 Heretic RE' '[4] SC117' \
     '[9] Stop owned' '[12] Set next Hive miner - Swift' '[13] Set next Hive miner - Hauhau' \
-    '[14] Set next Hive miner - Swift 1.5 Heretic RE' '[17] Set next Hive miner - SC117'; do grep -Fq "$expected" "$HOST"; done
-! grep -Eq '^[[:space:]]*echo .*\[(5|6|15|16)\]' "$HOST"
+    '[14] Set next Hive miner - Swift 1.5 Heretic RE' '[15] Set next Hive miner - SC117' \
+    '[16] Set next Hive miner - Swift 1.5 Heretic RE | Q8_0' '[17] Set next Hive miner - SC117 IQ3_S | Q8_0'; do grep -Fq "$expected" "$HOST"; done
+grep -Fq '[5] Swift 1.5 Heretic RE — Q8_0' "$HOST"
+grep -Fq '[6] SC117 GSQ-RCO IQ3_S (abliterated) — Q8_0' "$HOST"
 ! grep -Eq '^[[:space:]]*echo .*\[(3|14)\].*(Orca|DeepSeek)' "$HOST"
-grep -Fq '3|4)' "$HOST"; grep -Fq '12|13|14|17)' "$HOST"
+grep -Fq '3|4|5|6)' "$HOST"; grep -Fq '12|13|14|15|16|17)' "$HOST"
 grep -Fq 'heretic_profile_command --stop' "$HOST"
 grep -Fq 'sc117_trial_command --stop' "$HOST"
 grep -Fq 'set_next_hive_profile "$hive_profile"' "$HOST"
 grep -Fq "initial_profile='swift15u-q8'" "$INSTALL"
 ! grep -Fq 'candidate_expected_readiness=' "$INSTALL"  # no mandatory retired-model check
-for profile in swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh swift15-heretic-re iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146; do
+for profile in swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh swift15-heretic-re iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146 swift15-heretic-re-ple-q8 iq3_s-sc117-abliterated-ple-q8-v0146; do
  for f in h-run.sh h-config.sh h-stats.sh h-manifest.conf llm-hosting.conf; do
   [[ -f "$ROOT/hive-llm-miner/profiles/$profile/$f" && ! -L "$ROOT/hive-llm-miner/profiles/$profile/$f" ]]
  done
@@ -79,4 +81,12 @@ printf 'RUNTIME=0.1.45\nRUNTIME=0.1.46\n' > "$scratch/duplicate.conf"
 ln -s "$scratch/valid.conf" "$scratch/link.conf"
 for invalid in duplicate link;do if read_profile_runtime "$scratch/$invalid.conf";then exit 1;fi;done
 ! grep -Eq '^[[:space:]]*(pkill|killall|nvidia-smi[[:space:]]+--gpu-reset|reboot|shutdown)' "$HOST" "$MENU" "$INSTALL"
-echo 'Curated Heretic/retained menus, retired-model rejection, exact contexts/cache and identity/rental/atomic-publication safeguards: PASS'
+grep -Fq -- '--add-ple-q8-profiles' "$INSTALL"
+for profile in swift15-heretic-re-ple-q8 iq3_s-sc117-abliterated-ple-q8-v0146; do
+ profile_label "$profile" | grep -Fq 'Q8_0 n-gram'
+ wrapper="$ROOT/hive-llm-miner/profiles/$profile/h-run.sh"
+ bash -n "$wrapper"
+ for action in '--stop --ple-q8' '--quickstart --ple-q8' '--check-ready --ple-q8';do grep -Fq -- "$action" "$wrapper";done
+ grep -Fq "state.get('ple_q8') is not True" "$wrapper"
+done
+echo 'Curated IQ4_NL/Q8_0 PLE menus, retired-model rejection, exact contexts/cache and identity/rental/atomic-publication safeguards: PASS'

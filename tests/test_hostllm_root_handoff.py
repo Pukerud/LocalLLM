@@ -10,7 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class StrataOperatorHandoff(unittest.TestCase):
-    def run_handoff(self, *, trial=False, owner='user', through_selection=False, default_host=False):
+    def run_handoff(self, *, trial=False, owner='user', through_selection=False, default_host=False,
+                    profile_override=None, ple_q8=False):
         with tempfile.TemporaryDirectory() as directory:
             scratch = Path(directory)
             log = scratch / 'runuser.json'
@@ -18,13 +19,14 @@ class StrataOperatorHandoff(unittest.TestCase):
             stub.write_text('#!/usr/bin/python3\nimport json,sys\nfrom pathlib import Path\n'
                             f'Path({str(log)!r}).write_text(json.dumps(sys.argv[1:]))\n')
             stub.chmod(0o755)
-            profile = 'iq3_s-sc117-abliterated' if trial else 'orca-q4_k_s'
-            runtime = '0.1.45' if trial else '0.1.44.1'
+            profile = profile_override or ('iq3_s-sc117-abliterated' if trial else 'orca-q4_k_s')
+            runtime = '0.1.46' if profile == 'swift15-heretic-re' else '0.1.45' if trial else '0.1.44.1'
+            ple_arg = ' --ple-q8' if ple_q8 else ''
             function = 'run_selected v1strata.sh' if through_selection else 'run_strata_as_operator'
             host_assignment = '' if default_host else 'STRATA_HOST=' + ('0.0.0.0' if trial else '127.0.0.1')
             command = f'''source "$1/HostLLM.sh"
 STRATA_SC117_IQ3S_TRIAL={int(trial)} {host_assignment} \\
-    {function} --quickstart --profile {profile} --runtime {runtime} --parallel 1 --batch-groups 1
+    {function} --quickstart --profile {profile} --runtime {runtime} --parallel 1 --batch-groups 1{ple_arg}
 '''
             env = {'PATH': f'{scratch}:/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/root',
                    'QWEN38_OWNER_USER': owner, 'PYTHONPATH': '/hostile',
@@ -50,6 +52,22 @@ STRATA_SC117_IQ3S_TRIAL={int(trial)} {host_assignment} \\
                                                   '--parallel', '1', '--batch-groups', '1'])
                 self.assertNotIn('PYTHONPATH=/hostile', arguments)
                 self.assertNotIn('STRATA_PREFILL_CPU_SHARE=hostile', arguments)
+
+    def test_q8_variants_receive_separate_operator_state_and_preserve_the_cli_flag(self):
+        for trial, profile, state in [(True, 'iq3_s-sc117-abliterated', 'sc117-iq3s-ple-q8-trial'),
+                                      (False, 'swift15-heretic-re', 'swift15-heretic-re-ple-q8')]:
+            with self.subTest(profile=profile):
+                result, arguments = self.run_handoff(trial=trial, profile_override=profile, ple_q8=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('STRATA_STATE_ROOT=/home/user/.local/state/locallm-strata/' + state, arguments)
+                self.assertEqual(arguments[-1], '--ple-q8')
+                self.assertNotIn('PYTHONPATH=/hostile', arguments)
+                self.assertNotIn('STRATA_PREFILL_CPU_SHARE=hostile', arguments)
+
+    def test_q8_for_unrelated_profile_is_refused_before_operator_handoff(self):
+        result, arguments = self.run_handoff(ple_q8=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(arguments, [])
 
     def test_orca_defaults_to_lan_without_overriding_explicit_loopback(self):
         result, arguments = self.run_handoff(default_host=True)

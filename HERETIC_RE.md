@@ -2,6 +2,8 @@
 
 2026-10-29; `.69`, four RTX 3090s. Profile/state **`swift15-heretic-re`**, direct HostLLM **[3]**, Hive **[14]**. Swift's existing dense Q8 profile remains the overall default. Heretic's real native window is **262144**, not DeepSeek's historical 1M window.
 
+**2026-10-30 addition:** original IQ4_NL PLE remains [3]/Hive [14]; opt-in Q8_0 PLE uses direct **[5]** / Hive **[16]**, the same isolated .46 engine/tuning and separate state/cache. See [PLE_Q8.md](PLE_Q8.md). The tests below are the original IQ4_NL profile's historical evidence, **not Q8 inference/quality qualification**. The later no-interruption update leaves the operator's SC117 miner running rather than switching back to Heretic.
+
 ## Publisher inputs
 
 - Repository: `trubisky/Swift-1.5-Flash-Next-Heretic-ReverseEngineer`.

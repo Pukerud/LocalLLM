@@ -51,7 +51,7 @@ class Contract(unittest.TestCase):
 
     def test_menu_retired_rows_absent_but_heretic_and_sc117_retained(self):
         text=(REPO/'HostLLM.sh').read_text();rows=[l for l in text.splitlines() if 'echo ' in l and '[' in l]
-        for n in ['[5] TEST Orca','[6] DeepSeek','[14] Set next Hive miner - Orca','[15] Set next Hive miner - SC117','[16] Set next Hive miner - DeepSeek','[3] Orca']:
+        for n in ['[5] TEST Orca','[6] DeepSeek','[14] Set next Hive miner - Orca','[15] Set next Hive miner - Orca','[16] Set next Hive miner - DeepSeek','[3] Orca']:
             self.assertFalse(any(n in l for l in rows),n)
         self.assertIn('[3] Swift 1.5 Heretic RE',text);self.assertIn('[14] Set next Hive miner - Swift 1.5 Heretic RE',text)
         self.assertIn('[17] Set next Hive miner - SC117',text);self.assertIn('[4] SC117',text)

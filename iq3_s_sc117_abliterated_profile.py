@@ -1267,18 +1267,22 @@ def require_qualification(root, settings):
         raise SafetyError(message)
 
 
-def allow_trial_start(root, *, host, port, state_root):
+def allow_trial_start(root, *, host, port, state_root, ple_q8=False):
     """Permit the explicit unauthenticated trusted-LAN trial with dedicated isolated state."""
     if (os.environ.get(TRIAL_ENV) != '1' or host != TRIAL_BIND_HOST or
             type(port) is not int or port != TRIAL_PORT):
         return False
-    expected = Path.home() / '.local/state/locallm-strata' / TRIAL_STATE_ROOT_NAME
+    state_name = TRIAL_STATE_ROOT_NAME
+    if ple_q8:
+        from ple_q8_assets import STATES
+        state_name = STATES[PROFILE]
+    expected = Path.home() / '.local/state/locallm-strata' / state_name
     candidate = Path(state_root)
     if candidate != expected:
         return False
     # Do not let a symlinked home-state component redirect trial state into production state.
     current = Path.home()
-    for part in ('.local', 'state', 'locallm-strata', TRIAL_STATE_ROOT_NAME):
+    for part in ('.local', 'state', 'locallm-strata', state_name):
         current = current / part
         if current.is_symlink() or (current.exists() and not current.is_dir()):
             return False
@@ -1438,7 +1442,7 @@ def _apply_v01441_trial_tunables(cfg):
         cfg['gpu_order'] = 'as_given'
 
 
-def authorize_start(root, settings, *, host, port, state_root):
+def authorize_start(root, settings, *, host, port, state_root, ple_q8=False):
     """Permit only the isolated unqualified trial; normal/qualified starts are retired."""
     if os.environ.get(TRIAL_ENV) != '1':
         raise SafetyError('SC117 remains unqualified; normal/qualified hosting is disabled, and only the isolated .45/.46 trial is allowed')
@@ -1446,7 +1450,8 @@ def authorize_start(root, settings, *, host, port, state_root):
     validate_settings(settings)
     runtime = os.environ.get('STRATA_RUNTIME')
     if (settings != trial_settings or runtime not in TRIAL_RUNTIME_VERSIONS or
-            not allow_trial_start(root, host=host, port=port, state_root=state_root)):
+            not allow_trial_start(root, host=host, port=port, state_root=state_root,
+                                  **({'ple_q8': True} if ple_q8 else {}))):
         raise SafetyError('Unqualified SC117 trials require Strata .45 or .46, trusted-LAN 0.0.0.0:8080, and isolated sc117-iq3s-trial state')
     # Trials are explicitly not qualification evidence. The isolated cache prefix makes these
     # existing __pycache__ entries inactive; no normal/qualified start path is enabled.

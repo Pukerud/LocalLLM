@@ -11,6 +11,13 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ "${1:-}" == --add-ple-q8-profiles ]]; then
+    [[ "$#" -eq 1 ]] || { echo '--add-ple-q8-profiles takes no additional arguments' >&2; exit 2; }
+    exec /usr/bin/env -i HOME=/home/user USER=root LOGNAME=root \
+        PATH=/usr/sbin:/usr/bin:/sbin:/bin PYTHONDONTWRITEBYTECODE=1 QWEN38_OWNER_USER=user \
+        HOSTLLM_STATE_ROOT=/home/user/.local/state/hostllm \
+        /usr/bin/python3 "$SCRIPT_DIR/install_ple_q8_profiles.py" --add-only
+fi
 LLM_ROOT="${LLM_ROOT:-/home/user/LocalLLM}"
 CUSTOM_NAME="llm-hosting"
 CUSTOM_ROOT="/hive/miners/custom"
@@ -92,7 +99,7 @@ assert_idle() {
 }
 assert_idle
 
-for profile in swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh swift15-heretic-re iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146; do
+for profile in swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh swift15-heretic-re iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146 swift15-heretic-re-ple-q8 iq3_s-sc117-abliterated-ple-q8-v0146; do
     [[ -d "$SOURCE_DIR/profiles/$profile" && ! -L "$SOURCE_DIR/profiles/$profile" ]] || \
         fail "profile directory missing or symlinked: profiles/$profile"
     for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
@@ -133,7 +140,7 @@ if [[ -L "$CUSTOM_DIR/current" ]]; then
                 migrate_legacy_runtime="$current_sc117_runtime"
             fi
             ;;
-        profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/hauhau-q8-fastmtp-q4kv-xhigh|profiles/iq3_s-sc117-abliterated-v0146|profiles/deepseek41-abiray-iq2_xxs|profiles/swift15-heretic-re)
+        profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/hauhau-q8-fastmtp-q4kv-xhigh|profiles/iq3_s-sc117-abliterated-v0146|profiles/deepseek41-abiray-iq2_xxs|profiles/swift15-heretic-re|profiles/swift15-heretic-re-ple-q8|profiles/iq3_s-sc117-abliterated-ple-q8-v0146)
             initial_profile="${current_target#profiles/}"
             ;;
         *) fail "existing Hive profile pointer is not recognized: $current_target" ;;
@@ -150,7 +157,7 @@ elif [[ -e "$CUSTOM_DIR/llm-hosting.conf" ]]; then
     [[ -f "$CUSTOM_DIR/llm-hosting.conf" && ! -L "$CUSTOM_DIR/llm-hosting.conf" ]] || \
         fail 'legacy Hive profile config is not a regular file; refusing to infer a default'
     recognized_legacy_profile=''
-    for profile in swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh swift15-heretic-re iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146; do
+    for profile in swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh swift15-heretic-re iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146 swift15-heretic-re-ple-q8 iq3_s-sc117-abliterated-ple-q8-v0146; do
         if cmp -s <(tr -d '\r' < "$CUSTOM_DIR/llm-hosting.conf") \
                   <(tr -d '\r' < "$SOURCE_DIR/profiles/$profile/llm-hosting.conf"); then
             recognized_legacy_profile="$profile"
@@ -213,6 +220,14 @@ if [[ "$initial_profile" == swift15-heretic-re ]]; then
         "$LLM_ROOT/v1strata.sh" --check-ready --profile swift15-heretic-re \
         --runtime 0.1.46 --parallel 1 --batch-groups 1 || fail 'Selected Heretic readiness failed before package update'
 fi
+if [[ "$initial_profile" == swift15-heretic-re-ple-q8 || "$initial_profile" == iq3_s-sc117-abliterated-ple-q8-v0146 ]]; then
+    PYTHONDONTWRITEBYTECODE=1 python3 - "$LLM_ROOT" "$initial_profile" <<'PY' || fail 'Selected Q8_0 PLE readiness failed before package update'
+import sys
+sys.path.insert(0, sys.argv[1])
+from hive_profile_switch import preflight_profile
+preflight_profile(sys.argv[2])
+PY
+fi
 case "$initial_profile" in
     orca-*|deepseek41-*) fail 'Selected model has been retired; explicitly select an active profile before package refresh' ;;
 esac
@@ -234,9 +249,10 @@ assert_idle
    ! -L "$CUSTOM_DIR/profiles/orca-q4_k_s-v01441" && ! -L "$CUSTOM_DIR/profiles/swift15u-q8" && \
    ! -L "$CUSTOM_DIR/profiles/hauhau-q8-fastmtp-q4kv-xhigh" && \
    ! -L "$CUSTOM_DIR/profiles/iq3_s-sc117-abliterated" && ! -L "$CUSTOM_DIR/profiles/iq3_s-sc117-abliterated-v0146" && \
-   ! -L "$CUSTOM_DIR/profiles/deepseek41-abiray-iq2_xxs" && ! -L "$CUSTOM_DIR/profiles/swift15-heretic-re" ]] || \
+   ! -L "$CUSTOM_DIR/profiles/deepseek41-abiray-iq2_xxs" && ! -L "$CUSTOM_DIR/profiles/swift15-heretic-re" && \
+   ! -L "$CUSTOM_DIR/profiles/swift15-heretic-re-ple-q8" && ! -L "$CUSTOM_DIR/profiles/iq3_s-sc117-abliterated-ple-q8-v0146" ]] || \
     fail 'custom miner profile path is symlinked; refusing package update'
-for profile in swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh swift15-heretic-re iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146; do
+for profile in swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh swift15-heretic-re iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146 swift15-heretic-re-ple-q8 iq3_s-sc117-abliterated-ple-q8-v0146; do
     for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
         [[ ! -L "$CUSTOM_DIR/profiles/$profile/$file" ]] || fail "installed profile file is symlinked: $profile/$file"
     done
@@ -291,7 +307,7 @@ if [[ "$migrate_legacy_pointer" -eq 1 ]]; then
     sync
     printf 'Migrated the obsolete .39/SC117 .39 next-start pointer to the verified standard Orca Q4_K_S .45 profile before replacing the trial profile.\n'
 fi
-for profile in swift15-heretic-re hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146; do
+for profile in swift15-heretic-re hauhau-q8-fastmtp-q4kv-xhigh iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146 swift15-heretic-re-ple-q8 iq3_s-sc117-abliterated-ple-q8-v0146; do
     install_profile_files "$profile"
 done
 install -m 755 "$SOURCE_DIR/profile-menu.sh" "$CUSTOM_DIR/profile-menu.sh"

@@ -21,6 +21,13 @@ if [[ "${1:-}" == --check-ready ]]; then
         "${STRATA_SC117_IQ3S_TRIAL-unset}" "${STRATA_RUNTIME-unset}" "${STRATA_PORT-unset}" \
         "${STRATA_STATE_ROOT-unset}" "${PYTHONPYCACHEPREFIX-unset}" "${PYTHONDONTWRITEBYTECODE-unset}" \
         "${SETUPTOOLS_USE_DISTUTILS-unset}" >> "$events.env"
+    ple_suffix=''
+    if [[ "$variant" == trial-q8-exact || "$variant" == trial46-q8-exact ]]; then
+        [[ "$variant" != trial-q8-exact ]] || variant=trial-exact
+        [[ "$variant" != trial46-q8-exact ]] || variant=trial46-exact
+        ple_suffix=' PLE OVERRIDE: original-Qwen Q8_0 n-gram; mmap; separate Q8_0 state/cache; inference and quality A/B pending.'
+    fi
+    output="$(
     case "$variant" in
         trial-exact) printf '%s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' ;;
         trial46-exact) printf '%s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.46; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2; new SM86 release defaults enabled. This is not qualification.' ;;
@@ -28,6 +35,8 @@ if [[ "${1:-}" == --check-ready ]]; then
         trial-suffix) printf '%s contradictory\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' ;;
         trial-duplicate) printf '%s\n%s\n' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' 'TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.45; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2. This is not qualification.' ;;
     esac
+    )"
+    printf '%s%s\n' "$output" "$ple_suffix"
     exit 0
 fi
 printf 'launch %s\n' "$*" >> "$events"
@@ -155,4 +164,32 @@ grep -qx 'launch --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.46
 grep -Fq 'exec_with_stdin_api_key.py' "$ROOT/HostLLM.sh"
 grep -Fq 'Refusing exported STRATA_API_KEY' "$ROOT/HostLLM.sh"
 
-echo 'HostLLM SC117 .39 retirement, exact .45/.46 preflight-before-lease, one-slot refusals, trusted-LAN-only and 8080 gates: PASS'
+# Q8_0 PLE uses the same runtime/tuning but a separate state and an exact variant-specific readiness line.
+for runtime in 0.1.45 0.1.46; do
+    : > "$events"; : > "$events.env"
+    if [[ "$runtime" == 0.1.45 ]]; then variant=trial-q8-exact; else variant=trial46-q8-exact; fi
+    printf '%s\n' "$variant" > "$SCRATCH/variant"
+    STRATA_SC117_IQ3S_TRIAL=1 STRATA_HOST=0.0.0.0 STRATA_PORT=8080 \
+        run_selected v1strata.sh --quickstart --profile iq3_s-sc117-abliterated \
+        --runtime "$runtime" --parallel 1 --batch-groups 1 --ple-q8
+    grep -Fq -- '--ple-q8' "$events"
+    q8_state="$HOME/.local/state/locallm-strata/sc117-iq3s-ple-q8-trial"
+    grep -Fq "state=$q8_state cache=$q8_state/pycache" "$events.env"
+    check_line="$(grep -n '^check ' "$events" | cut -d: -f1)"
+    lease_line="$(grep -n '^hosting begin ' "$events" | cut -d: -f1)"
+    [[ "$check_line" -lt "$lease_line" ]]
+done
+for kind in missing-q8-suffix unexpected-q8-suffix duplicate-q8-flag; do
+    : > "$events"
+    args=(--quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.45 --parallel 1 --batch-groups 1)
+    case "$kind" in
+        missing-q8-suffix) printf 'trial-exact\n' > "$SCRATCH/variant"; args+=(--ple-q8) ;;
+        unexpected-q8-suffix) printf 'trial-q8-exact\n' > "$SCRATCH/variant" ;;
+        duplicate-q8-flag) printf 'trial-q8-exact\n' > "$SCRATCH/variant"; args+=(--ple-q8 --ple-q8) ;;
+    esac
+    if STRATA_SC117_IQ3S_TRIAL=1 STRATA_HOST=0.0.0.0 STRATA_PORT=8080 run_selected v1strata.sh "${args[@]}"; then
+        echo "Unexpected PLE preflight success: $kind" >&2; exit 1
+    fi
+    ! grep -qE '^hosting |^launch ' "$events"
+done
+echo 'HostLLM SC117 .39 retirement, exact .45/.46 IQ4_NL/Q8_0 preflight-before-lease, isolated state and trusted-LAN gates: PASS'

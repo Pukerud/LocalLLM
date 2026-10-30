@@ -1,17 +1,17 @@
 # SC117 abliterated IQ3_S on Strata — isolated route and qualification plan
 
-> **Current menu update (2026-10-29):** direct .45 [4] and Hive .46 [17] remain unqualified trials; the high-level Hive .45 [15] row was removed. Startup now reads the exact audited preset metadata and SC117's own verified inputs/runtime without requiring retired Orca weights. See the current [menu](README.md); the older preparation/qualification history below is not a new qualification.
+> **Current menu update (2026-10-30):** original IQ4_NL PLE uses direct .45 **[4]** and Hive .46 **[15]** (formerly [17]). New Q8_0 PLE-only candidates use direct .45 **[6]** and Hive .46 **[17]**, with separate state/cache; see [PLE_Q8.md](PLE_Q8.md). All remain unqualified trials. The operator's running SC117 was not stopped for the update. Startup verifies the exact retained preset metadata plus SC117's own inputs/runtime independently of retired Orca weights. Older preparation/qualification history below is not a new qualification.
 
-**Status: unqualified; the isolated `.45` trial profile is the only permitted start, and no qualification has passed.** It binds SC117 to trusted-LAN `0.0.0.0:8080` without API authentication. Do not read its readiness or inference behavior as a quality or production qualification claim. The documented tuning sweep was measured on `.44.1`; it is not a `.45` speed comparison.
+**Status: unqualified; only the explicitly isolated `.45`/`.46` trial profiles are permitted, and no qualification has passed.** It binds SC117 to trusted-LAN `0.0.0.0:8080` without API authentication. Do not read its readiness or inference behavior as a quality or production qualification claim. The documented tuning sweep was measured on `.44.1`; it is not a `.45` speed comparison.
 
-The route uses HostLLM choice **[4]** and Hive profile `iq3_s-sc117-abliterated`. It is a distinct model/profile, not the older base IQ3_S route documented in [STRATA_IQ3S.md](STRATA_IQ3S.md). SC117 remains unqualified: its legacy `.39` normal-start path is retired, and no qualified/production start is enabled. Only the explicit `.45` trusted-LAN trial on port 8080 is permitted.
+The original direct route uses HostLLM choice **[4]**; the current .46 Hive route uses **[15]**, profile `iq3_s-sc117-abliterated-v0146`. It is a distinct model/profile, not the older base IQ3_S route documented in [STRATA_IQ3S.md](STRATA_IQ3S.md). SC117 remains unqualified: its legacy `.39` normal-start path is retired, and no qualified/production start is enabled. Only explicit `.45`/`.46` trusted-LAN trials on port 8080 are permitted; adding Q8 PLE does not grant production qualification.
 
 ## Immutable model and runtime pins
 
 - Model repository: [SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF](https://huggingface.co/SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF/tree/eec4e10a2c29b440a2ae85591fa11569ce752963).
 - SC117's [Strata-specific README](https://huggingface.co/SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF/blob/eec4e10a2c29b440a2ae85591fa11569ce752963/strata/README.md) identifies `mtp-q2_0.gguf` as the source for `tools/mtp_rt.py` and `strata/rt/` as the runtime directory passed to `--mtp`. It explicitly states that the published MTP head is stock/non-abliterated; no abliterated MTP head is published.
 - Exact model revision: **`eec4e10a2c29b440a2ae85591fa11569ce752963`**.
-- Strata: **0.1.39**, source commit `6f32ec070f23ced9f50e704d854d775da52591ab`.
+- Historical preparation runtime: **0.1.39**, source commit `6f32ec070f23ced9f50e704d854d775da52591ab`; serving uses the separately pinned .45/.46 trials described in [STRATA_V0146.md](STRATA_V0146.md), not .39 normal hosting.
 - Profile: `iq3_s-sc117-abliterated`.
 - API model ID: `qwen3.8-flash-next-sc117-abliterated-iq3_s`.
 

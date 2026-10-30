@@ -103,8 +103,9 @@ run_strata_as_operator() {
     command -v runuser >/dev/null 2>&1 || { echo 'runuser is unavailable; Strata was not started.' >&2; return 1; }
     state_root="$owner_home/.local/state/locallm-strata"
     [[ "${STRATA_SC117_IQ3S_TRIAL:-0}" != 1 ]] || state_root+='/sc117-iq3s-trial'
-    local previous='' arg
+    local previous='' arg ple_q8=0
     for arg in "$@"; do
+        [[ "$arg" != --ple-q8 ]] || ple_q8=1
         if [[ ( "$previous" == --profile && "$arg" == deepseek41-abiray-iq2_xxs ) || "$arg" == --profile=deepseek41-abiray-iq2_xxs ]]; then
             state_root="$owner_home/.local/state/locallm-strata/deepseek41-abiray"
         fi
@@ -113,6 +114,13 @@ run_strata_as_operator() {
         fi
         previous="$arg"
     done
+    if [[ "$ple_q8" -eq 1 ]]; then
+        case "$state_root" in
+            */sc117-iq3s-trial) state_root="$owner_home/.local/state/locallm-strata/sc117-iq3s-ple-q8-trial" ;;
+            */swift15-heretic-re) state_root+="-ple-q8" ;;
+            *) echo 'Q8_0 PLE is only supported for the two pinned Flash-Next models.' >&2; return 1 ;;
+        esac
+    fi
     echo "Handing Strata hosting to $owner_user; the server will not run as root."
     runuser -u "$owner_user" -- /usr/bin/env -i \
         "HOME=$owner_home" "USER=$owner_user" "LOGNAME=$owner_user" \
@@ -139,6 +147,10 @@ sc117_trial_command() {
         [[ -n "$owner_home" ]] || { echo 'Cannot resolve the SC117 trial owner home.' >&2; return 1; }
     fi
     trial_state="$owner_home/.local/state/locallm-strata/sc117-iq3s-trial"
+    local arg
+    for arg in "$@"; do
+        [[ "$arg" != --ple-q8 ]] || trial_state="$owner_home/.local/state/locallm-strata/sc117-iq3s-ple-q8-trial"
+    done
     trial_env=(
         "HOME=$owner_home" "USER=$owner_user" "LOGNAME=$owner_user"
         'PATH=/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin'
@@ -170,7 +182,10 @@ deepseek_profile_command() {
 }
 
 heretic_profile_command() {
-    local owner_user="${QWEN38_OWNER_USER:-${SUDO_USER:-${USER:-user}}}" owner_home
+    local owner_user="${QWEN38_OWNER_USER:-${SUDO_USER:-${USER:-user}}}" owner_home state_name=swift15-heretic-re arg
+    for arg in "$@"; do
+        [[ "$arg" != --ple-q8 ]] || state_name=swift15-heretic-re-ple-q8
+    done
     owner_home="$(getent passwd "$owner_user" | cut -d: -f6)" || return 1
     [[ -n "$owner_home" && "$owner_home" != /root ]] || return 1
     local -a control=()
@@ -178,7 +193,7 @@ heretic_profile_command() {
     "${control[@]}" /usr/bin/env -i "HOME=$owner_home" "USER=$owner_user" "LOGNAME=$owner_user" \
         'PATH=/usr/local/bin:/usr/bin:/bin' PYTHONDONTWRITEBYTECODE=1 \
         "QWEN38_OWNER_USER=$owner_user" "STRATA_DATA_ROOT=$owner_home/.local/share/localllm-strata" \
-        "STRATA_STATE_ROOT=$owner_home/.local/state/locallm-strata/swift15-heretic-re" \
+        "STRATA_STATE_ROOT=$owner_home/.local/state/locallm-strata/$state_name" \
         "$SCRIPT_DIR/v1strata.sh" "$@" --profile swift15-heretic-re --runtime 0.1.46 --parallel 1 --batch-groups 1
 }
 
@@ -224,6 +239,8 @@ stop_owned_engines() {
     # Each helper validates PID/start time/executable and uses pidfds. No pkill/killall.
     local rc=0
     deepseek_profile_command --stop || rc=1
+    heretic_profile_command --stop --ple-q8 || rc=1
+    sc117_trial_command --stop --ple-q8 || rc=1
     heretic_profile_command --stop || rc=1
     sc117_trial_command --stop || rc=1
     owned_stop "$SCRIPT_DIR/v1strata.sh" --stop || rc=1
@@ -250,7 +267,8 @@ run_selected() {
     fi
     if [[ "$launcher" == v1strata.sh ]]; then
         local arg previous='' i candidate_041=0 candidate_0441=0 candidate_045=0 candidate_046=0 candidate_sc117_iq3s=0 candidate_sc117_trial=0 candidate_deepseek=0 candidate_heretic=0
-        local requested_profile='' requested_runtime='' requested_parallel=1 requested_groups=1
+        local requested_profile='' requested_runtime='' requested_parallel=1 requested_groups=1 candidate_ple_q8=0
+        local ple_q8_suffix=' PLE OVERRIDE: original-Qwen Q8_0 n-gram; mmap; separate Q8_0 state/cache; inference and quality A/B pending.'
         local requested_host readiness expected_readiness actual_readiness
         local requested_profile_count=0 requested_runtime_count=0 requested_parallel_count=0 requested_groups_count=0
         local -a check_args=(--check-ready) candidate_env=()
@@ -260,6 +278,7 @@ run_selected() {
             esac
             case "$arg" in
                 --profile=*|--runtime=*|--parallel=*|--batch-groups=*) check_args+=("$arg") ;;
+                --ple-q8) check_args+=("$arg"); candidate_ple_q8=$((candidate_ple_q8 + 1)) ;;
             esac
             previous="$arg"
         done
@@ -313,6 +332,9 @@ run_selected() {
                     ;;
             esac
         done
+        if [[ "$candidate_ple_q8" -gt 1 || ( "$candidate_ple_q8" -eq 1 && "$candidate_sc117_iq3s" -eq 0 && "$candidate_heretic" -eq 0 ) ]]; then
+            echo 'Q8_0 PLE requires one explicit variant flag and a pinned Flash-Next profile; nothing paused.' >&2; return 1
+        fi
         if [[ "$candidate_sc117_iq3s" -eq 1 ]]; then
             if [[ "$requested_profile_count" -ne 1 || "$requested_profile" != iq3_s-sc117-abliterated || \
                   "$requested_runtime_count" -ne 1 || \
@@ -336,12 +358,14 @@ run_selected() {
                   "$requested_parallel" != 1 || "$requested_groups" != 1 ]]; then
                 echo 'Heretic requires its pinned .46 profile and one slot/group; no services paused.' >&2; return 1
             fi
+            local heretic_state="${HOME:-/home/user}/.local/state/locallm-strata/swift15-heretic-re"
+            [[ "$candidate_ple_q8" -eq 0 ]] || heretic_state+="-ple-q8"
             candidate_env=(
                 "HOME=${HOME:-/home/user}" "USER=${USER:-user}" "LOGNAME=${LOGNAME:-${USER:-user}}"
                 'PATH=/usr/local/bin:/usr/bin:/bin' 'PYTHONDONTWRITEBYTECODE=1' 'SETUPTOOLS_USE_DISTUTILS=stdlib'
                 "QWEN38_OWNER_USER=${QWEN38_OWNER_USER:-${USER:-user}}"
                 "STRATA_DATA_ROOT=${HOME:-/home/user}/.local/share/localllm-strata"
-                "STRATA_STATE_ROOT=${HOME:-/home/user}/.local/state/locallm-strata/swift15-heretic-re"
+                "STRATA_STATE_ROOT=$heretic_state"
                 'STRATA_RUNTIME=0.1.46' 'STRATA_PARALLEL=1' 'STRATA_BATCH_GROUPS=1'
                 "STRATA_HOST=${STRATA_HOST:-0.0.0.0}" "STRATA_PORT=${STRATA_PORT:-8080}"
             )
@@ -349,6 +373,7 @@ run_selected() {
             readiness="$(/usr/bin/env -i "${candidate_env[@]}" "$SCRIPT_DIR/$launcher" "${check_args[@]}")" || return 1
             printf '%s\n' "$readiness"
             expected_readiness='READY CONFIG: Swift 1.5 Heretic RE; Strata=0.1.46; native context=262144; BF16 CPU vision; one serving slot/group; --spec 3; prefill auto; split 14,24,36; trim-stage-weights; pipeline-windows 2; conversation cache=8192 MiB / 4 slots; thinking high; trusted-LAN 0.0.0.0:8080 without mandatory API key. Bounded test, not qualification.'
+            [[ "$candidate_ple_q8" -eq 0 ]] || expected_readiness+="$ple_q8_suffix"
             [[ "$(grep '^READY CONFIG:' <<< "$readiness" || true)" == "$expected_readiness" ]] || {
                 echo 'Heretic exact readiness failed before service pause.' >&2; return 1;
             }
@@ -378,6 +403,7 @@ run_selected() {
         elif [[ "$candidate_sc117_trial" -eq 1 ]]; then
             local trial_home="${HOME:-/home/user}" trial_state expected_readiness
             trial_state="$trial_home/.local/state/locallm-strata/sc117-iq3s-trial"
+            [[ "$candidate_ple_q8" -eq 0 ]] || trial_state="$trial_home/.local/state/locallm-strata/sc117-iq3s-ple-q8-trial"
             candidate_env=(
                 "HOME=$trial_home" "USER=${USER:-user}" "LOGNAME=${LOGNAME:-${USER:-user}}"
                 'PATH=/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin'
@@ -394,6 +420,7 @@ run_selected() {
             if [[ "$requested_runtime" == 0.1.46 ]]; then
                 expected_readiness='TRIAL CONFIG: unqualified SC117 IQ3_S; Strata=0.1.46; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); stock/non-abliterated MTP head; --spec=3; CPU vision; one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; conversation cache=8192 MiB / 4 slots; pipeline-windows=2; new SM86 release defaults enabled. This is not qualification.'
             fi
+            [[ "$candidate_ple_q8" -eq 0 ]] || expected_readiness+="$ple_q8_suffix"
             actual_readiness="$(grep '^TRIAL CONFIG:' <<< "$readiness" || true)"
             [[ "$actual_readiness" == "$expected_readiness" ]] || {
                 echo "SC117 $requested_runtime trial preflight is incomplete or mismatched; no service pause was started." >&2
@@ -642,8 +669,10 @@ main() {
         echo ''
         echo '  [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
         echo '  [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
-        echo '  [3] Swift 1.5 Heretic RE — Strata 0.1.46 | native 262K | BF16 CPU vision | spec 3 + windows 2 | 8 GiB / 4-history cache | one slot'
-        echo '  [4] SC117 GSQ-RCO IQ3_S (abliterated) — Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot | LAN 8080'
+        echo '  [3] Swift 1.5 Heretic RE — IQ4_NL n-gram | Strata 0.1.46 | native 262K | BF16 CPU vision | spec 3 + windows 2 | 8 GiB / 4-history cache | one slot'
+        echo '  [4] SC117 GSQ-RCO IQ3_S (abliterated) — IQ4_NL n-gram | Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot | LAN 8080'
+        echo '  [5] Swift 1.5 Heretic RE — Q8_0 n-gram | Strata 0.1.46 | same native context/vision/tuning | isolated cache | NOT inference-tested'
+        echo '  [6] SC117 GSQ-RCO IQ3_S (abliterated) — Q8_0 n-gram | Strata 0.1.45 | same native context/vision/tuning | isolated trial cache | NOT inference-tested'
         echo ''
         printf '  Strata slots: %s (STRATA_PARALLEL; default 1), batch groups: %s. Runtime override: %s.\n' "${STRATA_PARALLEL:-1}" "${STRATA_BATCH_GROUPS:-1}" "${STRATA_RUNTIME:-selected default}"
         echo '  Starting hosting pauses the miner and OctaSpace automatically (never an active rental).'
@@ -654,8 +683,10 @@ main() {
         echo '  [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit'
         echo '  [12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
         echo '  [13] Set next Hive miner - Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
-        echo '  [14] Set next Hive miner - Swift 1.5 Heretic RE | Strata 0.1.46 | native 262K | BF16 CPU vision | spec 3 + windows 2 | 8 GiB / 4-history cache | one slot'
-        echo '  [17] Set next Hive miner - SC117 IQ3_S — Strata 0.1.46 unqualified CPU-vision trial | --spec 3 + pipeline-windows 2 | one slot | trusted-LAN 8080'
+        echo '  [14] Set next Hive miner - Swift 1.5 Heretic RE | IQ4_NL n-gram | Strata 0.1.46 | native 262K | BF16 CPU vision | spec 3 + windows 2 | 8 GiB / 4-history cache | one slot'
+        echo '  [15] Set next Hive miner - SC117 IQ3_S | IQ4_NL n-gram | Strata 0.1.46 unqualified CPU-vision trial | --spec 3 + pipeline-windows 2 | one slot | trusted-LAN 8080'
+        echo '  [16] Set next Hive miner - Swift 1.5 Heretic RE | Q8_0 n-gram | Strata 0.1.46 | isolated cache | NOT inference-tested'
+        echo '  [17] Set next Hive miner - SC117 IQ3_S | Q8_0 n-gram | Strata 0.1.46 unqualified trial | isolated cache | NOT inference-tested'
         echo '  Hive selections safely pause OctaSpace, switch the owned Hive LLM, then restore its running state.'
         echo '  No manual miner stop is needed; rentals and manual hosting sessions are never stopped.'
         read -r -p '  Select: ' choice || return 0
@@ -673,34 +704,38 @@ main() {
                     run_selected v1qwen38.sh --quickstart --profile "$profile"
                 fi
                 ;;
-            3|4)
+            3|4|5|6)
                 profile=swift15-heretic-re
-                [[ "$choice" == 4 ]] && profile=iq3_s-sc117-abliterated
+                [[ "$choice" == 4 || "$choice" == 6 ]] && profile=iq3_s-sc117-abliterated
+                local -a ple_args=()
+                [[ "$choice" != 5 && "$choice" != 6 ]] || ple_args=(--ple-q8)
                 if [[ "$active" == strata ]]; then
-                    [[ "$choice" == 4 ]] && sc117_trial_command --status
+                    [[ "$profile" != iq3_s-sc117-abliterated ]] || sc117_trial_command --status "${ple_args[@]}"
                     "$SCRIPT_DIR/v1strata.sh" --status
                     echo 'The running Strata model was left alone. Use [9] only when you are ready to switch.'
                 elif [[ "$active" == qwen38 ]] && ! hosting managed-qwen; then
                     echo 'A manual Qwen hosting session is already running; stop it before switching.'
                 elif [[ "$active" != none ]] && ! hosting managed-qwen; then
                     echo 'Another/unmanaged LLM is running. Stop it in its own verified lifecycle first.'
-                elif [[ "$choice" == 3 ]]; then
-                    STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.46 --parallel 1 --batch-groups 1
+                elif [[ "$profile" == swift15-heretic-re ]]; then
+                    STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.46 --parallel 1 --batch-groups 1 "${ple_args[@]}"
                 else
                     STRATA_SC117_IQ3S_TRIAL=1 STRATA_RUNTIME=0.1.45 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 \
                         STRATA_HOST=0.0.0.0 STRATA_PORT=8080 \
-                        run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.45 --parallel 1 --batch-groups 1
+                        run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.45 --parallel 1 --batch-groups 1 "${ple_args[@]}"
                 fi
                 ;;
             q|Q) return 0 ;;
             9) stop_owned_engines ;;
             10) check_update ;;
             11|x|X) return 0 ;;
-            12|13|14|17)
+            12|13|14|15|16|17)
                 hive_profile=swift15u-q8
                 [[ "$choice" == 13 ]] && hive_profile=hauhau-q8-fastmtp-q4kv-xhigh
                 [[ "$choice" == 14 ]] && hive_profile=swift15-heretic-re
-                [[ "$choice" == 17 ]] && hive_profile=iq3_s-sc117-abliterated-v0146
+                [[ "$choice" == 15 ]] && hive_profile=iq3_s-sc117-abliterated-v0146
+                [[ "$choice" == 16 ]] && hive_profile=swift15-heretic-re-ple-q8
+                [[ "$choice" == 17 ]] && hive_profile=iq3_s-sc117-abliterated-ple-q8-v0146
                 set_next_hive_profile "$hive_profile"
                 ;;
         esac
@@ -715,7 +750,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     if [[ "${1:-}" == --apply-hive-profile ]]; then
         [[ "$EUID" -eq 0 && "$#" -eq 2 ]] || { echo '--apply-hive-profile requires root and one profile' >&2; exit 2; }
         case "$2" in
-            swift15u-q8|hauhau-q8-fastmtp-q4kv-xhigh|swift15-heretic-re|iq3_s-sc117-abliterated|iq3_s-sc117-abliterated-v0146) ;;
+            swift15u-q8|hauhau-q8-fastmtp-q4kv-xhigh|swift15-heretic-re|iq3_s-sc117-abliterated|iq3_s-sc117-abliterated-v0146|swift15-heretic-re-ple-q8|iq3_s-sc117-abliterated-ple-q8-v0146) ;;
             *) echo 'Unknown Hive profile; no files changed.' >&2; exit 2 ;;
         esac
         apply_next_hive_profile "$2"

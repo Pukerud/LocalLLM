@@ -17,6 +17,7 @@ import time
 
 import hosting_lifecycle as hosting
 from engine_safety import SafetyError, command_output, docker_empty, proc, same_process
+import ple_q8_assets
 
 SCRIPT_ROOT = Path(__file__).resolve().parent
 WRAPPER = Path('/hive/miners/custom/llm-hosting/h-run.sh')
@@ -25,7 +26,7 @@ CUR_MINER = Path('/run/hive/cur_miner')
 JOURNAL = hosting.ROOT / 'hive-profile-switch.json'
 HERETIC_PROFILE = 'swift15-heretic-re'
 PROFILES = ('swift15u-q8', 'hauhau-q8-fastmtp-q4kv-xhigh', HERETIC_PROFILE,
-            'iq3_s-sc117-abliterated', 'iq3_s-sc117-abliterated-v0146')
+            'iq3_s-sc117-abliterated', 'iq3_s-sc117-abliterated-v0146', *ple_q8_assets.HIVE_PROFILES)
 DEEPSEEK_PROFILE = 'deepseek41-abiray-iq2_xxs'  # retained historical recovery/readiness implementation only
 SC117_V0146_PROFILE = 'iq3_s-sc117-abliterated-v0146'
 SC117_V0146_READINESS = (
@@ -279,6 +280,35 @@ def package_current(profile):
 
 def preflight_profile(profile):
     """Run the new SC117 route's exact readiness check before pausing Hive/OctaSpace."""
+    if profile in ple_q8_assets.HIVE_PROFILES:
+        from heretic_profile import READY
+        base = ple_q8_assets.HIVE_PROFILES[profile]
+        state = '/home/user/.local/state/locallm-strata/' + ple_q8_assets.STATES[base]
+        runuser = shutil.which('runuser', path='/usr/sbin:/usr/bin:/sbin:/bin')
+        if runuser is None:
+            raise SafetyError('runuser is unavailable; Q8_0 PLE preflight failed before pause')
+        command = [runuser, '-u', 'user', '--', '/usr/bin/env', '-i',
+                   'HOME=/home/user', 'USER=user', 'LOGNAME=user',
+                   'PATH=/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin',
+                   'PYTHONDONTWRITEBYTECODE=1', 'SETUPTOOLS_USE_DISTUTILS=stdlib',
+                   f'PYTHONPYCACHEPREFIX={state}/pycache', f'STRATA_STATE_ROOT={state}',
+                   'STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata',
+                   'STRATA_RUNTIME=0.1.46', 'STRATA_HOST=0.0.0.0', 'STRATA_PORT=8080',
+                   'STRATA_PARALLEL=1', 'STRATA_BATCH_GROUPS=1']
+        if base != HERETIC_PROFILE:
+            command.append('STRATA_SC117_IQ3S_TRIAL=1')
+        command += ['/home/user/LocalLLM/v1strata.sh', '--check-ready', '--profile', base,
+                    '--runtime', '0.1.46', '--parallel', '1', '--batch-groups', '1', '--ple-q8']
+        expected = (READY if base == HERETIC_PROFILE else SC117_V0146_READINESS) + ple_q8_assets.READY_SUFFIX
+        try:
+            result = subprocess.run(command, capture_output=True, text=True, timeout=600)
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise SafetyError('Q8_0 PLE readiness failed before any pause') from exc
+        lines = [line for line in result.stdout.splitlines() if line.startswith(('READY CONFIG:', 'TRIAL CONFIG:'))]
+        if result.returncode or lines != [expected]:
+            raise SafetyError('Q8_0 PLE exact isolated readiness failed before any pause')
+        say('Q8_0 PLE data/config readiness passed; inference/quality/speed testing is still pending.')
+        return
     if profile == HERETIC_PROFILE:
         from heretic_profile import READY
         runuser=shutil.which('runuser',path='/usr/sbin:/usr/bin:/sbin:/bin')
@@ -344,7 +374,7 @@ def preflight_profile(profile):
 def switch_profile(profile):
     if JOURNAL.exists() or JOURNAL.is_symlink():
         raise SafetyError(f'An earlier switch needs recovery: {recovery_command()}')
-    inspection = {'allow_fallback_miner': True} if profile in (DEEPSEEK_PROFILE, HERETIC_PROFILE) else {}
+    inspection = {'allow_fallback_miner': True} if profile in (DEEPSEEK_PROFILE, HERETIC_PROFILE, 'swift15-heretic-re-ple-q8') else {}
     wrappers = inspect_owned_workload(**inspection)
     fallback = verified_fallback_miner_jobs(hosting.gpu_jobs()) if inspection and not wrappers else []
     preflight_profile(profile)

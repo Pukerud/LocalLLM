@@ -38,6 +38,7 @@ import prepare_iq3_s_sc117_abliterated as prepare_sc117
 import strata_runtime as runtimes
 import deepseek41_profile as deepseek_profile
 import heretic_profile
+import ple_q8_profile
 
 SOURCE_COMMIT = '99f3dbd0b21d1401b3769e0c0d963913607f380b'
 MODEL_REVISION = 'ed59f92082b1e93c0e96d60a8b11aab089b52f09'
@@ -228,7 +229,21 @@ def ready_q4ks_v0146(root):
     return runtime_source, path, _apply_candidate_runtime_paths(cfg, runtime_source, runtimes.TEST_VERSION)
 
 
-def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
+def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, ple_q8=False):
+    if not ple_q8:
+        return _ready_runtime(profile, runtime, parallel, batch_groups)
+    ple_q8_profile.require_state(profile, strata_state())
+    if profile == heretic_profile.PROFILE:
+        if runtime not in ('auto', heretic_profile.VERSION) or (parallel, batch_groups) != (1, 1):
+            raise SafetyError('Heretic Q8_0 PLE requires pinned .46 and one serving slot/group')
+        source, path, cfg = heretic_profile.ready(data_root())
+        version = heretic_profile.VERSION
+    else:
+        source, path, cfg, version = _ready_runtime(profile, runtime, parallel, batch_groups)
+    return source, path, ple_q8_profile.overlay(data_root(), profile, cfg), version
+
+
+def _ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
     if profile == heretic_profile.PROFILE:
         if runtime not in ('auto',heretic_profile.VERSION) or (parallel,batch_groups)!=(1,1):
             raise SafetyError('Heretic requires pinned .46 and one serving slot/group')
@@ -289,9 +304,10 @@ def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1):
     return runtimes.configure(data_root(), source, path, cfg, profile, runtime, parallel, batch_groups)
 
 
-def sc117_trial_readiness_line(profile, version, parallel, batch_groups, cfg):
+def sc117_trial_readiness_line(profile, version, parallel, batch_groups, cfg, ple_q8=False):
     """Verify exact isolated SC117 .45/.46 trial inputs without granting qualification."""
-    expected_state = Path.home() / '.local/state/locallm-strata' / sc117_profile.TRIAL_STATE_ROOT_NAME
+    expected_state = (ple_q8_profile.state_root(profile) if ple_q8 else
+                      Path.home() / '.local/state/locallm-strata' / sc117_profile.TRIAL_STATE_ROOT_NAME)
     expected_cache = expected_state / 'pycache'
     if (profile != sc117_profile.PROFILE or version not in sc117_profile.TRIAL_RUNTIME_VERSIONS or
             (parallel, batch_groups) != (1, 1) or
@@ -320,11 +336,13 @@ def sc117_trial_readiness_line(profile, version, parallel, batch_groups, cfg):
     settings = sc117_profile.settings_for_start(allow_trial_env=True)
     authorization = sc117_profile.authorize_start(
         data_root(), settings, host=sc117_profile.TRIAL_BIND_HOST,
-        port=sc117_profile.TRIAL_PORT, state_root=strata_state())
+        port=sc117_profile.TRIAL_PORT, state_root=strata_state(),
+        **({'ple_q8': True} if ple_q8 else {}))
     if authorization != 'trial':
         raise SafetyError('SC117 .45 preflight did not authorize the isolated trial')
-    return (SC117_V0145_TRIAL_READY_CONFIG if version == sc117_profile.TRIAL_RUNTIME_VERSION
+    line = (SC117_V0145_TRIAL_READY_CONFIG if version == sc117_profile.TRIAL_RUNTIME_VERSION
             else SC117_V0146_TRIAL_READY_CONFIG)
+    return line + (ple_q8_profile.A.READY_SUFFIX if ple_q8 else '')
 
 
 def _q4ks_recorded_identity_valid(value):
@@ -954,7 +972,7 @@ def startup_config(cfg, version, profile=None):
     return effective
 
 
-def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hosting_lock=None):
+def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hosting_lock=None, ple_q8=False):
     api_key = consume_api_key()
     if os.geteuid() == 0 and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE, heretic_profile.PROFILE):
         raise SafetyError('This Strata profile must start as the normal operator; use sudo only for identity-bound administration')
@@ -967,7 +985,10 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         if (not re.fullmatch(r'[a-f0-9]{64}', requested_lease_id) or not isinstance(lease, dict) or
                 lease.get('phase') != 'held' or lease.get('lease_id') != requested_lease_id):
             raise SafetyError('HostLLM launch lease changed before model startup')
-    source, config_path, cfg, version = ready_runtime(profile, runtime, parallel, batch_groups)
+    source, config_path, cfg, version = ready_runtime(
+        profile, runtime, parallel, batch_groups, **({'ple_q8': True} if ple_q8 else {}))
+    if ple_q8:
+        ple_q8_profile.ready_asset(data_root(), full=True)  # full data pin before any model/GPU process is spawned
     cfg = startup_config(cfg, version, profile)
     if cfg.get('api_key'):
         raise SafetyError('API keys must not be stored in profile configs; use the stdin credential helper')
@@ -986,7 +1007,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         sc117_profile.require_trial_binding(effective_host)
         settings = sc117_profile.settings_for_start(allow_trial_env=True)
         sc117_authorization = sc117_profile.authorize_start(
-            data_root(), settings, host=effective_host, port=port, state_root=strata_state())
+            data_root(), settings, host=effective_host, port=port, state_root=strata_state(),
+            **({'ple_q8': True} if ple_q8 else {}))
     hosting_lease_id = None
     hive_launch_id = None
     if ((profile == ORCA_Q4KS_PROFILE and version in ('0.1.41', q4ks_v01441.RUNTIME_VERSION,
@@ -999,7 +1021,9 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         else:
             hive_launch_id = authorization['launch_id']
     launch_gate(port)
-    if profile == heretic_profile.PROFILE:
+    if ple_q8:
+        ple_q8_profile.seed_profile(data_root(), profile, strata_state())
+    elif profile == heretic_profile.PROFILE:
         heretic_profile.seed_profile(data_root(), strata_state())
     if profile == deepseek_profile.PROFILE:
         deepseek_profile.capacity_gate()
@@ -1027,6 +1051,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     else:
         cfg['model_name'] = 'qwen3.8-flash-next-iq3_s-strata'
         cfg['aliases'] = ['qwen38', 'strata']
+    if ple_q8:
+        ple_q8_profile.identity(cfg, profile)
     cfg['sampling'] = ({'temperature': 1.0, 'top_p': 1.0}
                        if profile == deepseek_profile.PROFILE else
                        {'temperature': 1.0, 'top_p': 0.95, 'top_k': 20,
@@ -1121,7 +1147,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
             print(sc117_profile.readiness_line(settings))
         print(sc117_assets.MTP_SOURCE_NOTE)
     elif profile == heretic_profile.PROFILE:
-        print(heretic_profile.READY)
+        print(heretic_profile.READY + (ple_q8_profile.A.READY_SUFFIX if ple_q8 else ''))
         print('Heretic-only BF16 L0-gate compatibility engine; publisher gate bytes and shared SC117 .46 runtime unchanged.')
         print('Publisher mixed-IQ4_NL target; verified stock Flash-Next MTP drafts, not a Heretic-trained drafter.')
     elif profile == deepseek_profile.PROFILE:
@@ -1129,6 +1155,9 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         print('DeepSeek full-quality six-expert path; separate original DSpark drafter; native window configured, not populated-context qualification.')
     else:
         print('EXPERIMENTAL Strata IQ3_S | BF16 GPU vision | native 262144 | INT8 KV | MTP | high reasoning')
+    if ple_q8:
+        print('Q8_0 PLE-only candidate: separate cache/state; original model/expert quantization, runtime and tuning retained.')
+        print('No inference/quality/speed qualification was performed during the no-interruption menu deployment.')
     if profile == ORCA_Q4KS_PROFILE and version in (q4ks_v01441.RUNTIME_VERSION,
                                                        *runtimes.PROFILE_BOUND_VERSIONS):
         print(f'Strata {version} note: pipeline-windows is omitted from this serving baseline.', flush=True)
@@ -1184,6 +1213,9 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
              'runtime_version': version, 'parallel': parallel, 'batch_groups': batch_groups, 'profile': profile,
              'config': str(run_config), 'allowed_executables': [str(python.resolve()), cfg['exe']] +
              ([cfg['vision']['exe']] if cfg.get('vision') else [])}
+    if ple_q8:
+        state['ple_q8'] = True
+        state['ple_sha256'] = ple_q8_profile.A.SHA256
     if runtime_config_dir is not None:
         state['runtime_config_dir'] = runtime_config_dir
         state['runtime_config_dir_identity'] = runtime_config_dir_identity
@@ -1288,6 +1320,7 @@ def main():
     modes.add_argument('--rollback-q4ks141-vision', action='store_true')
     modes.add_argument('--select-runtime', choices=runtimes.GENERIC_VERSIONS)
     ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE, ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE, heretic_profile.PROFILE], default=None)
+    ap.add_argument('--ple-q8', action='store_true', help='Opt-in original-Qwen Q8_0 PLE with separate state/cache; no quality claim')
     ap.add_argument('--runtime', choices=['auto', *runtimes.VERSIONS, q4ks_v01441.RUNTIME_VERSION, deepseek_profile.VERSION], default=os.environ.get('STRATA_RUNTIME', 'auto'))
     ap.add_argument('--parallel', type=int, choices=[1, 2], default=os.environ.get('STRATA_PARALLEL', '1'))
     ap.add_argument('--batch-groups', type=int, choices=[1, 2], default=os.environ.get('STRATA_BATCH_GROUPS', '1'))
@@ -1298,6 +1331,10 @@ def main():
         print('BLOCKED: this profile must start/configure as the normal operator; use sudo only for identity-bound administration.', file=sys.stderr)
         return 1
     try:
+        if a.ple_q8:
+            if not (a.quickstart or a.stop or a.status or a.check_ready):
+                raise SafetyError('--ple-q8 requires an explicit start, stop, status or readiness action')
+            ple_q8_profile.require_state(profile, strata_state())
         if a.select_runtime:
             # No running model is stopped/reconfigured. An active session reads its existing private run-config.
             for p in runtimes.PROFILES:
@@ -1340,18 +1377,20 @@ def main():
                 raise SafetyError('.41 CPU-vision rollback is only available for --profile orca-q4_k_s')
             q4ks_v0141.rollback_cpu_vision(data_root())
         elif a.check_ready:
-            source, config, cfg, version = ready_runtime(profile, a.runtime, a.parallel, a.batch_groups)
+            source, config, cfg, version = ready_runtime(
+                profile, a.runtime, a.parallel, a.batch_groups, **({'ple_q8': True} if a.ple_q8 else {}))
             print(f'Runtime ready: {version}, requested slots={a.parallel}, batch groups={a.batch_groups}')
             if profile == ORCA_PROFILE:
                 print('PREPARED: pinned Orca IQ3_XXS, own compatibility pack/tokenizer, F16 vision configured, native 262144, INT8 streaming KV.')
                 print('Readiness verifies assets/config only; bounded live results are separate in ORCA_IQ3XXS.md. No full-context quality claim.')
             elif profile == heretic_profile.PROFILE:
-                print(heretic_profile.READY)
+                print(heretic_profile.READY + (ple_q8_profile.A.READY_SUFFIX if a.ple_q8 else ''))
             elif profile == deepseek_profile.PROFILE:
                 print(deepseek_profile.READY)
             elif profile == sc117_profile.PROFILE:
                 print('UNQUALIFIED TRIAL PREFLIGHT ONLY: no normal-hosting or qualification authorization is granted.')
-                print(sc117_trial_readiness_line(profile, version, a.parallel, a.batch_groups, cfg))
+                print(sc117_trial_readiness_line(
+                    profile, version, a.parallel, a.batch_groups, cfg, **({'ple_q8': True} if a.ple_q8 else {})))
                 print(sc117_assets.MTP_SOURCE_NOTE)
             elif profile == ORCA_Q4KS_PROFILE:
                 context = cfg['args'][cfg['args'].index('--max-context') + 1]
@@ -1465,6 +1504,8 @@ def main():
             with (root / 'lifecycle.lock').open('a') as lock:
                 state = acquire_action_lock(lock, stopping=a.stop)
                 if a.stop:
+                    if state and bool(state.get('ple_q8')) != a.ple_q8 and family(state):
+                        raise SafetyError('A different PLE variant is running; variant-specific stop refused')
                     if a.profile and state and state.get('profile', 'iq3_s') != profile and family(state):
                         raise SafetyError('A different Strata profile is running; profile-specific stop refused')
                     explicit_runtime = any(x == '--runtime' or x.startswith('--runtime=') for x in sys.argv[1:])
@@ -1477,7 +1518,8 @@ def main():
                         print('Strata is not running; any owned concurrent cleanup has completed.')
                 else:
                     with host_lifecycle.launch_reservation() as hosting_lock:
-                        start(lock, profile, a.runtime, a.parallel, a.batch_groups, hosting_lock)
+                        start(lock, profile, a.runtime, a.parallel, a.batch_groups, hosting_lock,
+                              **({'ple_q8': True} if a.ple_q8 else {}))
     except (SafetyError, FileNotFoundError, PermissionError, ValueError, TypeError, KeyError, IndexError, BlockingIOError) as exc:
         print(f'BLOCKED: {exc}', file=sys.stderr)
         return 1
