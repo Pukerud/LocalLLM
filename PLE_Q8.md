@@ -75,6 +75,10 @@ The **add-only** installer serializes against HostLLM/Hive selection, refuses re
 
 The ordinary full installer still refuses active workloads and is **not** the no-stop command. Reopen HostLLM after updates; existing shells retain their old menu functions. Merely adding/listing the options does not choose them. A future explicit Hive [16]/[17] selection invokes the existing ownership/rental-checked switching workflow; direct [5]/[6] refuse to replace an already-running Strata instance.
 
+## Later .46 concurrency/cache experiment
+
+The operator authorized temporary parameter tests on 2026-11-01: [seven .46 measurements](SC117_Q8_CONCURRENCY_20261101.md). Two pipelined slots led the measured two-user throughput; eight cached histories reused all eight test histories. These are not new menu defaults or full-context concurrency qualification. Original **Q8 SC117 .46 Hive [17]**, one-slot/four-history settings and active OctaSpace were restored. Partial unnecessary .45 work was cancelled/excluded after clarification. No benchmark controller is pending.
+
 ## What was and was not tested
 
 Initial no-stop preparation: full sidecar checksum/header checks, full original-table identity comparison, actual offline readiness for Heretic .46 and SC117 .45/.46, unit/shell checks and add-only publication. [The original receipt](results/ple-q8-no-interruption-20261030.json) remains historical; no inference occurred during that stage.

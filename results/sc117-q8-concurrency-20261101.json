@@ -1,0 +1,1144 @@
+{
+  "date": "2026-11-01",
+  "scope": "Explicit operator-authorized temporary SC117 Q8_0 PLE concurrency/cache experiments, not a new default",
+  "completed_cases": 7,
+  "passed_cases": 7,
+  "all_passed": true,
+  "runtime_scope": "0.1.46 only after operator clarification; incomplete extra .45 run excluded",
+  "model": "SC117 Flash-Next IQ3_S main weights + pinned original-Qwen Q8_0 PLE",
+  "model_and_inference_uid": 1000,
+  "native_context": 262144,
+  "vision": "BF16 CPU",
+  "kv": "INT8 / 32768 resident",
+  "spec": 3,
+  "pipeline_windows": 2,
+  "split": "14,24,36",
+  "power_limits_w": [
+    300,
+    300,
+    300,
+    280
+  ],
+  "normal_menu_profiles_and_runtime_sources_unchanged": true,
+  "new_default_applied": false,
+  "regression": {
+    "source_python_tests": 441,
+    "skipped": 1,
+    "source_result": "OK",
+    "shell_suites": 7,
+    "shell_result": "PASS",
+    "private_experiment_contract_tests": 2,
+    "experiment_contract_result": "OK"
+  },
+  "method": {
+    "timed_repetitions": 3,
+    "timed_requests_per_case": 18,
+    "warmup": "one solo and one synchronized pair, excluded",
+    "workloads": "93-token short technical tutorial and ~11.8K-token ledger; greedy output capped at 384 tokens; all timed input reuse zero",
+    "thinking": "none for speed medians; separate real high-thinking arithmetic sanity",
+    "aggregate_tps": "sum of both actual completion-token counts divided by the synchronized pair wall time, including queue, prefill and transport",
+    "per_user_wall_decode_tps": "approximately (completion_tokens-1)/(last-first streamed content timestamp), excluding queue/prefill; baseline pair users run one after the other",
+    "cold_starts": "fresh owned model process per case, same frozen adaptive seed, no cross-case KV, normal OS caches not flushed",
+    "cache_test": "eight distinct ~4K-token histories, latest first on revisit; count includes live/slot-held reuse as well as parked restoration",
+    "long_join": "1536-token continuing decode, second ~29K-token cold prompt joins after first content; two repetitions",
+    "endpoint": "temporary key-free trusted-LAN benchmark port 18080, isolated from normal clients on 8080"
+  },
+  "initial_setup_note": "Initial OSN pause also drained its descendant model before the planned Hive stop. Original model was restored; stop order was corrected to exact owned Hive teardown before pausing its parent admission unit. No performance data came from that attempt.",
+  "operator_clarification": "All seven .46 runs finished first. An unnecessary extra .45 baseline was started for direct option [6], then cancelled when the operator clarified .46. Its partial measurements are excluded, and remaining .45 tests were not run.",
+  "rows": [
+    {
+      "case": {
+        "id": "0146-baseline-A1",
+        "version": "0.1.46",
+        "slots": 1,
+        "groups": 1,
+        "batch_mtp": false,
+        "cache_mib": 8192,
+        "cache_histories": 4
+      },
+      "passed": true,
+      "summary": {
+        "short": {
+          "solo_native_decode_tps": 134.2,
+          "solo_wall_decode_tps": 134.31469456823015,
+          "solo_ttft_s": 0.33371611300390214,
+          "solo_prefill_tps": 291.4,
+          "pair_aggregate_tps": 121.06897453880585,
+          "pair_per_user_wall_decode_tps": 133.1987503655522,
+          "pair_ttft_s": 1.8720622859837022,
+          "pair_latest_ttft_s": 3.467642125033308
+        },
+        "medium": {
+          "solo_native_decode_tps": 134.2,
+          "solo_wall_decode_tps": 134.36074426867663,
+          "solo_ttft_s": 4.198481646017171,
+          "solo_prefill_tps": 2820.2,
+          "pair_aggregate_tps": 53.85390634832563,
+          "pair_per_user_wall_decode_tps": 133.8967729293136,
+          "pair_ttft_s": 7.7484700574714225,
+          "pair_latest_ttft_s": 11.298493753012735
+        },
+        "cache_reused_histories": 5,
+        "long_join": {
+          "continuing_longest_gap_s": 0.03506370401009917,
+          "joining_ttft_s": 16.699689753499115
+        }
+      },
+      "functional": {
+        "passed": true,
+        "math": "63",
+        "swapped_images": true,
+        "tool_format_only": true,
+        "host_origin_403": true,
+        "key_free_ui": true,
+        "concurrent_tag_isolation": true
+      },
+      "high_thinking_math_passed": true,
+      "effective_serving_slots": 1,
+      "native_context": 262144,
+      "api_key_required": false,
+      "all_timed_prompt_cache_tokens_zero": true,
+      "solo_mtp_draft_tokens_reported": [
+        352,
+        316,
+        346,
+        346,
+        366,
+        338
+      ],
+      "prompt_tokens_by_workload": {
+        "short": [
+          93
+        ],
+        "medium": [
+          11782
+        ]
+      },
+      "completion_tokens_range": [
+        384,
+        384
+      ],
+      "cache": {
+        "reused_histories": 5,
+        "histories_tested": 8,
+        "fill_metrics": {
+          "enabled": true,
+          "budget_mib": 8192,
+          "slots": 4,
+          "parked": 4,
+          "bytes": 1207408800,
+          "evictions": 34,
+          "parks": 38,
+          "restores": 0,
+          "last_event": "parked",
+          "last_tokens": 4149,
+          "last_at": 1793536122.5612283,
+          "requests": 39,
+          "requests_reused": 0,
+          "reused_tokens": 0,
+          "prompt_tokens": 199781,
+          "last_reused": 0,
+          "last_prompt": 4143
+        },
+        "reuse_metrics": {
+          "enabled": true,
+          "budget_mib": 8192,
+          "slots": 4,
+          "parked": 4,
+          "bytes": 1465563008,
+          "evictions": 37,
+          "parks": 45,
+          "restores": 4,
+          "last_event": "parked",
+          "last_tokens": 4179,
+          "last_at": 1793536130.2468214,
+          "requests": 47,
+          "requests_reused": 5,
+          "reused_tokens": 20745,
+          "prompt_tokens": 233149,
+          "last_reused": 0,
+          "last_prompt": 4171
+        }
+      },
+      "resources": {
+        "min_available_ram_mib": 61562.19921875,
+        "max_gpu_temperature_c": 75.0,
+        "min_gpu_free_mib_by_card": [
+          5374.0,
+          8334.0,
+          5666.0,
+          3871.0
+        ],
+        "max_gpu_used_mib_by_card": [
+          18754.0,
+          15794.0,
+          18462.0,
+          20254.0
+        ],
+        "sampled_max_running": 0,
+        "sampled_max_active_batch_slots": 0,
+        "samples": 181,
+        "sample_errors": 0
+      },
+      "requested_batch_mtp_confirmed_in_native_argv": false,
+      "batch_initialization_notes": [],
+      "owned_shutdown_verified": true,
+      "delta_vs_pooled_baseline_pct": {
+        "short": {
+          "solo_native_decode": -0.07446016381237319,
+          "pair_aggregate": -0.0878510445401548
+        },
+        "medium": {
+          "solo_native_decode": -0.2971768202080227,
+          "pair_aggregate": -0.14061205519003694
+        }
+      }
+    },
+    {
+      "case": {
+        "id": "0146-cache8-8GiB",
+        "version": "0.1.46",
+        "slots": 1,
+        "groups": 1,
+        "batch_mtp": false,
+        "cache_mib": 8192,
+        "cache_histories": 8
+      },
+      "passed": true,
+      "summary": {
+        "short": {
+          "solo_native_decode_tps": 133.3,
+          "solo_wall_decode_tps": 133.4712498148902,
+          "solo_ttft_s": 0.32513066998217255,
+          "solo_prefill_tps": 299.5,
+          "pair_aggregate_tps": 121.16396796307959,
+          "pair_per_user_wall_decode_tps": 133.58977205517635,
+          "pair_ttft_s": 1.8680199689697474,
+          "pair_latest_ttft_s": 3.4478598030400462
+        },
+        "medium": {
+          "solo_native_decode_tps": 133.3,
+          "solo_wall_decode_tps": 133.4597488230083,
+          "solo_ttft_s": 4.21024992299499,
+          "solo_prefill_tps": 2813.0,
+          "pair_aggregate_tps": 53.78193070303377,
+          "pair_per_user_wall_decode_tps": 131.80449355763892,
+          "pair_ttft_s": 7.771864647511393,
+          "pair_latest_ttft_s": 11.324909706017934
+        },
+        "cache_reused_histories": 8,
+        "long_join": {
+          "continuing_longest_gap_s": 0.035160806990461424,
+          "joining_ttft_s": 16.808549924491672
+        }
+      },
+      "functional": {
+        "passed": true,
+        "math": "63",
+        "swapped_images": true,
+        "tool_format_only": true,
+        "host_origin_403": true,
+        "key_free_ui": true,
+        "concurrent_tag_isolation": true
+      },
+      "high_thinking_math_passed": true,
+      "effective_serving_slots": 1,
+      "native_context": 262144,
+      "api_key_required": false,
+      "all_timed_prompt_cache_tokens_zero": true,
+      "solo_mtp_draft_tokens_reported": [
+        351,
+        316,
+        346,
+        346,
+        366,
+        338
+      ],
+      "prompt_tokens_by_workload": {
+        "short": [
+          93
+        ],
+        "medium": [
+          11782
+        ]
+      },
+      "completion_tokens_range": [
+        384,
+        384
+      ],
+      "cache": {
+        "reused_histories": 8,
+        "histories_tested": 8,
+        "fill_metrics": {
+          "enabled": true,
+          "budget_mib": 8192,
+          "slots": 8,
+          "parked": 8,
+          "bytes": 2920074240,
+          "evictions": 30,
+          "parks": 38,
+          "restores": 0,
+          "last_event": "parked",
+          "last_tokens": 4149,
+          "last_at": 1793536402.8686817,
+          "requests": 39,
+          "requests_reused": 0,
+          "reused_tokens": 0,
+          "prompt_tokens": 199781,
+          "last_reused": 0,
+          "last_prompt": 4143
+        },
+        "reuse_metrics": {
+          "enabled": true,
+          "budget_mib": 8192,
+          "slots": 8,
+          "parked": 8,
+          "bytes": 3875012264,
+          "evictions": 30,
+          "parks": 45,
+          "restores": 7,
+          "last_event": "restored",
+          "last_tokens": 4149,
+          "last_at": 1793536407.0248902,
+          "requests": 47,
+          "requests_reused": 8,
+          "reused_tokens": 33192,
+          "prompt_tokens": 233149,
+          "last_reused": 4149,
+          "last_prompt": 4171
+        }
+      },
+      "resources": {
+        "min_available_ram_mib": 59571.3203125,
+        "max_gpu_temperature_c": 75.0,
+        "min_gpu_free_mib_by_card": [
+          5400.0,
+          8358.0,
+          5690.0,
+          3903.0
+        ],
+        "max_gpu_used_mib_by_card": [
+          18728.0,
+          15770.0,
+          18438.0,
+          20222.0
+        ],
+        "sampled_max_running": 0,
+        "sampled_max_active_batch_slots": 0,
+        "samples": 175,
+        "sample_errors": 0
+      },
+      "requested_batch_mtp_confirmed_in_native_argv": false,
+      "batch_initialization_notes": [],
+      "owned_shutdown_verified": true,
+      "delta_vs_pooled_baseline_pct": {
+        "short": {
+          "solo_native_decode": -0.7446016381235987,
+          "pair_aggregate": -0.00945773864174937
+        },
+        "medium": {
+          "solo_native_decode": -0.9658246656760627,
+          "pair_aggregate": -0.27407394074554503
+        }
+      }
+    },
+    {
+      "case": {
+        "id": "0146-cache8-16GiB",
+        "version": "0.1.46",
+        "slots": 1,
+        "groups": 1,
+        "batch_mtp": false,
+        "cache_mib": 16384,
+        "cache_histories": 8
+      },
+      "passed": true,
+      "summary": {
+        "short": {
+          "solo_native_decode_tps": 133.9,
+          "solo_wall_decode_tps": 134.08805569012605,
+          "solo_ttft_s": 0.32087191694881767,
+          "solo_prefill_tps": 304.1,
+          "pair_aggregate_tps": 121.51350665997909,
+          "pair_per_user_wall_decode_tps": 133.86237546886093,
+          "pair_ttft_s": 1.888378081988776,
+          "pair_latest_ttft_s": 3.4670188190066256
+        },
+        "medium": {
+          "solo_native_decode_tps": 134.4,
+          "solo_wall_decode_tps": 134.5700282384141,
+          "solo_ttft_s": 4.20281166996574,
+          "solo_prefill_tps": 2817.5,
+          "pair_aggregate_tps": 53.80203853859016,
+          "pair_per_user_wall_decode_tps": 134.08721734376783,
+          "pair_ttft_s": 7.787249966000672,
+          "pair_latest_ttft_s": 11.422522128967103
+        },
+        "cache_reused_histories": 8,
+        "long_join": {
+          "continuing_longest_gap_s": 0.0348926059959922,
+          "joining_ttft_s": 16.679368697514292
+        }
+      },
+      "functional": {
+        "passed": true,
+        "math": "63",
+        "swapped_images": true,
+        "tool_format_only": true,
+        "host_origin_403": true,
+        "key_free_ui": true,
+        "concurrent_tag_isolation": true
+      },
+      "high_thinking_math_passed": true,
+      "effective_serving_slots": 1,
+      "native_context": 262144,
+      "api_key_required": false,
+      "all_timed_prompt_cache_tokens_zero": true,
+      "solo_mtp_draft_tokens_reported": [
+        351,
+        316,
+        346,
+        346,
+        366,
+        338
+      ],
+      "prompt_tokens_by_workload": {
+        "short": [
+          93
+        ],
+        "medium": [
+          11782
+        ]
+      },
+      "completion_tokens_range": [
+        384,
+        384
+      ],
+      "cache": {
+        "reused_histories": 8,
+        "histories_tested": 8,
+        "fill_metrics": {
+          "enabled": true,
+          "budget_mib": 16384,
+          "slots": 8,
+          "parked": 8,
+          "bytes": 2920074240,
+          "evictions": 30,
+          "parks": 38,
+          "restores": 0,
+          "last_event": "parked",
+          "last_tokens": 4149,
+          "last_at": 1793536676.612964,
+          "requests": 39,
+          "requests_reused": 0,
+          "reused_tokens": 0,
+          "prompt_tokens": 199781,
+          "last_reused": 0,
+          "last_prompt": 4143
+        },
+        "reuse_metrics": {
+          "enabled": true,
+          "budget_mib": 16384,
+          "slots": 8,
+          "parked": 8,
+          "bytes": 3875012264,
+          "evictions": 30,
+          "parks": 45,
+          "restores": 7,
+          "last_event": "restored",
+          "last_tokens": 4149,
+          "last_at": 1793536680.4748282,
+          "requests": 47,
+          "requests_reused": 8,
+          "reused_tokens": 33192,
+          "prompt_tokens": 233149,
+          "last_reused": 4149,
+          "last_prompt": 4171
+        }
+      },
+      "resources": {
+        "min_available_ram_mib": 59830.484375,
+        "max_gpu_temperature_c": 75.0,
+        "min_gpu_free_mib_by_card": [
+          5374.0,
+          8334.0,
+          5666.0,
+          3871.0
+        ],
+        "max_gpu_used_mib_by_card": [
+          18754.0,
+          15794.0,
+          18462.0,
+          20254.0
+        ],
+        "sampled_max_running": 0,
+        "sampled_max_active_batch_slots": 0,
+        "samples": 175,
+        "sample_errors": 0
+      },
+      "requested_batch_mtp_confirmed_in_native_argv": false,
+      "batch_initialization_notes": [],
+      "owned_shutdown_verified": true,
+      "delta_vs_pooled_baseline_pct": {
+        "short": {
+          "solo_native_decode": -0.29784065524944836,
+          "pair_aggregate": 0.2789990066421222
+        },
+        "medium": {
+          "solo_native_decode": -0.14858841010400026,
+          "pair_aggregate": -0.2367886946471831
+        }
+      }
+    },
+    {
+      "case": {
+        "id": "0146-two-pipelined",
+        "version": "0.1.46",
+        "slots": 2,
+        "groups": 2,
+        "batch_mtp": false,
+        "cache_mib": 16384,
+        "cache_histories": 8
+      },
+      "passed": true,
+      "summary": {
+        "short": {
+          "solo_native_decode_tps": 138.4,
+          "solo_wall_decode_tps": 138.58787693572646,
+          "solo_ttft_s": 0.3066911789937876,
+          "solo_prefill_tps": 317.7,
+          "pair_aggregate_tps": 153.0297219172707,
+          "pair_per_user_wall_decode_tps": 86.01067930631454,
+          "pair_ttft_s": 0.5230672615289222,
+          "pair_latest_ttft_s": 0.75614452798618
+        },
+        "medium": {
+          "solo_native_decode_tps": 134.4,
+          "solo_wall_decode_tps": 134.58818952216325,
+          "solo_ttft_s": 4.265358783013653,
+          "solo_prefill_tps": 2775.8,
+          "pair_aggregate_tps": 57.88821475248075,
+          "pair_per_user_wall_decode_tps": 64.20293107928748,
+          "pair_ttft_s": 6.54294606653275,
+          "pair_latest_ttft_s": 8.806713879981544
+        },
+        "cache_reused_histories": 8,
+        "long_join": {
+          "continuing_longest_gap_s": 6.926814767997712,
+          "joining_ttft_s": 6.891029516496928
+        }
+      },
+      "functional": {
+        "passed": true,
+        "math": "63",
+        "swapped_images": true,
+        "tool_format_only": true,
+        "host_origin_403": true,
+        "key_free_ui": true,
+        "concurrent_tag_isolation": true
+      },
+      "high_thinking_math_passed": true,
+      "effective_serving_slots": 2,
+      "native_context": 262144,
+      "api_key_required": false,
+      "all_timed_prompt_cache_tokens_zero": true,
+      "solo_mtp_draft_tokens_reported": [
+        352,
+        316,
+        346,
+        346,
+        365,
+        338
+      ],
+      "prompt_tokens_by_workload": {
+        "short": [
+          93
+        ],
+        "medium": [
+          11782
+        ]
+      },
+      "completion_tokens_range": [
+        384,
+        384
+      ],
+      "cache": {
+        "reused_histories": 8,
+        "histories_tested": 8,
+        "fill_metrics": {
+          "enabled": true,
+          "budget_mib": 16384,
+          "slots": 8,
+          "parked": 8,
+          "bytes": 2257075744,
+          "evictions": 33,
+          "parks": 41,
+          "restores": 0,
+          "last_event": "parked",
+          "last_tokens": 4149,
+          "last_at": 1793536952.4109075,
+          "requests": 39,
+          "requests_reused": 0,
+          "reused_tokens": 0,
+          "prompt_tokens": 199781,
+          "last_reused": 0,
+          "last_prompt": 4143
+        },
+        "reuse_metrics": {
+          "enabled": true,
+          "budget_mib": 16384,
+          "slots": 8,
+          "parked": 8,
+          "bytes": 3212013768,
+          "evictions": 33,
+          "parks": 48,
+          "restores": 7,
+          "last_event": "restored",
+          "last_tokens": 4149,
+          "last_at": 1793536956.710421,
+          "requests": 47,
+          "requests_reused": 8,
+          "reused_tokens": 33192,
+          "prompt_tokens": 233149,
+          "last_reused": 4149,
+          "last_prompt": 4171
+        }
+      },
+      "resources": {
+        "min_available_ram_mib": 53392.8984375,
+        "max_gpu_temperature_c": 75.0,
+        "min_gpu_free_mib_by_card": [
+          4906.0,
+          7866.0,
+          5198.0,
+          3353.0
+        ],
+        "max_gpu_used_mib_by_card": [
+          19222.0,
+          16262.0,
+          18930.0,
+          20772.0
+        ],
+        "sampled_max_running": 2,
+        "sampled_max_active_batch_slots": 2,
+        "samples": 167,
+        "sample_errors": 0
+      },
+      "requested_batch_mtp_confirmed_in_native_argv": false,
+      "batch_initialization_notes": [
+        "strata generate: --pipeline-windows 2 is off: not with --batch slots",
+        "strata generate: --batch: 2 slot sessions on CUDA0 (0.30 GiB each); 21.18 GiB free",
+        "strata generate: --batch: 2 slot sessions on CUDA1 (0.29 GiB each); 21.49 GiB free",
+        "strata generate: --batch: 2 slot sessions on CUDA2 (0.29 GiB each); 21.30 GiB free",
+        "strata generate: --batch: 2 slot sessions on CUDA3 (0.29 GiB each); 20.83 GiB free",
+        "strata generate: --batch 2: the slot sessions take 0.59 GiB of VRAM on CUDA0 that the expert cache would otherwise hold"
+      ],
+      "owned_shutdown_verified": true,
+      "delta_vs_pooled_baseline_pct": {
+        "short": {
+          "solo_native_decode": 3.052866716306779,
+          "pair_aggregate": 26.28774984717697
+        },
+        "medium": {
+          "solo_native_decode": -0.14858841010400026,
+          "pair_aggregate": 7.340062891838373
+        }
+      }
+    },
+    {
+      "case": {
+        "id": "0146-two-serial",
+        "version": "0.1.46",
+        "slots": 2,
+        "groups": 1,
+        "batch_mtp": false,
+        "cache_mib": 16384,
+        "cache_histories": 8
+      },
+      "passed": true,
+      "summary": {
+        "short": {
+          "solo_native_decode_tps": 133.1,
+          "solo_wall_decode_tps": 133.204085675675,
+          "solo_ttft_s": 0.3095413339906372,
+          "solo_prefill_tps": 314.8,
+          "pair_aggregate_tps": 114.39586703626388,
+          "pair_per_user_wall_decode_tps": 62.278724044711666,
+          "pair_ttft_s": 0.5145333170075901,
+          "pair_latest_ttft_s": 0.7349975840188563
+        },
+        "medium": {
+          "solo_native_decode_tps": 134.0,
+          "solo_wall_decode_tps": 134.11676682170682,
+          "solo_ttft_s": 4.257825650041923,
+          "solo_prefill_tps": 2780.6,
+          "pair_aggregate_tps": 44.82040608243345,
+          "pair_per_user_wall_decode_tps": 52.68492030896337,
+          "pair_ttft_s": 8.056577378039947,
+          "pair_latest_ttft_s": 11.806703567970544
+        },
+        "cache_reused_histories": 8,
+        "long_join": {
+          "continuing_longest_gap_s": 3.707521984993946,
+          "joining_ttft_s": 19.089478489011526
+        }
+      },
+      "functional": {
+        "passed": true,
+        "math": "63",
+        "swapped_images": true,
+        "tool_format_only": true,
+        "host_origin_403": true,
+        "key_free_ui": true,
+        "concurrent_tag_isolation": true
+      },
+      "high_thinking_math_passed": true,
+      "effective_serving_slots": 2,
+      "native_context": 262144,
+      "api_key_required": false,
+      "all_timed_prompt_cache_tokens_zero": true,
+      "solo_mtp_draft_tokens_reported": [
+        354,
+        318,
+        346,
+        346,
+        365,
+        338
+      ],
+      "prompt_tokens_by_workload": {
+        "short": [
+          93
+        ],
+        "medium": [
+          11782
+        ]
+      },
+      "completion_tokens_range": [
+        384,
+        384
+      ],
+      "cache": {
+        "reused_histories": 8,
+        "histories_tested": 8,
+        "fill_metrics": {
+          "enabled": true,
+          "budget_mib": 16384,
+          "slots": 8,
+          "parked": 8,
+          "bytes": 2257075744,
+          "evictions": 36,
+          "parks": 44,
+          "restores": 0,
+          "last_event": "parked",
+          "last_tokens": 4149,
+          "last_at": 1793537272.2874706,
+          "requests": 39,
+          "requests_reused": 0,
+          "reused_tokens": 0,
+          "prompt_tokens": 199781,
+          "last_reused": 0,
+          "last_prompt": 4143
+        },
+        "reuse_metrics": {
+          "enabled": true,
+          "budget_mib": 16384,
+          "slots": 8,
+          "parked": 8,
+          "bytes": 3212013768,
+          "evictions": 36,
+          "parks": 51,
+          "restores": 7,
+          "last_event": "restored",
+          "last_tokens": 4149,
+          "last_at": 1793537276.2847185,
+          "requests": 47,
+          "requests_reused": 8,
+          "reused_tokens": 33192,
+          "prompt_tokens": 233149,
+          "last_reused": 4149,
+          "last_prompt": 4171
+        }
+      },
+      "resources": {
+        "min_available_ram_mib": 53777.1953125,
+        "max_gpu_temperature_c": 73.0,
+        "min_gpu_free_mib_by_card": [
+          4902.0,
+          7860.0,
+          5192.0,
+          3347.0
+        ],
+        "max_gpu_used_mib_by_card": [
+          19226.0,
+          16268.0,
+          18936.0,
+          20778.0
+        ],
+        "sampled_max_running": 2,
+        "sampled_max_active_batch_slots": 2,
+        "samples": 209,
+        "sample_errors": 0
+      },
+      "requested_batch_mtp_confirmed_in_native_argv": false,
+      "batch_initialization_notes": [
+        "strata generate: --pipeline-windows 2 is off: not with --batch slots",
+        "strata generate: --batch: 2 slot sessions on CUDA0 (0.30 GiB each); 21.18 GiB free",
+        "strata generate: --batch: 2 slot sessions on CUDA1 (0.29 GiB each); 21.49 GiB free",
+        "strata generate: --batch: 2 slot sessions on CUDA2 (0.29 GiB each); 21.30 GiB free",
+        "strata generate: --batch: 2 slot sessions on CUDA3 (0.29 GiB each); 20.83 GiB free",
+        "strata generate: --batch 2: the slot sessions take 0.59 GiB of VRAM on CUDA0 that the expert cache would otherwise hold"
+      ],
+      "owned_shutdown_verified": true,
+      "delta_vs_pooled_baseline_pct": {
+        "short": {
+          "solo_native_decode": -0.893521965748334,
+          "pair_aggregate": -5.594831782830512
+        },
+        "medium": {
+          "solo_native_decode": -0.4457652303120341,
+          "pair_aggregate": -16.891111113079038
+        }
+      }
+    },
+    {
+      "case": {
+        "id": "0146-two-batchmtp",
+        "version": "0.1.46",
+        "slots": 2,
+        "groups": 1,
+        "batch_mtp": true,
+        "cache_mib": 16384,
+        "cache_histories": 8
+      },
+      "passed": true,
+      "summary": {
+        "short": {
+          "solo_native_decode_tps": 134.5,
+          "solo_wall_decode_tps": 134.66752616838656,
+          "solo_ttft_s": 0.30744346498977393,
+          "solo_prefill_tps": 317.5,
+          "pair_aggregate_tps": 140.56769073110365,
+          "pair_per_user_wall_decode_tps": 78.1182841433136,
+          "pair_ttft_s": 0.5255239754915237,
+          "pair_latest_ttft_s": 0.7452869309927337
+        },
+        "medium": {
+          "solo_native_decode_tps": 133.8,
+          "solo_wall_decode_tps": 133.93543632100418,
+          "solo_ttft_s": 4.269743871991523,
+          "solo_prefill_tps": 2773.0,
+          "pair_aggregate_tps": 47.38952247586203,
+          "pair_per_user_wall_decode_tps": 61.93875719015044,
+          "pair_ttft_s": 8.07601455997792,
+          "pair_latest_ttft_s": 11.874526171013713
+        },
+        "cache_reused_histories": 8,
+        "long_join": {
+          "continuing_longest_gap_s": 3.7194888839730993,
+          "joining_ttft_s": 19.10499493300449
+        }
+      },
+      "functional": {
+        "passed": true,
+        "math": "63",
+        "swapped_images": true,
+        "tool_format_only": true,
+        "host_origin_403": true,
+        "key_free_ui": true,
+        "concurrent_tag_isolation": true
+      },
+      "high_thinking_math_passed": true,
+      "effective_serving_slots": 2,
+      "native_context": 262144,
+      "api_key_required": false,
+      "all_timed_prompt_cache_tokens_zero": true,
+      "solo_mtp_draft_tokens_reported": [
+        352,
+        316,
+        347,
+        346,
+        366,
+        338
+      ],
+      "prompt_tokens_by_workload": {
+        "short": [
+          93
+        ],
+        "medium": [
+          11782
+        ]
+      },
+      "completion_tokens_range": [
+        384,
+        384
+      ],
+      "cache": {
+        "reused_histories": 8,
+        "histories_tested": 8,
+        "fill_metrics": {
+          "enabled": true,
+          "budget_mib": 16384,
+          "slots": 8,
+          "parked": 8,
+          "bytes": 2257081920,
+          "evictions": 36,
+          "parks": 44,
+          "restores": 0,
+          "last_event": "parked",
+          "last_tokens": 4149,
+          "last_at": 1793537580.1777284,
+          "requests": 39,
+          "requests_reused": 0,
+          "reused_tokens": 0,
+          "prompt_tokens": 199781,
+          "last_reused": 0,
+          "last_prompt": 4143
+        },
+        "reuse_metrics": {
+          "enabled": true,
+          "budget_mib": 16384,
+          "slots": 8,
+          "parked": 8,
+          "bytes": 3212019944,
+          "evictions": 36,
+          "parks": 51,
+          "restores": 7,
+          "last_event": "restored",
+          "last_tokens": 4149,
+          "last_at": 1793537584.4547837,
+          "requests": 47,
+          "requests_reused": 8,
+          "reused_tokens": 33192,
+          "prompt_tokens": 233149,
+          "last_reused": 4149,
+          "last_prompt": 4171
+        }
+      },
+      "resources": {
+        "min_available_ram_mib": 53022.71875,
+        "max_gpu_temperature_c": 73.0,
+        "min_gpu_free_mib_by_card": [
+          4878.0,
+          7840.0,
+          5172.0,
+          3211.0
+        ],
+        "max_gpu_used_mib_by_card": [
+          19250.0,
+          16288.0,
+          18956.0,
+          20914.0
+        ],
+        "sampled_max_running": 2,
+        "sampled_max_active_batch_slots": 2,
+        "samples": 198,
+        "sample_errors": 0
+      },
+      "requested_batch_mtp_confirmed_in_native_argv": true,
+      "batch_initialization_notes": [
+        "strata generate: --pipeline-windows 2 is off: not with --batch slots",
+        "strata generate: --batch: 2 slot sessions on CUDA0 (0.30 GiB each); 21.18 GiB free",
+        "strata generate: --batch: 2 slot sessions on CUDA1 (0.29 GiB each); 21.49 GiB free",
+        "strata generate: --batch: 2 slot sessions on CUDA2 (0.29 GiB each); 21.30 GiB free",
+        "strata generate: --batch: 2 slot sessions on CUDA3 (0.29 GiB each); 20.83 GiB free",
+        "strata generate: --batch 2: the slot sessions take 0.59 GiB of VRAM on CUDA0 that the expert cache would otherwise hold",
+        "strata generate: --batch-mtp: 2 slot drafters on CUDA3 (49 MiB of private K/V state and buffers each, sharing the solo drafter's weights); 19.91 GiB free there"
+      ],
+      "owned_shutdown_verified": true,
+      "delta_vs_pooled_baseline_pct": {
+        "short": {
+          "solo_native_decode": 0.14892032762470198,
+          "pair_aggregate": 16.003460904423772
+        },
+        "medium": {
+          "solo_native_decode": -0.5943536404160343,
+          "pair_aggregate": -12.127289730329293
+        }
+      }
+    },
+    {
+      "case": {
+        "id": "0146-baseline-A2",
+        "version": "0.1.46",
+        "slots": 1,
+        "groups": 1,
+        "batch_mtp": false,
+        "cache_mib": 8192,
+        "cache_histories": 4
+      },
+      "passed": true,
+      "summary": {
+        "short": {
+          "solo_native_decode_tps": 134.4,
+          "solo_wall_decode_tps": 134.597671368717,
+          "solo_ttft_s": 0.3342824039864354,
+          "solo_prefill_tps": 291.5,
+          "pair_aggregate_tps": 121.28188229798899,
+          "pair_per_user_wall_decode_tps": 133.6802322303027,
+          "pair_ttft_s": 1.865560998005094,
+          "pair_latest_ttft_s": 3.464934010989964
+        },
+        "medium": {
+          "solo_native_decode_tps": 135.0,
+          "solo_wall_decode_tps": 135.15818346161612,
+          "solo_ttft_s": 4.204915125970729,
+          "solo_prefill_tps": 2816.0,
+          "pair_aggregate_tps": 54.00556977441902,
+          "pair_per_user_wall_decode_tps": 135.02640293777318,
+          "pair_ttft_s": 7.7482695005019195,
+          "pair_latest_ttft_s": 11.39217752800323
+        },
+        "cache_reused_histories": 5,
+        "long_join": {
+          "continuing_longest_gap_s": 0.03504574450198561,
+          "joining_ttft_s": 16.67012327449629
+        }
+      },
+      "functional": {
+        "passed": true,
+        "math": "63",
+        "swapped_images": true,
+        "tool_format_only": true,
+        "host_origin_403": true,
+        "key_free_ui": true,
+        "concurrent_tag_isolation": true
+      },
+      "high_thinking_math_passed": true,
+      "effective_serving_slots": 1,
+      "native_context": 262144,
+      "api_key_required": false,
+      "all_timed_prompt_cache_tokens_zero": true,
+      "solo_mtp_draft_tokens_reported": [
+        351,
+        316,
+        346,
+        346,
+        366,
+        338
+      ],
+      "prompt_tokens_by_workload": {
+        "short": [
+          93
+        ],
+        "medium": [
+          11782
+        ]
+      },
+      "completion_tokens_range": [
+        384,
+        384
+      ],
+      "cache": {
+        "reused_histories": 5,
+        "histories_tested": 8,
+        "fill_metrics": {
+          "enabled": true,
+          "budget_mib": 8192,
+          "slots": 4,
+          "parked": 4,
+          "bytes": 1207408800,
+          "evictions": 34,
+          "parks": 38,
+          "restores": 0,
+          "last_event": "parked",
+          "last_tokens": 4149,
+          "last_at": 1793537865.32917,
+          "requests": 39,
+          "requests_reused": 0,
+          "reused_tokens": 0,
+          "prompt_tokens": 199781,
+          "last_reused": 0,
+          "last_prompt": 4143
+        },
+        "reuse_metrics": {
+          "enabled": true,
+          "budget_mib": 8192,
+          "slots": 4,
+          "parked": 4,
+          "bytes": 1465563008,
+          "evictions": 37,
+          "parks": 45,
+          "restores": 4,
+          "last_event": "parked",
+          "last_tokens": 4179,
+          "last_at": 1793537873.0327003,
+          "requests": 47,
+          "requests_reused": 5,
+          "reused_tokens": 20745,
+          "prompt_tokens": 233149,
+          "last_reused": 0,
+          "last_prompt": 4171
+        }
+      },
+      "resources": {
+        "min_available_ram_mib": 61656.19140625,
+        "max_gpu_temperature_c": 75.0,
+        "min_gpu_free_mib_by_card": [
+          5374.0,
+          8334.0,
+          5666.0,
+          3871.0
+        ],
+        "max_gpu_used_mib_by_card": [
+          18754.0,
+          15794.0,
+          18462.0,
+          20254.0
+        ],
+        "sampled_max_running": 0,
+        "sampled_max_active_batch_slots": 0,
+        "samples": 181,
+        "sample_errors": 0
+      },
+      "requested_batch_mtp_confirmed_in_native_argv": false,
+      "batch_initialization_notes": [],
+      "owned_shutdown_verified": true,
+      "delta_vs_pooled_baseline_pct": {
+        "short": {
+          "solo_native_decode": 0.07446016381236209,
+          "pair_aggregate": 0.0878510445401437
+        },
+        "medium": {
+          "solo_native_decode": 0.2971768202080227,
+          "pair_aggregate": 0.14061205519002584
+        }
+      }
+    }
+  ],
+  "comparisons": {
+    "0.1.46": {
+      "pooled_baseline": {
+        "short": {
+          "solo_native_decode_tps": 134.3,
+          "pair_aggregate_tps": 121.17542841839742,
+          "baseline_solo_drift_pct": 0.14903129657228842,
+          "baseline_pair_drift_pct": 0.17585658092353906
+        },
+        "medium": {
+          "solo_native_decode_tps": 134.6,
+          "pair_aggregate_tps": 53.929738061372326,
+          "baseline_solo_drift_pct": 0.5961251862891315,
+          "baseline_pair_drift_pct": 0.28162010219359157
+        }
+      },
+      "best_short_pair": "0146-two-pipelined",
+      "best_medium_pair": "0146-two-pipelined"
+    }
+  },
+  "restoration": {
+    "passed": true,
+    "original_q8_sc117_hive_17_runtime": "0.1.46",
+    "semantic_configuration_unchanged": true,
+    "rig_wallet_oc_power_unchanged": true,
+    "octaspace_active": true,
+    "no_lease_or_journal": true,
+    "known_answer": "63"
+  },
+  "limitations": [
+    "One fresh process per candidate, baseline repeated before/after each runtime. Medians are bounded workload evidence, not universal speed guarantees.",
+    "Not a quality comparison, long-term stability qualification or a test of eight fully populated 262K histories/two simultaneous near-262K prompts.",
+    "Cache byte budget is a shared ceiling, not reserved RAM per history; eight shorter histories fitting does not guarantee eight large ones fit.",
+    "Default multi-slot decoding has no drafts while concurrent; batch-MTP uses one proposal per slot, not the normal solo --spec 3 path. Solo draft usage is recorded.",
+    "Native per-user decode rate and end-to-end combined rate are different metrics and must not be directly compared."
+  ]
+}
