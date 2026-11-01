@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add only two inactive Q8_0 PLE Hive profiles and the selector; never stop/restart or change current."""
+"""Add inactive Q8_0 PLE Hive choices (including the two-user preset); never stop/restart or change current."""
 import argparse
 import fcntl
 import hashlib
@@ -12,6 +12,8 @@ import tempfile
 
 from engine_safety import SafetyError, docker_empty
 import ple_q8_assets as A
+import sc117_q8_2slot_profile as TWO
+PROFILES = (*A.HIVE_PROFILES, TWO.HIVE_PROFILE)
 
 ROOT = Path('/hive/miners/custom/llm-hosting')
 SOURCE = Path(__file__).resolve().parent / 'hive-llm-miner'
@@ -135,14 +137,14 @@ def main():
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             docker_empty()
             before = active_snapshot()
-            for profile in A.HIVE_PROFILES:
+            for profile in PROFILES:
                 switch.preflight_profile(profile)  # metadata/file checks as user; no inference or lifecycle actions
             trusted_layout()
             docker_empty()
             if active_snapshot() != before:
                 raise SafetyError('Hive selection/active files/markers changed; no selector publication')
             added = {profile: install_inactive_profile(SOURCE / 'profiles' / profile, ROOT / 'profiles' / profile)
-                     for profile in A.HIVE_PROFILES}
+                     for profile in PROFILES}
             if active_snapshot() != before:
                 raise SafetyError('Active Hive state changed while adding inactive profiles; selector unchanged')
             changed = publish_menu(SOURCE / 'profile-menu.sh', ROOT / 'profile-menu.sh')

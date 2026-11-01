@@ -227,6 +227,7 @@ def active_engine():
     base = owner_home() / '.local/state/locallm-strata'
     roots = dict.fromkeys((strata_state(), base / 'sc117-iq3s-trial', base / 'swift15-heretic-re',
                           base / 'sc117-iq3s-ple-q8-trial', base / 'swift15-heretic-re-ple-q8',
+                          base / 'sc117-iq3s-ple-q8-2slot-trial',
                           base / 'deepseek41-abiray'))
     for root in roots:
         s = root / 'server.json'

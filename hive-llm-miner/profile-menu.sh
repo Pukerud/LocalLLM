@@ -63,6 +63,7 @@ profile_label() {
         swift15-heretic-re) printf '%s' 'Swift 1.5 Heretic RE — IQ4_NL n-gram | Strata .46 | native 262K | BF16 CPU vision | spec 3 + windows 2 | 8192 MiB / four-history cache | one slot' ;;
         swift15-heretic-re-ple-q8) printf '%s' 'Swift 1.5 Heretic RE — Q8_0 n-gram | Strata .46 | same context/vision/tuning | isolated cache | bounded smoke passed; quality/speed A/B pending' ;;
         iq3_s-sc117-abliterated-ple-q8-v0146) printf '%s' 'SC117 IQ3_S — Q8_0 n-gram | Strata .46 | same context/CPU vision/tuning | isolated trial cache | bounded smoke passed; quality/speed A/B pending' ;;
+        iq3_s-sc117-abliterated-ple-q8-2slot-v0146) printf '%s' 'SC117 Q8 two-user — Strata .46 | 2 pipelined slots | 16 GiB / 8 histories | solo MTP | long-prefill pauses possible; unqualified' ;;
         *) return 1 ;;
     esac
 }
@@ -72,7 +73,7 @@ read_current_profile() {
     if [[ -L "$CURRENT_LINK" ]]; then
         target="$(readlink -- "$CURRENT_LINK")" || return 1
         case "$target" in
-            profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/hauhau-q8-fastmtp-q4kv-xhigh|profiles/iq3_s-sc117-abliterated|profiles/iq3_s-sc117-abliterated-v0146|profiles/deepseek41-abiray-iq2_xxs|profiles/swift15-heretic-re|profiles/swift15-heretic-re-ple-q8|profiles/iq3_s-sc117-abliterated-ple-q8-v0146) printf '%s' "${target#profiles/}" ;;
+            profiles/orca-q4_k_s|profiles/orca-q4_k_s-v0141|profiles/orca-q4_k_s-v0141-2slot|profiles/orca-q4_k_s-v01441|profiles/swift15u-q8|profiles/hauhau-q8-fastmtp-q4kv-xhigh|profiles/iq3_s-sc117-abliterated|profiles/iq3_s-sc117-abliterated-v0146|profiles/deepseek41-abiray-iq2_xxs|profiles/swift15-heretic-re|profiles/swift15-heretic-re-ple-q8|profiles/iq3_s-sc117-abliterated-ple-q8-v0146|profiles/iq3_s-sc117-abliterated-ple-q8-2slot-v0146) printf '%s' "${target#profiles/}" ;;
             *) return 1 ;;
         esac
         return
@@ -80,7 +81,7 @@ read_current_profile() {
     [[ ! -e "$CURRENT_LINK" ]] || return 1
     current_conf="$CUSTOM_DIR/llm-hosting.conf"
     [[ -f "$current_conf" && ! -L "$current_conf" ]] || return 1
-    for profile in swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh swift15-heretic-re iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146 swift15-heretic-re-ple-q8 iq3_s-sc117-abliterated-ple-q8-v0146; do
+    for profile in swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh swift15-heretic-re iq3_s-sc117-abliterated iq3_s-sc117-abliterated-v0146 swift15-heretic-re-ple-q8 iq3_s-sc117-abliterated-ple-q8-v0146 iq3_s-sc117-abliterated-ple-q8-2slot-v0146; do
         if cmp -s <(tr -d '\r' < "$current_conf") <(tr -d '\r' < "$PROFILE_ROOT/$profile/llm-hosting.conf"); then
             printf '%s' "$profile"
             return 0
@@ -134,11 +135,26 @@ show_profiles() {
     printf '  [5] %s\n' "$(profile_label iq3_s-sc117-abliterated-v0146)"
     printf '  [6] %s\n' "$(profile_label swift15-heretic-re-ple-q8)"
     printf '  [7] %s\n' "$(profile_label iq3_s-sc117-abliterated-ple-q8-v0146)"
+    printf '  [8] %s\n' "$(profile_label iq3_s-sc117-abliterated-ple-q8-2slot-v0146)"
 }
 
 check_selected_profile_ready() {
     local effective="$1" q8_state='' q8_suffix=' PLE OVERRIDE: original-Qwen Q8_0 n-gram; mmap; separate Q8_0 state/cache; bounded live smoke passed; matched quality/speed A/B pending.'
     local -a ple_args=()
+    if [[ "$effective" == iq3_s-sc117-abliterated-ple-q8-2slot-v0146 ]]; then
+        command -v runuser >/dev/null 2>&1 || fail 'runuser is unavailable; two-slot profile unchanged'
+        local two_state='/home/user/.local/state/locallm-strata/sc117-iq3s-ple-q8-2slot-trial' readiness expected_readiness
+        readiness="$(runuser -u user -- env -i HOME=/home/user USER=user LOGNAME=user \
+            PATH=/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin \
+            PYTHONDONTWRITEBYTECODE=1 "PYTHONPYCACHEPREFIX=$two_state/pycache" SETUPTOOLS_USE_DISTUTILS=stdlib \
+            STRATA_SC117_IQ3S_TRIAL=1 STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata \
+            "STRATA_STATE_ROOT=$two_state" STRATA_RUNTIME=0.1.46 STRATA_PARALLEL=2 STRATA_BATCH_GROUPS=2 \
+            STRATA_HOST=0.0.0.0 STRATA_PORT=8080 \
+            "$LLM_ROOT/v1strata.sh" --check-ready --profile sc117-q8-2slot --runtime 0.1.46 --parallel 2 --batch-groups 2)" || fail 'two-slot isolated readiness failed; pointer unchanged'
+        expected_readiness='TRIAL CONFIG: unqualified SC117 Q8_0 2-slot; Strata=0.1.46; trusted-LAN=0.0.0.0:8080 (unauthenticated); native 262144; INT8 KV (32768 resident); BF16 CPU vision; --spec=3; pipeline-windows=2; split=14,24,36; two serving slots / two pipelined groups; conversation cache=16384 MiB / 8 histories; solo MTP; no concurrent drafts; mmap PLE; isolated state/cache. Bounded throughput evidence, not qualification; long-prefill stream stalls possible.'
+        [[ "$(grep '^TRIAL CONFIG:' <<< "$readiness" || true)" == "$expected_readiness" ]] || fail 'two-slot exact readiness mismatch; pointer unchanged'
+        return
+    fi
     case "$effective" in
         swift15-heretic-re-ple-q8)
             effective=swift15-heretic-re; q8_state=/home/user/.local/state/locallm-strata/swift15-heretic-re-ple-q8; ple_args=(--ple-q8) ;;
@@ -323,6 +339,7 @@ check_profile_files iq3_s-sc117-abliterated-v0146 || fail 'SC117 .46 trial profi
 check_profile_files swift15-heretic-re || fail 'Heretic profile files are incomplete or symlinked'
 check_profile_files swift15-heretic-re-ple-q8 || fail 'Heretic Q8_0 PLE profile files are incomplete or symlinked'
 check_profile_files iq3_s-sc117-abliterated-ple-q8-v0146 || fail 'SC117 Q8_0 PLE profile files are incomplete or symlinked'
+check_profile_files iq3_s-sc117-abliterated-ple-q8-2slot-v0146 || fail 'SC117 Q8 two-user profile files are incomplete or symlinked'
 validate_profile_layout
 
 case "${1:-}" in
@@ -341,6 +358,7 @@ case "${1:-}" in
         printf '  [5] %s\n' "$(profile_label iq3_s-sc117-abliterated-v0146)"
         printf '  [6] %s\n' "$(profile_label swift15-heretic-re-ple-q8)"
         printf '  [7] %s\n' "$(profile_label iq3_s-sc117-abliterated-ple-q8-v0146)"
+        printf '  [8] %s\n' "$(profile_label iq3_s-sc117-abliterated-ple-q8-2slot-v0146)"
         printf '  [q] Quit\n'
         read -r -p 'Select profile for the next Hive miner start: ' choice || exit 0
         case "${choice//[[:space:]]/}" in
@@ -351,6 +369,7 @@ case "${1:-}" in
             5|iq3_s-sc117-abliterated-v0146) target='iq3_s-sc117-abliterated-v0146' ;;
             6|swift15-heretic-re-ple-q8) target='swift15-heretic-re-ple-q8' ;;
             7|iq3_s-sc117-abliterated-ple-q8-v0146) target='iq3_s-sc117-abliterated-ple-q8-v0146' ;;
+            8|iq3_s-sc117-abliterated-ple-q8-2slot-v0146) target='iq3_s-sc117-abliterated-ple-q8-2slot-v0146' ;;
             q|Q|'') exit 0 ;;
             *) fail 'invalid selection; no files changed' ;;
         esac

@@ -10,8 +10,9 @@
 | SC117 IQ3_S / original IQ4_NL | **4** | **15** | Direct .45; Hive .46 |
 | Heretic RE / **Q8_0** | **5** | **16** | Same .46/BF16-gate engine |
 | SC117 IQ3_S / **Q8_0** | **6** | **17** | Direct .45; Hive .46 |
+| SC117 Q8_0 / **two-user preset** | **7** | **18** | **.46**, two pipelined slots, 16 GiB/eight histories |
 
-Old Hive SC117 [17] becomes [15]; [17] now deliberately names **SC117 with Q8_0 PLE**. This does not change the selected Hive profile. The low-level Hive selector keeps [1]–[5] and adds **[6] Heretic Q8_0** and **[7] SC117 .46 Q8_0**. Swift/Hauhau and the menu's existing Swift installation default are unchanged.
+Old Hive SC117 [17] becomes [15]; [17] now deliberately names **SC117 with Q8_0 PLE**. This does not change the selected Hive profile. The low-level Hive selector keeps [1]–[5], adds **[6] Heretic Q8_0** and **[7] SC117 .46 Q8_0**, and later **[8] SC117 Q8 two-user**. See [the separate two-user profile](SC117_Q8_2SLOT.md) for its exact .46/2-slot/2-group policy, isolated state and operator-requested activation; the original choices remain one-slot. Swift/Hauhau and the menu's existing Swift installation default are unchanged.
 
 **Q8_0 here describes only the learned PLE/n-gram table.** It does not turn the IQ3_S experts, Heretic's mixed-quantized experts, or INT8 KV into a different model quantization. No runtime upgrade, retraining, new routing shortcut, YaRN or context extension is involved.
 
@@ -34,7 +35,7 @@ Local preparation verifies the full published file checksum, exact one-tensor he
 
 ## Same serving policy, separate state/cache
 
-The only numerical model input changed is `--ple-gguf`. The overlay also explicitly binds all **original** model shards through `--native-dense-gguf` (Heretic eight, SC117 two), preventing the table-only shard's unrelated six-shard metadata from triggering model-shard auto-discovery. No Q6 model weights are loaded. Keep the original expert/dense weights, pack, tokenizer, MTP, projector, engine and tuning:
+For the original single-slot variants, the only numerical model input changed is `--ple-gguf`. The later separate two-user preset also changes serving/cache policy to 2/2 and 16384 MiB/eight histories; it never changes the one-slot profiles. The overlay also explicitly binds all **original** model shards through `--native-dense-gguf` (Heretic eight, SC117 two), preventing the table-only shard's unrelated six-shard metadata from triggering model-shard auto-discovery. No Q6 model weights are loaded. Keep the original expert/dense weights, pack, tokenizer, MTP, projector, engine and tuning:
 
 - Native **262144** context; no silent fit/truncation or RoPE extension.
 - Four GPUs, split **14,24,36**, one serving slot/group.
@@ -71,7 +72,7 @@ sudo ./install-hive-llm-miner.sh --add-ple-q8-profiles
 
 The downloader is resumable, size/SHA-pinned, serialized and low-priority. No model-repository code is executed. The original model files are kept for rollback, so this adds the full **54.4 GB** of disk data, not just the difference between table formats.
 
-The **add-only** installer serializes against HostLLM/Hive selection, refuses rentals or a pending lease/journal, checks both .46 candidates as unprivileged `user`, publishes only two complete new profile directories and atomically replaces the selector. It refuses to overwrite a differing existing Q8 profile. It verifies that `current`, stable entrypoint links, active profile files and miner markers stay unchanged. It does **not** rewrite rig/wallet files, active wrappers/configs, service state or the selected profile, and contains no stop/start/switch operation.
+The **add-only** installer serializes against HostLLM/Hive selection, refuses rentals or a pending lease/journal, checks both .46 candidates as unprivileged `user`, publishes only missing complete inactive Q8 profile directories (including the later two-user choice) and atomically replaces the selector. It refuses to overwrite a differing existing Q8 profile. It verifies that `current`, stable entrypoint links, active profile files and miner markers stay unchanged. It does **not** rewrite rig/wallet files, active wrappers/configs, service state or the selected profile, and contains no stop/start/switch operation.
 
 The ordinary full installer still refuses active workloads and is **not** the no-stop command. Reopen HostLLM after updates; existing shells retain their old menu functions. Merely adding/listing the options does not choose them. A future explicit Hive [16]/[17] selection invokes the existing ownership/rental-checked switching workflow; direct [5]/[6] refuse to replace an already-running Strata instance.
 

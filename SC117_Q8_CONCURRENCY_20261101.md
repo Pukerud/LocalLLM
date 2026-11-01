@@ -1,5 +1,7 @@
 # SC117 Q8_0 PLE — .46 concurrency and conversation-cache measurements
 
+> **Later follow-up:** the operator approved a distinct [7]/Hive [18] preset and explicitly requested it left active. See [SC117_Q8_2SLOT.md](SC117_Q8_2SLOT.md). Restoration/no-applied-preset statements below describe the completed benchmark stage, not the later approved activation.
+
 2026-11-01, `.69`, four RTX 3090s. **Strata 0.1.46 only.** Seven completed fresh-process runs cover six configurations, including a before/after baseline. The operator explicitly authorized stopping the current server and testing settings. An unnecessary extra .45 baseline was begun for direct option [6], then cancelled when the operator clarified .46; none of its partial measurements are included. Direct [6]'s .45 defaults are not changed or qualified by these results.
 
 ## Speed summary

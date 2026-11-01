@@ -18,6 +18,7 @@ import time
 import hosting_lifecycle as hosting
 from engine_safety import SafetyError, command_output, docker_empty, proc, same_process
 import ple_q8_assets
+import sc117_q8_2slot_profile as sc117_two
 
 SCRIPT_ROOT = Path(__file__).resolve().parent
 WRAPPER = Path('/hive/miners/custom/llm-hosting/h-run.sh')
@@ -26,7 +27,7 @@ CUR_MINER = Path('/run/hive/cur_miner')
 JOURNAL = hosting.ROOT / 'hive-profile-switch.json'
 HERETIC_PROFILE = 'swift15-heretic-re'
 PROFILES = ('swift15u-q8', 'hauhau-q8-fastmtp-q4kv-xhigh', HERETIC_PROFILE,
-            'iq3_s-sc117-abliterated', 'iq3_s-sc117-abliterated-v0146', *ple_q8_assets.HIVE_PROFILES)
+            'iq3_s-sc117-abliterated', 'iq3_s-sc117-abliterated-v0146', *ple_q8_assets.HIVE_PROFILES, sc117_two.HIVE_PROFILE)
 DEEPSEEK_PROFILE = 'deepseek41-abiray-iq2_xxs'  # retained historical recovery/readiness implementation only
 SC117_V0146_PROFILE = 'iq3_s-sc117-abliterated-v0146'
 SC117_V0146_READINESS = (
@@ -280,6 +281,27 @@ def package_current(profile):
 
 def preflight_profile(profile):
     """Run the new SC117 route's exact readiness check before pausing Hive/OctaSpace."""
+    if profile == sc117_two.HIVE_PROFILE:
+        state = '/home/user/.local/state/locallm-strata/' + sc117_two.STATE_NAME
+        runuser = shutil.which('runuser', path='/usr/sbin:/usr/bin:/sbin:/bin')
+        if runuser is None:
+            raise SafetyError('runuser is unavailable; two-slot readiness failed before pause')
+        command = [runuser, '-u', 'user', '--', '/usr/bin/env', '-i',
+                   'HOME=/home/user', 'USER=user', 'LOGNAME=user',
+                   'PATH=/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin',
+                   'PYTHONDONTWRITEBYTECODE=1', 'SETUPTOOLS_USE_DISTUTILS=stdlib',
+                   f'PYTHONPYCACHEPREFIX={state}/pycache', f'STRATA_STATE_ROOT={state}',
+                   'STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata',
+                   'STRATA_SC117_IQ3S_TRIAL=1', 'STRATA_RUNTIME=0.1.46',
+                   'STRATA_HOST=0.0.0.0', 'STRATA_PORT=8080', 'STRATA_PARALLEL=2', 'STRATA_BATCH_GROUPS=2',
+                   '/home/user/LocalLLM/v1strata.sh', '--check-ready', '--profile', sc117_two.PROFILE,
+                   '--runtime', '0.1.46', '--parallel', '2', '--batch-groups', '2']
+        result = subprocess.run(command, capture_output=True, text=True, timeout=600)
+        lines = [line for line in result.stdout.splitlines() if line.startswith(('READY CONFIG:', 'TRIAL CONFIG:'))]
+        if result.returncode or lines != [sc117_two.READY]:
+            raise SafetyError('SC117 two-slot exact isolated readiness failed before any pause')
+        say('SC117 Q8 two-slot preset readiness passed; bounded .46 throughput evidence, not qualification.')
+        return
     if profile in ple_q8_assets.HIVE_PROFILES:
         from heretic_profile import READY
         base = ple_q8_assets.HIVE_PROFILES[profile]

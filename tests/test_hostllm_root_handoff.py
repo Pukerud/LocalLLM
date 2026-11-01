@@ -20,13 +20,14 @@ class StrataOperatorHandoff(unittest.TestCase):
                             f'Path({str(log)!r}).write_text(json.dumps(sys.argv[1:]))\n')
             stub.chmod(0o755)
             profile = profile_override or ('iq3_s-sc117-abliterated' if trial else 'orca-q4_k_s')
-            runtime = '0.1.46' if profile == 'swift15-heretic-re' else '0.1.45' if trial else '0.1.44.1'
+            runtime = '0.1.46' if profile in ('swift15-heretic-re','sc117-q8-2slot') else '0.1.45' if trial else '0.1.44.1'
+            slots = 2 if profile == 'sc117-q8-2slot' else 1
             ple_arg = ' --ple-q8' if ple_q8 else ''
             function = 'run_selected v1strata.sh' if through_selection else 'run_strata_as_operator'
             host_assignment = '' if default_host else 'STRATA_HOST=' + ('0.0.0.0' if trial else '127.0.0.1')
             command = f'''source "$1/HostLLM.sh"
 STRATA_SC117_IQ3S_TRIAL={int(trial)} {host_assignment} \\
-    {function} --quickstart --profile {profile} --runtime {runtime} --parallel 1 --batch-groups 1{ple_arg}
+    {function} --quickstart --profile {profile} --runtime {runtime} --parallel {slots} --batch-groups {slots}{ple_arg}
 '''
             env = {'PATH': f'{scratch}:/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/root',
                    'QWEN38_OWNER_USER': owner, 'PYTHONPATH': '/hostile',
@@ -63,6 +64,14 @@ STRATA_SC117_IQ3S_TRIAL={int(trial)} {host_assignment} \\
                 self.assertEqual(arguments[-1], '--ple-q8')
                 self.assertNotIn('PYTHONPATH=/hostile', arguments)
                 self.assertNotIn('STRATA_PREFILL_CPU_SHARE=hostile', arguments)
+
+    def test_two_slot_profile_has_own_root_handoff_and_pinned_046(self):
+        result, arguments = self.run_handoff(trial=True, profile_override='sc117-q8-2slot')
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('STRATA_STATE_ROOT=/home/user/.local/state/locallm-strata/sc117-iq3s-ple-q8-2slot-trial',arguments)
+        self.assertEqual(arguments[-6:],['--runtime','0.1.46','--parallel','2','--batch-groups','2'])
+        self.assertNotIn('PYTHONPATH=/hostile',arguments)
+        self.assertNotIn('STRATA_PREFILL_CPU_SHARE=hostile',arguments)
 
     def test_q8_for_unrelated_profile_is_refused_before_operator_handoff(self):
         result, arguments = self.run_handoff(ple_q8=True)
