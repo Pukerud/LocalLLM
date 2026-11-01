@@ -1,0 +1,119 @@
+{
+  "date": "2026-11-01",
+  "result": "FAILED-NOT-PROMOTED-PAUSED-FOR-OPERATOR-REBOOT",
+  "runtime_only": "0.1.46",
+  "production_code_config_unchanged": true,
+  "new_default_applied": false,
+  "saved_hive_menu": 18,
+  "saved_context": 262144,
+  "saved_slots": 2,
+  "saved_groups": 2,
+  "saved_cache_mib": 16384,
+  "saved_histories": 8,
+  "candidate_context": 524288,
+  "candidate_rope": "YaRN2, original262144; experimental at every position",
+  "candidate_two_slots_loaded": true,
+  "native_completed_runs": 2,
+  "candidate_completed_run": false,
+  "native_near_full_actual_inputs": [
+    257980,
+    257980
+  ],
+  "candidate_under_native_length_actual_inputs": [
+    257980,
+    257980
+  ],
+  "both_under_native_length_documents_correct": true,
+  "native_A1_resource": {
+    "min_available_ram_mib": 41659.91796875,
+    "min_free_vram_mib": [
+      4912.0,
+      7854.0,
+      5186.0,
+      3351.0
+    ],
+    "max_temp_c": 77.0,
+    "max_occupied_slots": 2,
+    "max_decoding_slots": 2
+  },
+  "native_A2_resource": {
+    "min_available_ram_mib": 53552.015625,
+    "min_free_vram_mib": [
+      4912.0,
+      7860.0,
+      5192.0,
+      3357.0
+    ],
+    "max_temp_c": 75.0,
+    "max_occupied_slots": 2,
+    "max_decoding_slots": 2
+  },
+  "no_thinking_toy_correct_native": [
+    8,
+    8
+  ],
+  "no_thinking_toy_correct_candidate": 8,
+  "toy_questions_per_run": 24,
+  "default_high_correct_native_A2": 8,
+  "default_high_correct_candidate": 8,
+  "default_high_questions": 8,
+  "candidate_functional": {
+    "passed": true,
+    "math": "63",
+    "swapped_images": true,
+    "tool_format_only": true,
+    "host_origin_403": true,
+    "key_free_ui": true,
+    "concurrent_tag_isolation": true
+  },
+  "pre_fault_speed_only": {
+    "short": {
+      "native_solo_decode_tps": 138.0,
+      "candidate_solo_decode_tps": 135.1,
+      "native_pair_total_tps": 153.5825166052847,
+      "candidate_pair_total_tps": 153.64226496045933,
+      "scope": "matched native/candidate before full-load fault only; not512K capacity/stability qualification"
+    },
+    "medium": {
+      "native_solo_decode_tps": 130.55,
+      "candidate_solo_decode_tps": 128.4,
+      "native_pair_total_tps": 57.84408885930205,
+      "candidate_pair_total_tps": 57.8516262383244,
+      "scope": "matched native/candidate before full-load fault only; not512K capacity/stability qualification"
+    }
+  },
+  "fault": {
+    "at_utc": "2026-11-01T15:50:02Z",
+    "requested_input_tokens": 519983,
+    "last_reported_prefill_tokens": 376832,
+    "first_near512k_request_completed": false,
+    "second_near512k_request_launched": false,
+    "two_near512k_slots_proven": false,
+    "kernel_markers": [
+      "AMD-Vi IO_PAGE_FAULT",
+      "Xid79 GPUs1/3 fallen off bus",
+      "Xid154 Node Reboot Required"
+    ],
+    "root_cause_established": false,
+    "ordinary_ram_or_vram_oom_proven": false
+  },
+  "paused": {
+    "operator_requested_save_then_user_reboot": true,
+    "inference_active": false,
+    "octaspace": "inactive",
+    "exact_experiment_pause_lease_intentionally_held": true,
+    "miner_stop_asserted": true,
+    "all_test_processes_stopped": true,
+    "no_pending_automatic_controller_or_startup": true,
+    "agent_reboot_or_reset_performed": false,
+    "recovery_completed": false,
+    "next_step": "Wait for operator reboot and explicit continue. Fresh all4GPU/rental/session/selection/lease checks; restore unchanged native262K18 only."
+  },
+  "limitations": [
+    "512K loaded and short/default-high/native-length tests passed; full512K did NOT complete and both slots were NOT capacity-qualified.",
+    "No full-load candidate RAM/VRAM monitor rows were committed when the fixture client was terminated; do not infer a peak/headroom bound.",
+    "Native baseline toy failures are not a general model-quality score; eight high-thinking cases are narrow evidence.",
+    "Root cause unknown. No driver/kernel/boot/power/clock/weight/runtime changes or recovery reset/reboot were made.",
+    "Native-A3 and candidate post-full checks not started/completed. Never replay controllers or retry512K automatically."
+  ]
+}

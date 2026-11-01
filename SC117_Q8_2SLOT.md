@@ -1,5 +1,7 @@
 # SC117 Q8 two-user preset — Strata .46
 
+> **Later pause:** the [two-slot512K test](SC117_512K_TEST_20261101.md) faulted the GPU/driver. Saved[18] remains this native262K preset, but inference is stopped awaiting operator reboot/continue and recovery. Earlier active-deployment statements below are historical; no512K default was applied.
+
 Added on 2026-11-01 at the operator's request, based on [the completed .46 cache/concurrency study](SC117_Q8_CONCURRENCY_20261101.md). This is a separate opt-in profile, **not** a rewrite of the existing one-slot routes or an overall installation-default change.
 
 | Menu | Choice |

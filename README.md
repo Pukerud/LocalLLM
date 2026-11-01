@@ -27,6 +27,8 @@ The 2026-10-29 Orca/DeepSeek retirement remains in force; reused numbers do not 
 
 ## Higher-precision Q8_0 n-gram candidates
 
+**Latest checkpoint — PAUSED:** [the later two-slot512K test failed with GPU-bus loss](SC117_512K_TEST_20261101.md). **512K not promoted; saved[18] stays native262K/two slots, but inference is currently stopped, OctaSpace paused and the exact test lease held.** User will reboot and resume with “continue”; no test/controller or automatic restart remains. Restore native[18] only after fresh four-GPU/rental/session/lease checks. Earlier active-deployment statements below are pre-fault history.
+
 **New opt-in [.46 two-user preset](SC117_Q8_2SLOT.md): direct [7] / Hive [18] (low-level [8]).** Two pipelined serving slots, 16-GiB/eight-history cache, separate state, unchanged native 262K/CPU vision/Q8 main policy. Solo MTP stays active; concurrent windows have no drafts, and long prompt reads may pause another stream. The operator requested this as the active Hive miner; original [6]/[17] and all other numbers/defaults remain unchanged. Adding inactive profiles alone never selects them.
 
 **2026-11-01: [.46 SC117 concurrency/cache measurements](SC117_Q8_CONCURRENCY_20261101.md).** Seven temporary runs completed; two pipelined slots reached **153.0 total tokens/s versus 121.2** for the one-slot queue on short-prompt pairs. Eight cached histories reused **8/8** test histories; the count-only increase did not materially change decode speed. Solo MTP stayed active. A long joining prompt can pause the other stream. Original Q8 SC117 .46 Hive [17], one-slot/four-history defaults and active OctaSpace were restored; **no winning preset was applied**. Incomplete extra .45 measurements are excluded.
