@@ -1,6 +1,6 @@
 {
   "date": "2026-11-01",
-  "result": "FAILED-NOT-PROMOTED-PAUSED-FOR-OPERATOR-REBOOT",
+  "result": "512K-FAILED-NOT-PROMOTED; POST-REBOOT-NATIVE262K-HIVE18-RECOVERED-ACTIVE",
   "runtime_only": "0.1.46",
   "production_code_config_unchanged": true,
   "new_default_applied": false,
@@ -97,7 +97,14 @@
     "root_cause_established": false,
     "ordinary_ram_or_vram_oom_proven": false
   },
-  "paused": {
+  "limitations": [
+    "512K loaded and short/default-high/native-length tests passed; full512K did NOT complete and both slots were NOT capacity-qualified.",
+    "No full-load candidate RAM/VRAM monitor rows were committed when the fixture client was terminated; do not infer a peak/headroom bound.",
+    "Native baseline toy failures are not a general model-quality score; eight high-thinking cases are narrow evidence.",
+    "Root cause unknown. No driver/kernel/boot/power/clock/weight/runtime changes or recovery reset/reboot were made.",
+    "Native-A3 and candidate post-full checks not started/completed. Never replay controllers or retry512K automatically."
+  ],
+  "historical_pause_at_fault": {
     "operator_requested_save_then_user_reboot": true,
     "inference_active": false,
     "octaspace": "inactive",
@@ -109,11 +116,48 @@
     "recovery_completed": false,
     "next_step": "Wait for operator reboot and explicit continue. Fresh all4GPU/rental/session/selection/lease checks; restore unchanged native262K18 only."
   },
-  "limitations": [
-    "512K loaded and short/default-high/native-length tests passed; full512K did NOT complete and both slots were NOT capacity-qualified.",
-    "No full-load candidate RAM/VRAM monitor rows were committed when the fixture client was terminated; do not infer a peak/headroom bound.",
-    "Native baseline toy failures are not a general model-quality score; eight high-thinking cases are narrow evidence.",
-    "Root cause unknown. No driver/kernel/boot/power/clock/weight/runtime changes or recovery reset/reboot were made.",
-    "Native-A3 and candidate post-full checks not started/completed. Never replay controllers or retry512K automatically."
-  ]
+  "post_reboot_recovery": {
+    "passed": true,
+    "new_boot_verified": true,
+    "four_original_gpus_healthy": true,
+    "current_boot_fault_scan_clear": true,
+    "hive_menu": 18,
+    "hive_profile": "iq3_s-sc117-abliterated-ple-q8-2slot-v0146",
+    "runtime": "0.1.46",
+    "native_context": 262144,
+    "slots": 2,
+    "groups": 2,
+    "cache_mib": 16384,
+    "histories": 8,
+    "cpu_bf16_vision": true,
+    "uid1000_exact_hive_token_identity_verified": true,
+    "semantic_config_and_installed_bundle_unchanged": true,
+    "post_rental_rig_wallet_oc_preserved": true,
+    "external_cloud_rig_wallet_refresh_detected": true,
+    "no_renter_container_or_service_stopped": true,
+    "power_limits_w": [
+      300,
+      300,
+      300,
+      280
+    ],
+    "known_lan_answer": "63",
+    "vision_tools_concurrent_tag_host_origin_checks_passed": true,
+    "octaspace_active": true,
+    "no_pause_lease_or_switch_journal": true,
+    "no512k_retry_or_promotion": true,
+    "no_additional_reboot_reset_or_configuration_change": true
+  },
+  "operator_renter_priority": "Never override a renter. The intervening GPU render container was left untouched and finished naturally before recovery resumed.",
+  "recovery_timeline": {
+    "normal_reboot_explicitly_authorized_and_completed": true,
+    "first_recovery_deferred_while_gpu_render_container_present": true,
+    "renter_finished_naturally": true,
+    "cleared_only_matching_old18080_experiment_lease_when_idle": true,
+    "existing_owned_hive_start_observed_no_duplicate_start": true,
+    "cloud_refreshed_rig_wallet_preserved": true,
+    "no_renter_or_service_stopped": true,
+    "current_kernel_and_driver_retained": true,
+    "no_further_reboot_test_switch_or_auto_recovery_pending": true
+  }
 }

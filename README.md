@@ -27,7 +27,7 @@ The 2026-10-29 Orca/DeepSeek retirement remains in force; reused numbers do not 
 
 ## Higher-precision Q8_0 n-gram candidates
 
-**Latest checkpoint — PAUSED:** [the later two-slot512K test failed with GPU-bus loss](SC117_512K_TEST_20261101.md). **512K not promoted; saved[18] stays native262K/two slots, but inference is currently stopped, OctaSpace paused and the exact test lease held.** User will reboot and resume with “continue”; no test/controller or automatic restart remains. Restore native[18] only after fresh four-GPU/rental/session/lease checks. Earlier active-deployment statements below are pre-fault history.
+**Latest checkpoint — RECOVERED:** [the later two-slot512K test failed with GPU-bus loss](SC117_512K_TEST_20261101.md), so **512K was not promoted**. After one explicitly authorized normal reboot and fresh checks, all four GPUs recovered and **native262K [18] is active again**, 2/2 slots/groups and 16 GiB/eight histories. UID1000 LAN63/vision/stream/Host-Origin checks passed; OctaSpace active, no lease/journal or pending test/controller/reboot. The intervening renter was never stopped: recovery waited for natural completion and preserved cloud-refreshed configuration. No512K retry is pending.
 
 **New opt-in [.46 two-user preset](SC117_Q8_2SLOT.md): direct [7] / Hive [18] (low-level [8]).** Two pipelined serving slots, 16-GiB/eight-history cache, separate state, unchanged native 262K/CPU vision/Q8 main policy. Solo MTP stays active; concurrent windows have no drafts, and long prompt reads may pause another stream. The operator requested this as the active Hive miner; original [6]/[17] and all other numbers/defaults remain unchanged. Adding inactive profiles alone never selects them.
 
