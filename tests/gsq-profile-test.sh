@@ -35,9 +35,12 @@ QWEN38_GSQ_CTX=131072 configure_profile
 PROFILE=gsq-iq3
 configure_profile
 [[ "$GSQ_TUNED" == 0 && "$SERVER_CTX" == 32768 ]]
-PROFILE=hauhau-q8-fastmtp-q4kv-xhigh
+PROFILE=swift15u-q8
 configure_profile
-[[ "$RUNTIME_KIND" == hauhau && "$KV_TYPE" == q4_0 && "$SPEC_MODE" == fast ]]
+[[ "$RUNTIME_KIND" == swift15 && "$KV_TYPE" == q8_0 && "$SPEC_MODE" == native && "$PARALLEL" == 2 ]]
+if (PROFILE=hauhau-q8-fastmtp-q4kv-xhigh; configure_profile); then
+    echo 'Retired Hauhau profile unexpectedly accepted' >&2; exit 1
+fi
 if (PROFILE=gsq-q2; SPEC_OVERRIDE=fast; configure_profile); then
     echo 'Unexpected GSQ speculative override acceptance' >&2; exit 1
 fi

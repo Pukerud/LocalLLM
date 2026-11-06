@@ -45,16 +45,17 @@ class Contract(unittest.TestCase):
             H.require_state(Path('/operator/.local/state/locallm-strata')/A.STATE_NAME)
             with self.assertRaises(SafetyError):H.require_state(Path('/operator/.local/state/locallm-strata/sc117-iq3s-trial'))
 
-    def test_all_three_real_readiness_consumers_match(self):
-        for name in ['HostLLM.sh','hive-llm-miner/profile-menu.sh','hive-llm-miner/profiles/swift15-heretic-re/h-run.sh']:
-            with self.subTest(file=name):self.assertIn(H.READY,(REPO/name).read_text())
+    def test_historical_wrapper_keeps_exact_readiness_evidence(self):
+        # Source provenance remains auditable; no retired profile is published.
+        self.assertIn(H.READY,(REPO/'hive-llm-miner/profiles/swift15-heretic-re/h-run.sh').read_text())
 
     def test_menu_retired_rows_absent_but_heretic_and_sc117_retained(self):
         text=(REPO/'HostLLM.sh').read_text();rows=[l for l in text.splitlines() if 'echo ' in l and '[' in l]
         for n in ['[5] TEST Orca','[6] DeepSeek','[14] Set next Hive miner - Orca','[15] Set next Hive miner - Orca','[16] Set next Hive miner - DeepSeek','[3] Orca']:
             self.assertFalse(any(n in l for l in rows),n)
-        self.assertIn('[3] Swift 1.5 Heretic RE',text);self.assertIn('[14] Set next Hive miner - Swift 1.5 Heretic RE',text)
-        self.assertIn('[17] Set next Hive miner - SC117',text);self.assertIn('[4] SC117',text)
+        for n in ('[3] Swift 1.5 Heretic RE','[14] Set next Hive miner - Swift 1.5 Heretic RE','[17] Set next Hive miner - SC117','[4] SC117'):
+            self.assertNotIn(n,text)
+        self.assertIn('[7] SC117 Q8_0 two-user',text);self.assertIn('[18] Set next Hive miner - SC117 Q8_0 two-user',text)
 
     def test_runtime_and_slots_refused_before_preparation(self):
         for version,parallel in [('0.1.45',1),('0.1.51',1),('0.1.46',2)]:
@@ -84,7 +85,7 @@ class Contract(unittest.TestCase):
 
     def test_switch_requires_pinned_preflight_and_retired_models_are_not_targets(self):
         import hive_profile_switch as S
-        self.assertIn(A.PROFILE,S.PROFILES)
+        self.assertNotIn(A.PROFILE,S.PROFILES)
         self.assertNotIn('deepseek41-abiray-iq2_xxs',S.PROFILES)
         self.assertFalse(any(p.startswith('orca-') for p in S.PROFILES))
         with mock.patch.object(S.shutil,'which',return_value=None),mock.patch.object(S,'run') as mutate:

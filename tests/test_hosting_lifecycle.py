@@ -155,9 +155,21 @@ class HostingLease(unittest.TestCase):
         h.release(token)
         self.assertIsNone(h.read_lease())
 
+    def test_hardware_fault_hold_cannot_be_released_by_generic_stop(self):
+        h.begin(8080)
+        lease=h.read_lease();lease['hardware_recovery_required']=True;h.write_lease(lease)
+        before=list(self.calls)
+        with self.assertRaisesRegex(SafetyError,'Hardware-fault hold'):
+            h.release(lease['lease_id'])
+        self.assertEqual(self.calls,before);self.assertTrue(h.STOP.exists())
+        self.assertIs(h.read_lease()['hardware_recovery_required'],True)
+        self.assertEqual(self.service,'active')
+
     def test_pause_then_restore_previous_state(self):
         h.begin(8080)
-        self.assertEqual(self.calls[:2], [['systemctl', 'stop', 'osn.service'], [h.MINER, 'stop']])
+        self.assertEqual(self.calls, [[h.MINER, 'stop']])
+        self.assertEqual(self.service, 'active')
+        self.assertIs(h.read_lease()['admission_kept_running'], True)
         self.assertTrue(h.STOP.exists())
         self.assertEqual(h.read_lease()['phase'], 'held')
         h.release()
@@ -278,8 +290,11 @@ class HostingLease(unittest.TestCase):
         self.assertTrue(h.STOP.exists())
         self.assertIsNotNone(h.read_lease())
 
-    def test_workload_appearing_during_service_restore_keeps_miner_suppressed(self):
+    def test_workload_appearing_during_external_service_recovery_keeps_miner_suppressed(self):
         h.begin(8080)
+        # Admission was kept running. Simulate an unrelated service outage so
+        # restoration still exercises its existing start/recheck safety gate.
+        self.service = 'inactive'
         original_action = self.action
 
         def action(args):

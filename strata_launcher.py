@@ -1386,7 +1386,7 @@ def main():
     modes.add_argument('--enable-q4ks141-vision', action='store_true')
     modes.add_argument('--rollback-q4ks141-vision', action='store_true')
     modes.add_argument('--select-runtime', choices=runtimes.GENERIC_VERSIONS)
-    ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE, ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE, heretic_profile.PROFILE, sc117_two.PROFILE], default=None)
+    ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE, ORCA_Q4KS_PROFILE, deepseek_profile.PROFILE, sc117_two.PROFILE], default=None)
     ap.add_argument('--ple-q8', action='store_true', help='Opt-in original-Qwen Q8_0 PLE with separate state/cache; no quality claim')
     ap.add_argument('--runtime', choices=['auto', *runtimes.VERSIONS, q4ks_v01441.RUNTIME_VERSION, deepseek_profile.VERSION], default=os.environ.get('STRATA_RUNTIME', 'auto'))
     ap.add_argument('--parallel', type=int, choices=[1, 2], default=os.environ.get('STRATA_PARALLEL', '1'))

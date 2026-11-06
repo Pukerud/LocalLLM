@@ -285,26 +285,21 @@ Usage:
   v1qwen38.sh --dashboard [--profile PROFILE]
   v1qwen38.sh --no-dashboard --quickstart --profile PROFILE
   v1qwen38.sh --stop
+  v1qwen38.sh --print-command --profile swift15u-q8  # JSON argv only; no download/build/start
 
-Profiles:
-  hauhau-q8          HauhauCS Q8_K_P + BF16 vision, native 262K, embedded MTP
-  hauhau-q8-fastmtp  HauhauCS Q8_K_P + BF16 vision, FastMTP sidecar, Q8 KV fallback
-  hauhau-q8-fastmtp-q4kv-xhigh
-                     Hauhau FastMTP production profile with Q4_0 K/V and maximum xhigh reasoning
+Profiles (Swift uncensored Q8 is the retained menu model; other non-retired entries are CLI-only):
   turbo-q8-mtp       Qwen3.8-27B TURBO MTP Q8_0 + BF16 vision, native 262K, Q8 KV
   swift-bf16         Swift-Qwen3.8 uncensored BF16 GGUF + BF16 vision, native 262K, Q4 KV
   swift15-q8         UkisAI Swift 1.5 Q8_0 + F16 vision, native 262K, xhigh, embedded MTP
   swift15-q4         UkisAI Swift 1.5 Q4_K_M + F16 vision, native 262K, xhigh, embedded MTP
   swift15u-q8        Ajgazin Swift 1.5 uncensored Q8_K_XL + BF16 vision, native 262K, embedded MTP
   swift15u-bf16      Ajgazin Swift 1.5 uncensored BF16 + BF16 vision, native 262K, embedded MTP
-  hauhau-q8-dflash2  HauhauCS Q8_K_P + DFlash2 Q4 draft, text-only, native 262K (explicit CLI-only experiment)
 
 --smoke uses a 4096-token context, one short text request, and one small PNG
 request. It never sends a long-context prompt. --quickstart uses the profile's
 configured native context and leaves the server running. Normal starts keep
-thinking enabled at xhigh. The production Hauhau profile
-hauhau-q8-fastmtp-q4kv-xhigh uses Q4_0 K/V; hauhau-q8-fastmtp remains the Q8-KV
-fallback. For TURBO, xhigh is the model's maximum supported reasoning level,
+thinking enabled at xhigh. Hauhau routes/assets are retired and cannot be downloaded or launched.
+For TURBO, xhigh is the model's maximum supported reasoning level,
 but its training intentionally keeps the reasoning block short. Smoke and
 speed tests intentionally disable reasoning.
 EOF
@@ -342,6 +337,9 @@ parse_args() {
                 ;;
             --status)
                 MODE="status"
+                ;;
+            --print-command)
+                MODE="command"
                 ;;
             --stop)
                 MODE="stop"
@@ -390,6 +388,7 @@ parse_args() {
 }
 
 configure_profile() {
+    case "$PROFILE" in hauhau-*) die 'Hauhau routes/assets were retired by operator request on 2026-11-06; no download or launch attempted' ;; esac
     SERVER_CTX=262144
     PARALLEL=1
     KV_TYPE="f16"
@@ -1408,7 +1407,7 @@ PY
 
 run_speed_test_all() {
     local original_profile="$PROFILE" original_smoke="$SMOKE" original_spec="$SPEC_OVERRIDE" rc=0 profile
-    for profile in hauhau-q8 hauhau-q8-fastmtp hauhau-q8-fastmtp-q4kv-xhigh turbo-q8-mtp swift-bf16; do
+    for profile in swift15u-q8; do
         PROFILE="$profile"
         SPEC_OVERRIDE=""
         SMOKE=1
@@ -1629,21 +1628,20 @@ choose_profile() {
     say "Qwen3.8 Quick Start (retained installed bundles)"
     say "  GPUs detected: ${GPU_SUMMARY}"
     say "  BF16 vision; native 262K context per slot; normal xhigh reasoning."
-    for candidate in swift15u-q8 hauhau-q8-fastmtp-q4kv-xhigh; do
+    for candidate in swift15u-q8; do
         PROFILE="$candidate"
         configure_profile
         [[ -f "$MODEL_PATH" && -f "$MMPROJ_PATH" ]] || continue
         [[ -z "$DRAFT_PATH" || -f "$DRAFT_PATH" ]] || continue
         case "$candidate" in
             swift15u-q8) description="Swift 1.5 Uncensored Q8_K_XL | DEFAULT | ${PARALLEL} slots | Q8 KV | BF16 vision | native MTP n=${SWIFT15U_MTP_N_MAX}" ;;
-            hauhau-q8-fastmtp-q4kv-xhigh) description="Hauhau Q8_K_P | proven fallback | ${PARALLEL} slots | Q4 KV | BF16 vision | FastMTP n=${FAST_MTP_N_MAX}" ;;
         esac
         menu_profiles+=("$candidate")
         index="${#menu_profiles[@]}"
         say "  [$index] $description"
     done
-    say "  Strata IQ3_S is a separate engine: HostLLM [3], not a Qwen runtime profile."
-    say "  Archived comparison profiles remain explicit CLI-only; selecting them can re-download removed models."
+    say "  SC117 Q8 two-user is a separate engine: HostLLM [7], Hive [18]."
+    say "  Hauhau and Heretic were retired; removed model routes do not auto-download."
     say "  [q] Cancel"
     read -r -p "Select [1]: " choice || { say "Cancelled."; exit 0; }
     choice="${choice:-1}"
@@ -1676,6 +1674,12 @@ main() {
         choose_profile
     fi
     configure_profile
+    if [[ "$MODE" == command ]]; then
+        make_server_args
+        printf '%s\0' "$RUNTIME_DIR/source/build/bin/llama-server" "${SERVER_ARGS[@]}" | \
+            python3 -c 'import sys,json;print(json.dumps([p.decode() for p in sys.stdin.buffer.read().split(b"\0") if p]))'
+        exit 0
+    fi
 
     case "$MODE" in
         download)

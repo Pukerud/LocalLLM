@@ -1,130 +1,76 @@
-# LocalLLM — Swift, Hauhau and Flash-Next Strata
+# LocalLLM — Swift and SC117
 
-HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s, approximately 128 GB RAM. **Swift remains the default; Hauhau remains the retained fallback.** The operator normally runs **SC117 .46**; maintenance must preserve that actual selection unless explicitly asked to switch. The Flash-Next Heretic model below is separate from the smaller dense Swift/Hauhau models, despite sharing the Swift name.
+HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default.** SC117 native-262K two-user **[18]** is the operator’s selected miner.
+
+## Latest checkpoint — 2026-11-06
+
+**Cleanup completed; native262K Hive [18] recovered and ACTIVE; TensorSharp GPU deployment rejected.** Hauhau and the single-slot Heretic/SC117 routes were removed. Only unused Hauhau/Heretic model trees were deleted, freeing approximately **137 GiB**; shared SC117 weights, original dense shards, Q8 PLE, CPU vision, runtime and preset metadata remain intact.
+
+During TensorSharp TP4’s **2048-token startup warm-up**, GPU3 fell off the bus (**Xid79**, followed by **Xid154: Node Reboot Required**). No TensorSharp HTTP inference/speed result was obtained, and it is **not deployed**. This was not a 512K test. Root cause remains unknown.
+
+After the operator’s manual restart and “continue,” **all four original GPUs recovered, the current boot’s fault scan was clear, and native262K [18] is ACTIVE**. Fresh rental/ownership checks preceded release of only this task’s exact fault lease; an existing owned startup was observed without duplication. UID1000 key-free LAN text/thinking/vision/concurrent-tags/complete-SSE/tools-format and Host/Origin checks passed. OctaSpace admission stayed active; no renter/container/service was stopped and cloud settings were preserved. No lease/journal, test/controller, reset, reboot or retry is pending.
+
+See **[the full checkpoint](TENSORSHARP_SWIFT_20261106.md)** and [sanitized results](results/tensorsharp-swift-cleanup-20261106.json). Earlier pause instructions and controllers are historical; do not replay them or retry TensorSharp/512K.
 
 ## Current menu
 
-```text
-[1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots
-[2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots
-[3] Swift 1.5 Heretic RE — IQ4_NL n-gram | Strata .46 | native 262K | BF16 CPU vision | spec 3 + windows 2 | one slot
-[4] SC117 GSQ-RCO IQ3_S — IQ4_NL n-gram | Strata .45 | unqualified CPU-vision trial | native 262K | one slot
-[5] Swift 1.5 Heretic RE — Q8_0 n-gram | same .46/runtime/tuning | isolated state/cache | bounded smoke passed
-[6] SC117 GSQ-RCO IQ3_S — Q8_0 n-gram | same .45/runtime/tuning | isolated trial state/cache | bounded smoke passed
-[7] SC117 Q8 two-user — .46 | 2 slots / 2 pipelined groups | 16 GiB / 8 histories | solo MTP | isolated state
+| Direct | Hive | Model/runtime |
+|---:|---:|---|
+| **1** | **12** | Swift 1.5 Uncensored **Q8_K_XL**, existing pinned llama.cpp; BF16 vision, native MTP n3, xhigh, two native-262K slots |
+| **7** | **18** | SC117 abliterated IQ3_S with **Q8_0 PLE**, Strata **.46**; two pipelined slots/groups, 16 GiB/eight histories, CPU vision; unqualified trial |
+| **8** | **19** | TensorSharp / same Swift file — **DISABLED information entries**, not serving or installable profiles |
 
-[9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit
-[12] Set next Hive miner — Swift 1.5 Uncensored Q8_K_XL
-[13] Set next Hive miner — Hauhau Q8_K_P
-[14] Set next Hive miner — Heretic RE | IQ4_NL n-gram | Strata .46
-[15] Set next Hive miner — SC117 | IQ4_NL n-gram | Strata .46 unqualified trial
-[16] Set next Hive miner — Heretic RE | Q8_0 n-gram | same .46 | bounded smoke passed; A/B pending
-[17] Set next Hive miner — SC117 | Q8_0 n-gram | same .46 | bounded smoke passed; A/B pending
-[18] Set next Hive miner — SC117 Q8 two-user | .46 | 2 slots / 2 groups | 16 GiB / 8 histories
-```
+**[9]** owned stop, **[10]** update, **[11]** exit. Requested former **[2–6] and [13–17]** are gone; their numbers were not reused. The low-level Hive selector retains **[1] Swift / [8] SC117 two-user** only.
 
-The 2026-10-29 Orca/DeepSeek retirement remains in force; reused numbers do not restore those models. On **2026-10-30**, existing SC117 .46 Hive **[17] moved to [15]**, and new Q8_0 PLE-only variants use direct **[5]/[6]** and Hive **[16]/[17]**. Existing IQ4_NL routes keep their engines/settings. The lower-level Hive selector adds [6] Heretic Q8_0 and [7] SC117 .46 Q8_0; its retained [5] now corresponds to high-level [15].
+Hauhau, Heretic and the original one-slot SC117 IQ4_NL/Q8 routes are retired. Orca/DeepSeek retirement also remains in force. Historical source, wrappers and reports remain audit evidence where useful; they are not current serving instructions or permission to redownload retired models.
 
-## Higher-precision Q8_0 n-gram candidates
+## Retained settings
 
-**Latest checkpoint — RECOVERED:** [the later two-slot512K test failed with GPU-bus loss](SC117_512K_TEST_20261101.md), so **512K was not promoted**. After one explicitly authorized normal reboot and fresh checks, all four GPUs recovered and **native262K [18] is active again**, 2/2 slots/groups and 16 GiB/eight histories. UID1000 LAN63/vision/stream/Host-Origin checks passed; OctaSpace active, no lease/journal or pending test/controller/reboot. The intervening renter was never stopped: recovery waited for natural completion and preserved cloud-refreshed configuration. No512K retry is pending.
+### Swift
 
-**New opt-in [.46 two-user preset](SC117_Q8_2SLOT.md): direct [7] / Hive [18] (low-level [8]).** Two pipelined serving slots, 16-GiB/eight-history cache, separate state, unchanged native 262K/CPU vision/Q8 main policy. Solo MTP stays active; concurrent windows have no drafts, and long prompt reads may pause another stream. The operator requested this as the active Hive miner; original [6]/[17] and all other numbers/defaults remain unchanged. Adding inactive profiles alone never selects them.
+The retained file is the **27B dense Qwen model**, not Flash-Next:
+`Swift-1.5-Qwen3.8-27B-Uncensored-Dynamic-MTP-UD-Q8_K_XL.gguf`.
 
-**2026-11-01: [.46 SC117 concurrency/cache measurements](SC117_Q8_CONCURRENCY_20261101.md).** Seven temporary runs completed; two pipelined slots reached **153.0 total tokens/s versus 121.2** for the one-slot queue on short-prompt pairs. Eight cached histories reused **8/8** test histories; the count-only increase did not materially change decode speed. Solo MTP stayed active. A long joining prompt can pause the other stream. Original Q8 SC117 .46 Hive [17], one-slot/four-history defaults and active OctaSpace were restored; **no winning preset was applied**. Incomplete extra .45 measurements are excluded.
+- Original pinned model/projector unchanged; shared by any explicitly authorized future TensorSharp investigation.
+- Existing llama.cpp `4cbe8b07`, four-GPU layer split, Q8 K/V, BF16 vision, embedded target-verified MTP depth 3.
+- Two **262144-token** slots. Its `--ctx-size 524288` is the aggregate allocation for two native windows, **not** a 512K-per-slot extension.
+- Normal xhigh thinking; temperature 1, top-p .95, top-k 20, min-p/presence 0, repetition 1.
+- `v1qwen38.sh --print-command --profile swift15u-q8` prints JSON argv without downloading, building or starting inference.
 
-See **[PLE_Q8.md](PLE_Q8.md)** for immutable data pins, preparation, no-stop installation and validation limits. Both original model PLE tensors were fully hashed and are bit-identical IQ4_NL. The new options share one checksum-verified **54.4-GB original-Qwen Q8_0 PLE shard**; they do not download/load a Q6 model, requantize the existing IQ4_NL table, change expert/dense weights, or upgrade Strata. KV remains INT8/32768 resident; native 262K, BF16 CPU vision, thinking, MTP, spec 3/windows 2 and 8-GiB/four-history cache policies are retained.
+### SC117 two-user
 
-Each candidate has a **separate state/cache and adaptive expert profile**. Initial publication preserved the live miner. Later explicit authorization allowed actual **[5]/[6]/[16]/[17]** tests: key-free LAN text/high thinking, swapped/ordered images, SSE/tools, four-history cache reuse and owned cleanup passed; both Hive variants retrieved a marker from **259835 input tokens**. [Live results](results/ple-q8-live-menus-20261030.json) disclose initial fixture/handoff/driver corrections. **441 Python tests OK/one skipped; seven shell suites passed.** At that earlier smoke-test checkpoint original SC117 .46/IQ4_NL, unchanged configuration and active OctaSpace were restored; the later explicitly selected two-user [18] is described above. This is bounded functional evidence, **not** a matched IQ4_NL/Q8 quality/speed A/B or production qualification.
+[SC117_Q8_2SLOT.md](SC117_Q8_2SLOT.md) documents the separately bounded `sc117-q8-2slot` / `iq3_s-sc117-abliterated-ple-q8-2slot-v0146` preset:
 
-To add only the new inactive Hive profiles and updated selector while the current miner remains running, after operator-owned preparation:
+- Strata .46; **native262144 per slot**, two slots/two pipelined groups.
+- INT8 KV/32768 resident, BF16 CPU vision, split `14,24,36`, spec 3/windows 2.
+- **16384 MiB/eight cached histories**, isolated state/adaptive profile; not proof of eight full-context histories.
+- Solo MTP remains; concurrent windows have no drafts. Long prefill can pause another stream.
+- Q8_0 applies to the **PLE table only**, not main weights or KV. Original SC117 shards remain required native-dense/provenance dependencies even though the serving PLE is Q8.
+- Unqualified trial. **No 512K promotion/retry** or output/thinking-budget change.
 
-```bash
-sudo ./install-hive-llm-miner.sh --add-ple-q8-profiles
-```
-
-This narrow mode does not stop/restart/switch anything or rewrite the current profile, stable entrypoints, rig/wallet config or live model settings. The ordinary full installer still requires an idle host. Reopen HostLLM to see the new rows; **deployment itself never selects [16]/[17]**.
-
-## Heretic RE
-
-Publisher: [trubisky/Swift-1.5-Flash-Next-Heretic-ReverseEngineer](https://huggingface.co/trubisky/Swift-1.5-Flash-Next-Heretic-ReverseEngineer), pinned revision **`a7a90ef46b79b746c484d094fd5814c359543d77`**. See [HERETIC_RE.md](HERETIC_RE.md) for assets, provenance, validation scope and results.
-
-| Setting | Explicit profile |
-|---|---|
-| Profile | `swift15-heretic-re` |
-| Native model/served context | **262144**, from actual GGUF metadata; no extension or silent truncation |
-| Model | Publisher's mixed IQ4_NL V2-70G-FIX, all eight SHA-pinned shards |
-| Strata | Existing pinned **0.1.46** frontend/vision plus isolated **BF16 L0-gate compatibility engine**, CUDA sm_86; shared SC117 runtime unchanged |
-| Vision | **BF16 CPU vision**, original Flash-Next projector; preserves VRAM for the target model |
-| Serving | One slot/group, four GPUs, split `14,24,36` |
-| Tuning | `--spec 3 --pipeline-windows 2`, automatic prefill, `--trim-stage-weights` |
-| KV | INT8, native 262K window with 32768 resident |
-| Conversation cache | **8192 MiB budget / four parked histories**, not four serving slots |
-| Thinking / sampling | High default; temperature 1.0, top-p 0.95, top-k 20 |
-| Load policy | Eager model + vision load; no automatic idle unloading |
-| State | `~/.local/state/locallm-strata/swift15-heretic-re/`, separate learned expert profile |
-
-The plain .46 engine loaded this pack but rejected its uncompressed BF16 attention gate on first inference. A narrow isolated compatibility build now uses existing BF16 kernels for that exact gate; actual-matrix CPU/GPU oracle tests and bit-identity checks passed, with no target requantization. See [the compatibility scope](HERETIC_RE.md#why-the-bf16-compatibility-overlay-is-necessary).
-
-The publisher's `strata-pack-heretic-v2-70g-fix.zip` is **data only**. Its exact dense/index/tokenizer/compatibility files are SHA-pinned; no downloaded scripts are executed. Its older, doubled-prefix shard names are preserved as local filenames, mapping to the identical HF-published bytes. All 48 layers' expert offsets/types and every GGUF tensor bound are checked against the real eight shard headers. No requantization or omitted target tensors.
-
-The drafter is the same independently pinned **stock/non-abliterated Flash-Next MTP head** used by SC117, copied into Heretic's own support directory. It is not advertised as a Heretic-trained head; the actual target verifies drafts. Tuning inherited from another model is not proof of optimal performance for this one.
-
-### Prepare explicitly, then start
-
-As the normal operator, not root:
-
-```bash
-cd /home/user/LocalLLM
-./v1strata.sh --prepare-heretic --download-only
-./v1strata.sh --prepare-heretic --prepare-compat
-./v1strata.sh --prepare-heretic --prepare-pack
-./HostLLM.sh
-# [3] direct foreground server; [14] select/switch Hive.
-```
-
-Preparation never starts inference or changes services. The root-owned runtime parent may need one administrative creation of the new overlay directory; build and inference still run as `user` (see [preparation details](HERETIC_RE.md#preparation)). Pack preparation reuses the locally pinned SC117 projector/MTP **only after full checksum verification**, copying them into independent support files; those source assets must already be prepared on a new host. It fails closed if anything is missing or differs.
-
-For explicit readiness:
-
-```bash
-STRATA_STATE_ROOT="$HOME/.local/state/locallm-strata/swift15-heretic-re" \
-  ./v1strata.sh --check-ready --profile swift15-heretic-re \
-  --runtime 0.1.46 --parallel 1 --batch-groups 1
-```
-
-Readiness is provenance/configuration, **not inference, populated-context, broad-quality or sustained-load qualification**. Ordinary starts never download or upgrade anything.
-
-## Hosting safety and LAN access
+## Installation and lifecycle
 
 ```bash
 cd /home/user/LocalLLM
 ./HostLLM.sh
 ```
 
-- Direct hosting uses a newly created, identity-bound HostLLM pause lease. It pauses OctaSpace/mining only after readiness and rental/workload checks. Ctrl+C stops only that exact frontend/engine/vision family, then restores the recorded previous state after GPU teardown clears.
-- Root menus hand Strata inference to unprivileged `user`. No inference/preparation as root, process-name kills, driver resets or clock/power changes.
-- Hive selections use a serialized ownership-checked transaction and atomic profile pointer. Hive-owned sessions may be switched; rentals, unidentified jobs and another manual hosting session are never adopted or stopped. A pending transaction can be recovered only after inspecting its exact identity/journal: `sudo python3 hive_profile_switch.py --recover`.
-- Hive hosting keeps OctaSpace active and yields its own model if a rental arrives. Do not disable the cloud agent, rental guards or process-ownership checks to force hosting.
-- [9] controls the retained isolated IQ4_NL and Q8_0 states as well as the ordinary Qwen state; wrong-variant stops are refused. Exiting an unrelated menu never releases someone else's lease. Reopen the menu after updates; old shells retain old functions.
-- New package installs default to Swift and preserve recognized active selections. A selected retired model is refused rather than silently loaded/migrated from missing weights.
+For an existing live package, after operator-owned preparation and with **no lease/journal/rental**, the narrow publication mode preserves current selection, active files, stable links, miner markers, services and cloud configuration:
 
-Trusted-LAN endpoints:
+```bash
+sudo ./install-hive-llm-miner.sh --publish-retained-profiles
+```
 
-- Web UI: <http://192.168.1.69:8080/>
-- OpenAI: `http://192.168.1.69:8080/v1`
-- Anthropic: `http://192.168.1.69:8080/v1/messages`
+`--add-ple-q8-profiles` remains a compatibility spelling for this **retained-only** publisher; it cannot reintroduce the retired profiles. The ordinary full installer remains **idle-only** and never stops a workload to make itself run. Never use publication/installation to bypass any future fault hold.
 
-**No API key is required**, including after upgrades. Preserve hostile Host/DNS-rebinding and browser Origin rejection and optional explicitly configured authentication. This is for a trusted, firewalled LAN, never public exposure. Heretic defaults to `0.0.0.0:8080`; `STRATA_HOST=127.0.0.1` selects explicit local-only direct hosting. SC117 trials stay fixed to trusted-LAN `0.0.0.0:8080` and remain **unqualified**, not normal/production authorization. Swift/Hauhau retain their llama.cpp UI and existing multi-slot behavior.
+High-level Hive selection verifies exact ownership/ancestry and readiness before changing an owned workload. **Renters always have priority. OctaSpace admission stays running.** New rental/unknown work blocks or yields only our LLM. No `pkill`, numeric-PID signal fallback, GPU reset, driver/clock/power change or cloud-agent suppression.
 
-## Removed weights and historical evidence
+Use only on a trusted, firewalled LAN: **http://192.168.1.69:8080/**, **no mandatory key, dummy token or Authorization header**. Preserve Host/Origin checks and deliberately configured optional auth. Not public hosting.
 
-On operator request (2026-10-29), unique **Orca Q4_K_S and DeepSeek Abiray IQ2_XXS weights/packs** were removed from `.69`. They are no longer runnable rollbacks. Retained source/build/configuration and historical reports are not proof their weights are installed. No unrelated model, system NVIDIA/CUDA/kernel, protected Pi skill/extension/settings or user conversation state was deleted.
+## TensorSharp status
 
-SC117 no longer needs the retired Orca GGUFs/pack/projector to pass startup. It reuses only the exact SHA-bound audited preset **metadata** and independently checks its own model/pack/MTP and selected .45/.46 runtime. This does not bypass qualification or weaken the trial-only state/bind restrictions.
+Pinned **2.8.6 / `9d18a64dbf07efa7b0fb5b7d34dda97f05e2c368`**, private .NET10.0.403/CUDA13.0.2, GGML CUDA SM86. System CUDA12.9/driver unchanged. Exact Host/Origin/fixed-model patch; no numerical source patch.
 
-Historical references (not current menu instructions): [Orca Q4](ORCA_Q4KS.md), [.41](ORCA_Q4KS_V0141.md), [.44.1](ORCA_Q4KS_V01441.md), [DeepSeek](DEEPSEEK41_ABIRAY.md), [DeepSeek speed](DEEPSEEK41_SPEED_20261026.md), [.46 runtime/no-key patch](STRATA_V0146.md), [SC117](STRATA_SC117_IQ3S.md), [measurement protocol](HOWTOTUNE.md), [Swift two-slot](SWIFT15U_2SLOT_2026-09-26.md), [Swift/MTP](SWIFT15.md), [Hauhau baseline](GSQ_TUNING_RESULTS.md), [Hive package](hive-llm-miner/README.md).
+Software build and CPU-only unauthenticated LAN UI/Host/Origin/pidfd-shutdown tests passed. GPU layer split was refused by `qwen35`; TP4 disabled MTP, then faulted during warm-up before serving readiness. **No winning configuration or speed improvement exists.** `prepare_tensorsharp.py --prepare` can verify software only; `--check-ready` refuses GPU deployment. Do not retry automatically after reboot.
 
-The original .38/.39/.41 engine/source pins remain available where compatible assets are retained; .46 is profile-bound, not a generic global upgrade. See [STRATA_IQ3S.md](STRATA_IQ3S.md), [STRATA_V0139.md](STRATA_V0139.md), [STRATA_V0141.md](STRATA_V0141.md). No quality/speed claims are transferred between model families.
-
-Pi clients should use the server's actual per-sequence **`meta.n_ctx`**, not just training-context metadata. No global Pi settings change is needed. Strata is MIT-licensed; weights retain the publisher's Swift Open License/Qwen license terms.
+Historical evidence: [concurrency](SC117_Q8_CONCURRENCY_20261101.md), [two-user activation](SC117_Q8_2SLOT.md), [rejected 512K test](SC117_512K_TEST_20261101.md), [PLE pins](PLE_Q8.md), [retired Heretic](HERETIC_RE.md). Their old menu/install instructions are superseded above.

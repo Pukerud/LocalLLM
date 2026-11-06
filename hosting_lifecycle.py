@@ -222,22 +222,21 @@ def begin(port, *, require_new_lease=False, lease_id=None):
         except OSError as exc:
             raise SafetyError(f'Port {port} is occupied; nothing was stopped') from exc
     if read_lease():
-        if service_state() == 'active':
-            raise SafetyError('Existing pause lease conflicts with active OctaSpace; use [9] to recover first')
+        if service_state() == 'active' and not existing.get('admission_kept_running'):
+            raise SafetyError('Existing legacy pause lease conflicts with active OctaSpace; use owned recovery first')
         wait_idle()
         STOP.write_text('1\n')
-        print('Existing HostLLM pause retained; miner and OctaSpace remain stopped.')
+        print('Existing exact HostLLM pause retained; admission state unchanged.')
         return
     lease = {'version': 1, 'phase': 'pausing', 'osn_was_active': service_state() == 'active',
              'miner_was_running': bool(jobs) or RUN.exists(), 'stop_was_present': STOP.exists(),
              'stop_value': STOP.read_text() if STOP.exists() else None, 'port': port,
-             'lease_id': lease_id or secrets.token_hex(32)}
+             'lease_id': lease_id or secrets.token_hex(32), 'admission_kept_running': True}
     write_lease(lease)  # Durable before the first mutation; [9] can recover after an interrupted launcher.
     docker_empty()
-    if lease['osn_was_active']:
-        print('Pausing OctaSpace (osn.service)...', flush=True)
-        if action(['systemctl', 'stop', SERVICE]) != 0 or service_state() == 'active':
-            raise SafetyError('Could not pause OctaSpace; start cancelled')
+    # Rental admission is deliberately NOT paused. A renter appearing now or
+    # later blocks/yields our owned LLM; it is never stopped to reclaim GPUs.
+    print('Keeping OctaSpace admission running; renters always have priority.', flush=True)
     docker_empty()
     print('Stopping Hive miner for hosting...', flush=True)
     rc = action([MINER, 'stop'])
@@ -248,7 +247,7 @@ def begin(port, *, require_new_lease=False, lease_id=None):
         raise SafetyError('Hive miner stop failed; hosting cancelled')
     lease['phase'] = 'held'
     write_lease(lease)
-    print('Hosting pause active: miner stopped, OctaSpace paused, GPUs idle.', flush=True)
+    print('Hosting lease held: owned miner stopped, GPUs idle, rental admission unchanged.', flush=True)
 
 
 def release(expected_lease_id=None):
@@ -259,8 +258,10 @@ def release(expected_lease_id=None):
         return
     if expected_lease_id and lease.get('lease_id') != expected_lease_id:
         raise SafetyError('HostLLM lease identity changed; refusing to release another session\'s pause')
+    if lease.get('hardware_recovery_required'):
+        raise SafetyError('Hardware-fault hold: explicit approved post-reboot four-GPU recovery is required; lease/marker retained')
     if active_engine() != 'none':
-        print('Hosting remains active; miner/OctaSpace stay paused. Use [9] after stopping the LLM.')
+        print('Hosting remains active; miner remains suppressed and admission unchanged. Use owned shutdown first.')
         return
     docker_empty()
     try:

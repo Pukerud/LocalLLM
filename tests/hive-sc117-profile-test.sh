@@ -20,7 +20,7 @@ for script in "$PROFILE_DIR/h-manifest.conf" "$PROFILE_DIR/h-config.sh" "$PROFIL
 done
 
 grep -Fq "expected_readiness='$EXPECTED'" "$PROFILE_DIR/h-run.sh"
-grep -Fq "expected_readiness='$EXPECTED'" "$MENU"
+! grep -Fq "expected_readiness='$EXPECTED'" "$MENU"  # historical one-slot profile is no longer selectable
 grep -Fq "$EXPECTED" "$ROOT/HostLLM.sh"
 grep -Fq 'PROFILE=iq3_s-sc117-abliterated' "$PROFILE_DIR/llm-hosting.conf"
 grep -Fq "PROFILE='iq3_s-sc117-abliterated'" "$PROFILE_DIR/h-run.sh"
@@ -69,16 +69,14 @@ grep -Fq 'LAYER_SPLIT=14,24,36' "$PROFILE_DIR/llm-hosting.conf"
 grep -Fq 'TRIM_STAGE_WEIGHTS=1' "$PROFILE_DIR/llm-hosting.conf"
 grep -Fq 'QUALIFIED=0' "$PROFILE_DIR/llm-hosting.conf"
 ! grep -Fq 'PIPELINE_WINDOWS=' "$PROFILE_DIR/llm-hosting.conf"
-grep -Fq '4|iq3_s-sc117-abliterated) target=' "$MENU"
-grep -Fq '5|iq3_s-sc117-abliterated-v0146) target=' "$MENU"
+! grep -Fq '4|iq3_s-sc117-abliterated) target=' "$MENU"
+! grep -Fq '5|iq3_s-sc117-abliterated-v0146) target=' "$MENU"
 grep -Fq 'check_selected_profile_ready "$target"' "$MENU"
-grep -Fq 'profiles/iq3_s-sc117-abliterated|' "$MENU"
-grep -Fq 'iq3_s-sc117-abliterated' "$INSTALL"
-grep -Fq -- '--check-ready --profile iq3_s-sc117-abliterated' "$INSTALL"
-grep -Fq "initial_profile='orca-q4_k_s-v01441'" "$INSTALL"
-grep -Fq 'Migrated the obsolete .39/SC117 .39 next-start pointer to the verified standard Orca Q4_K_S .45' "$INSTALL"
-grep -Fq 'if [[ ! -L "$CUSTOM_DIR/current" ]]; then' "$INSTALL"
-grep -Fq 'ln -s -- "profiles/$initial_profile"' "$INSTALL"
+grep -Fq 'S.preflight_profile(sys.argv[1])' "$MENU"
+grep -Fq 'iq3_s-sc117-abliterated-ple-q8-2slot-v0146' "$INSTALL"
+grep -Fq 'initial_profile=swift15u-q8' "$INSTALL"
+grep -Fq 'retired/unknown current pointer; no automatic migration' "$INSTALL"
+grep -Fq 'ln -s "profiles/$initial_profile"' "$INSTALL"
 ! grep -Eq 'miner[[:space:]]+(start|stop)' "$PROFILE_DIR/h-run.sh" "$MENU" "$INSTALL"
 
 # Qualification remains impossible without the reviewed/trusted runner and pin policy; every SC117 start stays trial-only.
@@ -108,5 +106,5 @@ grep -Fq 'new SM86 release defaults enabled' "$PROFILE_046_DIR/h-run.sh"
 grep -Fq 'RUNTIME=0.1.46' "$PROFILE_046_DIR/llm-hosting.conf"
 grep -Fq 'PIPELINE_WINDOWS=2' "$PROFILE_046_DIR/llm-hosting.conf"
 grep -Fq 'QUALIFIED=0' "$PROFILE_046_DIR/llm-hosting.conf"
-grep -Fq "0.1.46) printf 'iq3_s-sc117-abliterated-v0146'" "$INSTALL"
-echo 'Hive SC117 .45/.46 CPU-vision trial profiles, trusted-LAN/state isolation, selector, and qualification gates: PASS'
+! grep -Fq "0.1.46) printf 'iq3_s-sc117-abliterated-v0146'" "$INSTALL"
+echo 'Historical SC117 .45/.46 CPU-vision/ownership evidence retained; retired selectors blocked; separate .46 two-slot preset only: PASS'

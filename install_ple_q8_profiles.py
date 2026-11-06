@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Add inactive Q8_0 PLE Hive choices (including the two-user preset); never stop/restart or change current."""
+"""Secure package primitives and compatibility CLI for retained-only no-stop publication.
+Historical single-slot Q8 choices are no longer published.
+"""
 import argparse
 import fcntl
 import hashlib
@@ -13,7 +15,7 @@ import tempfile
 from engine_safety import SafetyError, docker_empty
 import ple_q8_assets as A
 import sc117_q8_2slot_profile as TWO
-PROFILES = (*A.HIVE_PROFILES, TWO.HIVE_PROFILE)
+PROFILES = (TWO.HIVE_PROFILE,)
 
 ROOT = Path('/hive/miners/custom/llm-hosting')
 SOURCE = Path(__file__).resolve().parent / 'hive-llm-miner'
@@ -121,39 +123,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--add-only', action='store_true', required=True)
     ap.parse_args()
-    if os.geteuid() != 0:
-        raise SystemExit('Add-only Hive profile installation requires root; model preparation must run as user')
+    # Preserve the established command spelling, not its retired profile set.
+    # One implementation enforces current/lease/renter/byte-preservation checks.
+    from install_retained_profiles import publish
     try:
-        trusted_layout()
-        fd = os.open(LOCK, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-        import hive_profile_switch as switch
-        with switch.hosting.launch_reservation(), os.fdopen(fd, 'r+') as lock:
-            if switch.hosting.read_lease() is not None or switch.JOURNAL.exists() or switch.JOURNAL.is_symlink():
-                raise SafetyError('A hosting lease/switch journal exists; add-only installation refused')
-            info = os.fstat(lock.fileno())
-            if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or
-                    stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1):
-                raise SafetyError('Hive selector lock type/owner/mode is unsafe')
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            docker_empty()
-            before = active_snapshot()
-            for profile in PROFILES:
-                switch.preflight_profile(profile)  # metadata/file checks as user; no inference or lifecycle actions
-            trusted_layout()
-            docker_empty()
-            if active_snapshot() != before:
-                raise SafetyError('Hive selection/active files/markers changed; no selector publication')
-            added = {profile: install_inactive_profile(SOURCE / 'profiles' / profile, ROOT / 'profiles' / profile)
-                     for profile in PROFILES}
-            if active_snapshot() != before:
-                raise SafetyError('Active Hive state changed while adding inactive profiles; selector unchanged')
-            changed = publish_menu(SOURCE / 'profile-menu.sh', ROOT / 'profile-menu.sh')
-            if active_snapshot() != before:
-                raise SafetyError('Active Hive state changed externally during selector publication; inspect before switching')
-            print(json.dumps({'added_inactive_profiles': added, 'selector_updated': changed,
-                              'current_unchanged': True, 'active_profile_files_unchanged': True,
-                              'stable_entrypoint_links_unchanged': True, 'miner_markers_unchanged': True,
-                              'lifecycle_actions': [], 'inference_tested': False}, indent=2))
+        print(json.dumps(publish(), indent=2))
     except (SafetyError, OSError, ValueError) as exc:
         print('BLOCKED:', exc)
         return 1

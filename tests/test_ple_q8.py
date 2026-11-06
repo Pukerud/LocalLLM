@@ -167,8 +167,7 @@ class Contracts(unittest.TestCase):
                             S.preflight_profile(profile)
 
     def test_readiness_suffix_in_all_real_consumers_and_owned_variant_marker(self):
-        for name in ['HostLLM.sh', 'hive-llm-miner/profile-menu.sh',
-                     *['hive-llm-miner/profiles/' + p + '/h-run.sh' for p in A.HIVE_PROFILES]]:
+        for name in ['hive-llm-miner/profiles/' + p + '/h-run.sh' for p in A.HIVE_PROFILES]:
             text = (REPO / name).read_text()
             self.assertIn(A.READY_SUFFIX, text, name)
         for profile in A.HIVE_PROFILES:
@@ -185,9 +184,11 @@ class Contracts(unittest.TestCase):
                     '[15] Set next Hive miner - SC117 IQ3_S | IQ4_NL',
                     '[16] Set next Hive miner - Swift 1.5 Heretic RE | Q8_0',
                     '[17] Set next Hive miner - SC117 IQ3_S | Q8_0']:
-            self.assertIn(row, text)
-        self.assertIn('sc117_trial_command --stop --ple-q8', text)
-        self.assertIn('heretic_profile_command --stop --ple-q8', text)
+            self.assertNotIn(row, text)
+        self.assertNotIn('sc117_trial_command --stop --ple-q8', text)
+        self.assertNotIn('heretic_profile_command --stop --ple-q8', text)
+        self.assertIn('[7] SC117 Q8_0 two-user', text)
+        self.assertIn('[18] Set next Hive miner - SC117 Q8_0 two-user', text)
         self.assertIn('--prepare-ple-q8', (REPO / 'v1strata.sh').read_text())
 
     def test_spawn_handoff_requires_complete_stable_owned_exec_and_never_accepts_replacement(self):
@@ -246,7 +247,9 @@ class Contracts(unittest.TestCase):
                  mock.patch.object(L, 'acquire_action_lock', return_value={'ple_q8': not requested_q8}), \
                  mock.patch.object(L, 'family', return_value=[object()]), mock.patch.object(L, 'stop') as stop, \
                  mock.patch('sys.argv', ['launcher', '--stop', '--profile', H.PROFILE] + (['--ple-q8'] if requested_q8 else [])):
-                self.assertEqual(L.main(), 1)
+                with self.assertRaises(SystemExit) as refused:
+                    L.main()
+                self.assertEqual(refused.exception.code, 2)  # retired CLI profile cannot reach any stop
                 stop.assert_not_called()
 
     def test_preparation_refuses_root_before_network_or_file_work(self):

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# HostLLM: retained Qwen bundles and guarded Strata experiments.
-# Hosting pauses the Hive miner and OctaSpace, then restores their previous state.
+# HostLLM: retained Swift / SC117; failed TensorSharp candidate is informational only.
+# Owned lifecycle only; rental admission remains running.
 # Rental containers/unidentified GPU workloads are never stopped.
 set -uo pipefail
 # Never let inherited bash xtrace print credentials during the interactive handoff.
@@ -39,10 +39,7 @@ run_as_root() {
 }
 hive_profile_package_is_current() {
     local profile="$1" file source_file installed_file
-    grep -qx 'MINER=custom' /hive-config/rig.conf 2>/dev/null || return 1
-    grep -qx 'CUSTOM_MINER=llm-hosting' /hive-config/wallet.conf 2>/dev/null || return 1
-    grep -qx 'CUSTOM_CONFIG_FILENAME=/hive/miners/custom/llm-hosting/llm-hosting.conf' /hive-config/wallet.conf 2>/dev/null || return 1
-    grep -qx 'CUSTOM_INSTALL_URL=' /hive-config/wallet.conf 2>/dev/null || return 1
+    PYTHONDONTWRITEBYTECODE=1 python3 -c 'import sys;sys.path.insert(0,sys.argv[1]);import hive_profile_switch as S;raise SystemExit(0 if S.flight_sheet_current() else 1)' "$SCRIPT_DIR" || return 1
     [[ -f "$HIVE_PROFILE_SOURCE/profile-menu.sh" && -x "$HIVE_PROFILE_MENU" ]] || return 1
     cmp -s "$HIVE_PROFILE_SOURCE/profile-menu.sh" "$HIVE_PROFILE_MENU" || return 1
     for file in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
@@ -257,13 +254,7 @@ check_update() {
 stop_owned_engines() {
     # Each helper validates PID/start time/executable and uses pidfds. No pkill/killall.
     local rc=0
-    deepseek_profile_command --stop || rc=1
     sc117_two_slot_command --stop || rc=1
-    heretic_profile_command --stop --ple-q8 || rc=1
-    sc117_trial_command --stop --ple-q8 || rc=1
-    heretic_profile_command --stop || rc=1
-    sc117_trial_command --stop || rc=1
-    owned_stop "$SCRIPT_DIR/v1strata.sh" --stop || rc=1
     owned_stop "$SCRIPT_DIR/v1qwen38.sh" --stop || rc=1
     if [[ "$(detect_engine)" == unmanaged ]]; then
         echo 'An unmanaged server remains. Stop it in its own terminal/supervisor; no unknown process was killed.'
@@ -714,35 +705,23 @@ main() {
         host_gpu_summary
         echo ''
         echo '  [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
-        echo '  [2] Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
-        echo '  [3] Swift 1.5 Heretic RE — IQ4_NL n-gram | Strata 0.1.46 | native 262K | BF16 CPU vision | spec 3 + windows 2 | 8 GiB / 4-history cache | one slot'
-        echo '  [4] SC117 GSQ-RCO IQ3_S (abliterated) — IQ4_NL n-gram | Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot | LAN 8080'
-        echo '  [5] Swift 1.5 Heretic RE — Q8_0 n-gram | Strata 0.1.46 | same native context/vision/tuning | isolated cache | bounded smoke passed; quality/speed A/B pending'
-        echo '  [6] SC117 GSQ-RCO IQ3_S (abliterated) — Q8_0 n-gram | Strata 0.1.45 | same native context/vision/tuning | isolated trial cache | bounded smoke passed; quality/speed A/B pending'
         echo '  [7] SC117 Q8_0 two-user — Strata 0.1.46 | 2 slots / 2 pipelined groups | 16 GiB / 8-history cache | solo MTP | long-prefill pauses possible'
+        echo '  [8] TensorSharp / Swift Q8_K_XL — DISABLED: GPU fault during startup; no speed comparison established'
         echo ''
-        printf '  Strata slots: %s (STRATA_PARALLEL; default 1), batch groups: %s. Runtime override: %s.\n' "${STRATA_PARALLEL:-1}" "${STRATA_BATCH_GROUPS:-1}" "${STRATA_RUNTIME:-selected default}"
-        echo '  Starting hosting pauses the miner and OctaSpace automatically (never an active rental).'
-        echo '  Heretic and SC117 serve trusted-LAN 0.0.0.0:8080; Heretic permits explicit loopback hosting.'
-        echo '  SC117 .45/.46 are unqualified trials with dedicated state; neither is qualified for normal/production hosting.'
-        echo '  Orca Q4_K_S and DeepSeek routes/weights retired by operator request; Swift remains the default.'
+        echo '  Native 262K per slot. SC117 remains an unqualified .46 trial with isolated state.'
+        echo '  Renters always have priority. No rental, render container, or unknown workload is stopped.'
         echo '  LAN access is unauthenticated unless an optional hosting key is configured: use only on a trusted, firewalled network.'
         echo '  [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit'
         echo '  [12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
-        echo '  [13] Set next Hive miner - Hauhau Q8_K_P — BF16 vision | FastMTP n4 | Q4 KV | xhigh | 3 native-262K slots'
-        echo '  [14] Set next Hive miner - Swift 1.5 Heretic RE | IQ4_NL n-gram | Strata 0.1.46 | native 262K | BF16 CPU vision | spec 3 + windows 2 | 8 GiB / 4-history cache | one slot'
-        echo '  [15] Set next Hive miner - SC117 IQ3_S | IQ4_NL n-gram | Strata 0.1.46 unqualified CPU-vision trial | --spec 3 + pipeline-windows 2 | one slot | trusted-LAN 8080'
-        echo '  [16] Set next Hive miner - Swift 1.5 Heretic RE | Q8_0 n-gram | Strata 0.1.46 | isolated cache | bounded smoke passed; quality/speed A/B pending'
-        echo '  [17] Set next Hive miner - SC117 IQ3_S | Q8_0 n-gram | Strata 0.1.46 unqualified trial | isolated cache | bounded smoke passed; quality/speed A/B pending'
         echo '  [18] Set next Hive miner - SC117 Q8_0 two-user | Strata 0.1.46 | 2 slots / 2 groups | 16 GiB / 8 histories | solo MTP | long-prefill pauses possible'
-        echo '  Hive selections safely pause OctaSpace, switch the owned Hive LLM, then restore its running state.'
+        echo '  [19] TensorSharp Hive candidate — DISABLED; not an installable/serving profile'
+        echo '  Hive selections keep OctaSpace running; new rental work blocks LLM startup.'
         echo '  No manual miner stop is needed; rentals and manual hosting sessions are never stopped.'
         read -r -p '  Select: ' choice || return 0
         choice="${choice//[[:space:]]/}"
         case "$choice" in
-            1|2)
+            1)
                 profile=swift15u-q8
-                [[ "$choice" == 2 ]] && profile=hauhau-q8-fastmtp-q4kv-xhigh
                 if [[ "$active" == qwen38 ]] && ! hosting managed-qwen; then
                     echo 'A manual Qwen hosting session is already running; stop it before switching.'
                     "$SCRIPT_DIR/v1qwen38.sh" --dashboard
@@ -752,44 +731,26 @@ main() {
                     run_selected v1qwen38.sh --quickstart --profile "$profile"
                 fi
                 ;;
-            3|4|5|6|7)
-                profile=swift15-heretic-re
-                [[ "$choice" == 4 || "$choice" == 6 ]] && profile=iq3_s-sc117-abliterated
-                [[ "$choice" != 7 ]] || profile=sc117-q8-2slot
-                local -a ple_args=()
-                [[ "$choice" != 5 && "$choice" != 6 ]] || ple_args=(--ple-q8)
+            7)
+                profile=sc117-q8-2slot
                 if [[ "$active" == strata ]]; then
-                    [[ "$profile" != iq3_s-sc117-abliterated ]] || sc117_trial_command --status "${ple_args[@]}"
-                    [[ "$profile" != sc117-q8-2slot ]] || sc117_two_slot_command --status
-                    "$SCRIPT_DIR/v1strata.sh" --status
-                    echo 'The running Strata model was left alone. Use [9] only when you are ready to switch.'
-                elif [[ "$active" == qwen38 ]] && ! hosting managed-qwen; then
-                    echo 'A manual Qwen hosting session is already running; stop it before switching.'
+                    sc117_two_slot_command --status
+                    echo 'The running Strata model was left alone. Stop it only through its verified owner.'
                 elif [[ "$active" != none ]] && ! hosting managed-qwen; then
-                    echo 'Another/unmanaged LLM is running. Stop it in its own verified lifecycle first.'
-                elif [[ "$profile" == sc117-q8-2slot ]]; then
+                    echo 'Another/manual LLM is running; no session was stopped.'
+                else
                     STRATA_SC117_IQ3S_TRIAL=1 STRATA_RUNTIME=0.1.46 STRATA_PARALLEL=2 STRATA_BATCH_GROUPS=2 \
                         STRATA_HOST=0.0.0.0 STRATA_PORT=8080 \
                         run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.46 --parallel 2 --batch-groups 2
-                elif [[ "$profile" == swift15-heretic-re ]]; then
-                    STRATA_HOST="${STRATA_HOST:-0.0.0.0}" run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.46 --parallel 1 --batch-groups 1 "${ple_args[@]}"
-                else
-                    STRATA_SC117_IQ3S_TRIAL=1 STRATA_RUNTIME=0.1.45 STRATA_PARALLEL=1 STRATA_BATCH_GROUPS=1 \
-                        STRATA_HOST=0.0.0.0 STRATA_PORT=8080 \
-                        run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.45 --parallel 1 --batch-groups 1 "${ple_args[@]}"
                 fi
                 ;;
             q|Q) return 0 ;;
+            8|19) echo 'BLOCKED: TensorSharp failed GPU startup (Xid79 / reboot required). No model/service/selection was changed. Await explicit recovery; no automatic TensorSharp retry.' ;;
             9) stop_owned_engines ;;
             10) check_update ;;
             11|x|X) return 0 ;;
-            12|13|14|15|16|17|18)
+            12|18)
                 hive_profile=swift15u-q8
-                [[ "$choice" == 13 ]] && hive_profile=hauhau-q8-fastmtp-q4kv-xhigh
-                [[ "$choice" == 14 ]] && hive_profile=swift15-heretic-re
-                [[ "$choice" == 15 ]] && hive_profile=iq3_s-sc117-abliterated-v0146
-                [[ "$choice" == 16 ]] && hive_profile=swift15-heretic-re-ple-q8
-                [[ "$choice" == 17 ]] && hive_profile=iq3_s-sc117-abliterated-ple-q8-v0146
                 [[ "$choice" == 18 ]] && hive_profile=iq3_s-sc117-abliterated-ple-q8-2slot-v0146
                 set_next_hive_profile "$hive_profile"
                 ;;
@@ -805,7 +766,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     if [[ "${1:-}" == --apply-hive-profile ]]; then
         [[ "$EUID" -eq 0 && "$#" -eq 2 ]] || { echo '--apply-hive-profile requires root and one profile' >&2; exit 2; }
         case "$2" in
-            swift15u-q8|hauhau-q8-fastmtp-q4kv-xhigh|swift15-heretic-re|iq3_s-sc117-abliterated|iq3_s-sc117-abliterated-v0146|swift15-heretic-re-ple-q8|iq3_s-sc117-abliterated-ple-q8-v0146|iq3_s-sc117-abliterated-ple-q8-2slot-v0146) ;;
+            swift15u-q8|iq3_s-sc117-abliterated-ple-q8-2slot-v0146) ;;
             *) echo 'Unknown Hive profile; no files changed.' >&2; exit 2 ;;
         esac
         apply_next_hive_profile "$2"

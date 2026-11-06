@@ -113,8 +113,10 @@ class Profile(unittest.TestCase):
                 self.assertIn('STRATA_RUNTIME=0.1.46',args);self.assertNotIn('--ple-q8',args);mutate.assert_not_called()
 
     def test_all_readiness_consumers_and_wrapper_ownership_match(self):
-        consumers=['HostLLM.sh','hive-llm-miner/profile-menu.sh','hive-llm-miner/profiles/'+T.HIVE_PROFILE+'/h-run.sh']
+        consumers=['HostLLM.sh','hive-llm-miner/profiles/'+T.HIVE_PROFILE+'/h-run.sh']
         for path in consumers:self.assertIn(T.READY,(REPO/path).read_text())
+        self.assertIn('S.preflight_profile(sys.argv[1])',(REPO/'hive-llm-miner/profile-menu.sh').read_text())
+        self.assertIn('lines != [sc117_two.READY]',(REPO/'hive_profile_switch.py').read_text())
         wrapper=(REPO/consumers[-1]).read_text()
         for needle in ["state.get('sc117_q8_two_slot') is not True","state.get('parallel')!=2","state.get('batch_groups')!=2",'hive_launch_id_sha256','carries_token','START_STATE_IDENTITY','--parallel 2 --batch-groups 2']:
             self.assertIn(needle,wrapper)
@@ -129,6 +131,8 @@ main < <(printf '%s\\n11\\n' "$2")
 '''
             p=subprocess.run(['/bin/bash','-c',command,'test',str(REPO),choice],text=True,capture_output=True,timeout=5)
             self.assertEqual(p.returncode,0,p.stderr);self.assertIn(expected,p.stdout)
-            self.assertIn('[17] Set next Hive miner - SC117 IQ3_S | Q8_0',p.stdout)
+            self.assertNotIn('[17] Set next Hive miner - SC117 IQ3_S | Q8_0',p.stdout)
+            self.assertIn('[12] Set next Hive miner - Swift',p.stdout)
+            self.assertIn('[18] Set next Hive miner - SC117 Q8_0 two-user',p.stdout)
 
 if __name__=='__main__':unittest.main()

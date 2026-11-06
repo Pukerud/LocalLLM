@@ -58,7 +58,7 @@ PY
 unset HOSTLLM_LAUNCH_LOCK_FD HOSTLLM_LAUNCH_LEASE_ID
 exec {test_lock_fd}<&-
 # Even if an archived comparison is downloaded later, it is not reintroduced into the curated menu.
-for PROFILE in swift15u-q8 hauhau-q8-fastmtp turbo-q8-mtp swift15-q8 swift15u-bf16; do
+for PROFILE in swift15u-q8 turbo-q8-mtp swift15-q8 swift15u-bf16; do
     configure_profile
     mkdir -p "$(dirname "$MODEL_PATH")" "$(dirname "$MMPROJ_PATH")"
     touch "$MODEL_PATH" "$MMPROJ_PATH"
@@ -71,16 +71,11 @@ args=" ${SERVER_ARGS[*]} "
 [[ "$args" == *' --ctx-size 524288 '* && "$args" == *' --parallel 2 '* ]]
 [[ "$args" == *' --reasoning-effort xhigh '* && "$args" == *' --cache-type-k q8_0 '* ]]
 [[ "$args" == *' --spec-draft-n-max 3 '* && "$args" == *' --mmproj '* ]]
-choose_profile <<< 2 > "$scratch/menu"
-[[ "$PROFILE" == hauhau-q8-fastmtp-q4kv-xhigh ]]
-configure_profile; make_server_args
-args=" ${SERVER_ARGS[*]} "
-[[ "$args" == *' --ctx-size 786432 '* && "$args" == *' --parallel 3 '* ]]
-[[ "$args" == *' --spec-draft-n-max 4 '* && "$args" == *' --spec-draft-model '* ]]
-[[ "$args" == *' --reasoning-effort xhigh '* && "$args" == *' --cache-type-v q4_0 '* ]]
-[[ "$(grep -c '^  \[[12]\]' "$scratch/menu")" == 2 ]]
-! grep -qE 'TURBO|UkisAI|Uncensored BF16|\[3\] Swift|GSQ-RCO' "$scratch/menu"
-grep -q 'HostLLM \[3\]' "$scratch/menu"
+[[ "$(grep -c '^  \[[12]\]' "$scratch/menu")" == 1 ]]
+! grep -qE 'Hauhau|TURBO|UkisAI|Uncensored BF16|\[3\] Swift|GSQ-RCO' "$scratch/menu"
+grep -q 'HostLLM \[7\], Hive \[18\]' "$scratch/menu"
+(choose_profile <<< 2 > "$scratch/invalid-menu")
+grep -q 'Cancelled.' "$scratch/invalid-menu"
 source "$root/HostLLM.sh"
 exit_lease_trace="$scratch/exit-lease.trace"
 (
@@ -191,23 +186,14 @@ if [[ "$EUID" -ne 0 ]]; then
   grep -Eq '^release --lease-id [a-f0-9]{64}$' "$parity_trace"
 fi
 grep -q '\[1\] Swift 1.5 Uncensored Q8_K_XL — DEFAULT' "$root/HostLLM.sh"
-grep -q '\[2\] Hauhau Q8_K_P — BF16 vision' "$root/HostLLM.sh"
-grep -q '\[3\] Swift 1.5 Heretic RE' "$root/HostLLM.sh"
-grep -q '\[4\] SC117 GSQ-RCO IQ3_S (abliterated) — IQ4_NL n-gram | Strata 0.1.45 | native 262K | --spec 3 + pipeline-windows 2 | CPU vision | one slot' "$root/HostLLM.sh"
-! grep -q '^ *echo .*\[5\] TEST Orca' "$root/HostLLM.sh"
+for retired in 2 3 4 5 6 13 14 15 16 17; do ! grep -Eq "^[[:space:]]*echo .*\\[$retired\\]" "$root/HostLLM.sh"; done
+grep -q '\[7\] SC117 Q8_0 two-user' "$root/HostLLM.sh"
 grep -q '\[12\] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL' "$root/HostLLM.sh"
-grep -q '\[13\] Set next Hive miner - Hauhau Q8_K_P' "$root/HostLLM.sh"
-grep -q '\[14\] Set next Hive miner - Swift 1.5 Heretic RE' "$root/HostLLM.sh"
-grep -q '\[5\] Swift 1.5 Heretic RE — Q8_0 n-gram' "$root/HostLLM.sh"
-grep -q '\[6\] SC117.*Q8_0 n-gram' "$root/HostLLM.sh"
-grep -q '\[15\].*SC117.*IQ4_NL n-gram' "$root/HostLLM.sh"
-grep -q '\[16\].*Heretic RE.*Q8_0 n-gram' "$root/HostLLM.sh"
-! grep -qE '^ *echo .*\[(6|7)\] Orca Q4_K_S — Strata 0\.1\.(41|44\.1)' "$root/HostLLM.sh"
-! grep -q '\[3\] SC117.*0.1.39' "$root/HostLLM.sh"
-grep -q '\[17\].*SC117.*0.1.46' "$root/HostLLM.sh"
-grep -q 'candidate_heretic=1' "$root/HostLLM.sh"
+grep -q '\[18\] Set next Hive miner - SC117 Q8_0 two-user' "$root/HostLLM.sh"
+grep -q '\[8\] TensorSharp.*DISABLED' "$root/HostLLM.sh"
+grep -q '\[19\] TensorSharp.*DISABLED' "$root/HostLLM.sh"
 grep -q 'SC117.*0.0.0.0:8080' "$root/HostLLM.sh"
-grep -q 'spec 3 + windows 2' "$root/HostLLM.sh"
+grep -q 'pipeline-windows=2' "$root/HostLLM.sh"
 grep -q -- '--prepare-q4ks141' "$root/HostLLM.sh"
 grep -q -- '--run-q4ks141-32k-validation' "$root/HostLLM.sh"
 grep -q 'Q4KS_V0141_VALIDATION_ONLY=1 STRATA_HOST=127.0.0.1' "$root/HostLLM.sh"
@@ -231,17 +217,12 @@ trace="$scratch/maintrace"
     printf '%s|%s|%s\n' "${STRATA_SC117_IQ3S_TRIAL-unset}" "${STRATA_HOST:-unset}" "${STRATA_PORT:-unset}" >> "$trace.env"
   }
   unset STRATA_HOST STRATA_PORT STRATA_SC117_IQ3S_TRIAL
-  main < <(printf '1\n 2 \n3\n4\n5\n6\n11\n') > /dev/null
+  main < <(printf '1\n 2 \n3\n4\n5\n6\n7\n8\n19\n11\n') > /dev/null
 )
 grep -qx 'v1qwen38.sh --quickstart --profile swift15u-q8' "$trace"
-grep -qx 'v1qwen38.sh --quickstart --profile hauhau-q8-fastmtp-q4kv-xhigh' "$trace"
-grep -qx 'v1strata.sh --quickstart --profile swift15-heretic-re --runtime 0.1.46 --parallel 1 --batch-groups 1' "$trace"
-grep -qx 'v1strata.sh --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.45 --parallel 1 --batch-groups 1' "$trace"
-grep -qx 'unset|0.0.0.0|unset' "$trace.env"
+grep -qx 'v1strata.sh --quickstart --profile sc117-q8-2slot --runtime 0.1.46 --parallel 2 --batch-groups 2' "$trace"
 grep -qx '1|0.0.0.0|8080' "$trace.env"
-grep -qx 'v1strata.sh --quickstart --profile swift15-heretic-re --runtime 0.1.46 --parallel 1 --batch-groups 1 --ple-q8' "$trace"
-grep -qx 'v1strata.sh --quickstart --profile iq3_s-sc117-abliterated --runtime 0.1.45 --parallel 1 --batch-groups 1 --ple-q8' "$trace"
-[[ "$(wc -l < "$trace")" -eq 6 ]]
+[[ "$(wc -l < "$trace")" -eq 2 ]]
 # Original Hive routes are [14]/[15]; Q8_0 PLE variants are [16]/[17].
 hive_target_trace="$scratch/hive-target-trace"
 (
@@ -249,13 +230,11 @@ hive_target_trace="$scratch/hive-target-trace"
   show_workload_status() { :; }
   host_gpu_summary() { :; }
   set_next_hive_profile() { printf '%s\n' "$1" >> "$hive_target_trace"; }
-  main < <(printf '14\n15\n16\n17\n11\n') > /dev/null
+  main < <(printf '12\n13\n14\n15\n16\n17\n18\n19\n11\n') > /dev/null
 )
-grep -qx 'swift15-heretic-re' "$hive_target_trace"
-grep -qx 'iq3_s-sc117-abliterated-v0146' "$hive_target_trace"
-grep -qx 'swift15-heretic-re-ple-q8' "$hive_target_trace"
-grep -qx 'iq3_s-sc117-abliterated-ple-q8-v0146' "$hive_target_trace"
-[[ "$(wc -l < "$hive_target_trace")" -eq 4 ]]
+grep -qx 'swift15u-q8' "$hive_target_trace"
+grep -qx 'iq3_s-sc117-abliterated-ple-q8-2slot-v0146' "$hive_target_trace"
+[[ "$(wc -l < "$hive_target_trace")" -eq 2 ]]
 # Exercise the inner package/pointer stage with inert installed files. The
 # transaction's owned-stop/OctaSpace ordering has dedicated Python tests.
 hive_menu_trace="$scratch/hive-menu.trace"
@@ -265,7 +244,7 @@ hive_fake_bin="$scratch/fake-bin"
 hive_pkg_source="$scratch/hive-pkg-source"
 hive_pkg_root="$scratch/hive-pkg-installed"
 hive_menu_installed="$hive_pkg_root/profile-menu.sh"
-hive_profiles=(swift15-heretic-re iq3_s-sc117-abliterated-v0146 swift15-heretic-re-ple-q8 iq3_s-sc117-abliterated-ple-q8-v0146)
+hive_profiles=(swift15u-q8 iq3_s-sc117-abliterated-ple-q8-2slot-v0146)
 mkdir -p "$hive_fake_bin" "$hive_pkg_source/profiles" "$hive_pkg_root/profiles"
 printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "%s"\n' "$hive_menu_trace" > "$hive_pkg_source/profile-menu.sh"
 chmod +x "$hive_pkg_source/profile-menu.sh"
@@ -297,21 +276,28 @@ done
   PATH="$hive_fake_bin:$PATH"
   export HIVE_PROFILE_SOURCE HIVE_PROFILE_MENU HIVE_PROFILE_ROOT HIVE_PROFILE_INSTALLER PATH
   set_next_hive_profile() { apply_next_hive_profile "$@"; }
+  # The real semantic cloud parser is covered by Python tests; this inert
+  # package fixture validates byte comparisons/install-once without live config.
+  hive_profile_package_is_current() {
+    local f
+    cmp -s "$HIVE_PROFILE_SOURCE/profile-menu.sh" "$HIVE_PROFILE_MENU" || return 1
+    for f in h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf; do
+      cmp -s "$HIVE_PROFILE_SOURCE/profiles/$1/$f" "$HIVE_PROFILE_ROOT/$1/$f" || return 1
+    done
+  }
   detect_engine() { echo none; }
   show_workload_status() { :; }
   host_gpu_summary() { :; }
-  main < <(printf '%s\n' 14 15 16 17 11) > /dev/null
+  main < <(printf '%s\n' 12 18 11) > /dev/null
 )
-grep -qx -- '--profile swift15-heretic-re' "$hive_menu_trace"
-grep -qx -- '--profile iq3_s-sc117-abliterated-v0146' "$hive_menu_trace"
-grep -qx -- '--profile swift15-heretic-re-ple-q8' "$hive_menu_trace"
-grep -qx -- '--profile iq3_s-sc117-abliterated-ple-q8-v0146' "$hive_menu_trace"
-[[ "$(wc -l < "$hive_menu_trace")" -eq 4 ]]
+grep -qx -- '--profile swift15u-q8' "$hive_menu_trace"
+grep -qx -- '--profile iq3_s-sc117-abliterated-ple-q8-2slot-v0146' "$hive_menu_trace"
+[[ "$(wc -l < "$hive_menu_trace")" -eq 2 ]]
 [[ "$(wc -l < "$hive_install_trace")" -eq 1 ]]
 if [[ "$EUID" -eq 0 ]]; then
   [[ ! -e "$hive_sudo_trace" ]]
 else
-  [[ "$(wc -l < "$hive_sudo_trace")" -eq 5 ]]
+  [[ "$(wc -l < "$hive_sudo_trace")" -eq 3 ]]
   grep -Fq -- '-- ' "$hive_sudo_trace"
 fi
 # Root-side lifecycle identity can prove a Qwen session managed even if user-side /proc reports unmanaged.
@@ -319,10 +305,10 @@ fi
   detect_engine() { echo unmanaged; }
   hosting() { [[ "$1" == managed-qwen ]]; }
   run_selected() { printf '%s\n' "$*" >> "$trace"; }
-  main < <(printf '3\n11\n') > /dev/null
+  main < <(printf '7\n11\n') > /dev/null
 )
-[[ "$(tail -n1 "$trace")" == 'v1strata.sh --quickstart --profile swift15-heretic-re --runtime 0.1.46 --parallel 1 --batch-groups 1' ]]
-[[ "$(wc -l < "$trace")" -eq 7 ]]
+[[ "$(tail -n1 "$trace")" == 'v1strata.sh --quickstart --profile sc117-q8-2slot --runtime 0.1.46 --parallel 2 --batch-groups 2' ]]
+[[ "$(wc -l < "$trace")" -eq 3 ]]
 # Choosing Heretic while Strata runs must not call the launch/pause/stop path.
 (
   SCRIPT_DIR="$scratch/live-menu"
@@ -334,9 +320,9 @@ fi
   host_gpu_summary() { :; }
   hosting() { :; }
   run_selected() { echo 'unexpected-start' >> "$trace"; }
-  main < <(printf '3\n11\n') > /dev/null
+  main < <(printf '7\n11\n') > /dev/null
 )
-[[ "$(wc -l < "$trace")" -eq 7 ]]
+[[ "$(wc -l < "$trace")" -eq 3 ]]
 # An unprepared historical explicit Q4 request must use its readiness gate, before any service/engine mutation.
 ready_trace="$scratch/readiness.trace"
 export ready_trace
@@ -499,4 +485,4 @@ grep -qx -- '--check-ready --profile iq3_s --runtime 0.1.39 --parallel 2 --batch
 )
 grep -qx -- '--check-ready --profile orca-iq3_xxs' "$ready_trace"
 [[ "$(wc -l < "$ready_trace")" -eq 5 ]]
-echo 'HostLLM [1]–[6]/[12]–[17] IQ4_NL/Q8_0 PLE dispatch, SC117 trusted-LAN trial gate, preflight-before-hosting, and running-Strata preservation: PASS'
+echo 'Retained Swift [1]/[12] and SC117 [7]/[18], removed-route rejection, disabled TensorSharp, exact leases/reservations/preflight and live-Strata preservation: PASS'

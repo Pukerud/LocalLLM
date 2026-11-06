@@ -43,8 +43,8 @@ if [[ "${1:-}" == --prepare-ple-q8 ]]; then
     exec nice -n 19 ionice -c 3 python3 "$root/prepare_ple_q8.py" "$@"
 fi
 if [[ "${1:-}" == --prepare-heretic ]]; then
-    shift
-    exec nice -n 19 ionice -c 3 python3 "$root/prepare_heretic.py" "$@"
+    echo 'Heretic routes/assets retired by operator request on 2026-11-06; no download attempted.' >&2
+    exit 2
 fi
 if [[ "${1:-}" == --prepare-deepseek41 ]]; then
     shift

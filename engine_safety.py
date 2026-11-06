@@ -242,6 +242,11 @@ def active_engine():
             return 'qwen38'
     except SafetyError:
         return 'unmanaged'
+    tensor = owner_home() / '.local/state/localllm-tensorsharp/swift15u-q8/server.json'
+    if tensor.is_symlink():raise SafetyError('TensorSharp state is symlinked')
+    if tensor.exists():
+        saved=json.loads(tensor.read_text());identity=saved.get('identity')
+        if identity and same_process(identity,proc(identity['pid'])):return 'tensorsharp'  # detection only, never stop authorization
     for d in Path('/proc').iterdir():
         if not d.name.isdigit():
             continue
@@ -250,7 +255,8 @@ def active_engine():
         except OSError:
             continue
         if cmd and (os.path.basename(cmd[0]) in (b'llama-server', b'strata') or
-                    b'serve.server' in cmd or any(x.endswith(b'/tabbyAPI/main.py') for x in cmd[:3])):
+                    b'serve.server' in cmd or any(os.path.basename(x) in (b'TensorSharp.Server.Host.dll',b'TensorSharp.Server.Host') for x in cmd[:3]) or
+                    any(x.endswith(b'/tabbyAPI/main.py') for x in cmd[:3])):
             return 'unmanaged'
     return 'none'
 

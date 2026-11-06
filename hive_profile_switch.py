@@ -26,8 +26,7 @@ CURRENT = WRAPPER.parent / 'current'
 CUR_MINER = Path('/run/hive/cur_miner')
 JOURNAL = hosting.ROOT / 'hive-profile-switch.json'
 HERETIC_PROFILE = 'swift15-heretic-re'
-PROFILES = ('swift15u-q8', 'hauhau-q8-fastmtp-q4kv-xhigh', HERETIC_PROFILE,
-            'iq3_s-sc117-abliterated', 'iq3_s-sc117-abliterated-v0146', *ple_q8_assets.HIVE_PROFILES, sc117_two.HIVE_PROFILE)
+PROFILES = ('swift15u-q8', sc117_two.HIVE_PROFILE)
 DEEPSEEK_PROFILE = 'deepseek41-abiray-iq2_xxs'  # retained historical recovery/readiness implementation only
 SC117_V0146_PROFILE = 'iq3_s-sc117-abliterated-v0146'
 SC117_V0146_READINESS = (
@@ -58,7 +57,7 @@ def llm_processes():
         except (FileNotFoundError, ProcessLookupError):
             continue
         names = {os.path.basename(arg) for arg in args}
-        if not (names & {b'llama-server', b'strata', b'strata-dsv41', b'strata-vision', b'strata_launcher.py', b'v1qwen38.sh'} or
+        if not (names & {b'llama-server', b'strata', b'strata-dsv41', b'strata-vision', b'strata_launcher.py', b'v1qwen38.sh', b'tensorsharp_launcher.py', b'TensorSharp.Server.Host.dll', b'TensorSharp.Server.Host'} or
                 b'serve.server' in args or b'llama_cpp.server' in args):
             continue
         identity = proc(int(directory.name))
@@ -242,8 +241,8 @@ def restore(previous):
         hosting.STOP.write_text(previous['stop_value'])
     else:
         hosting.STOP.unlink(missing_ok=True)
-    # Start Hive first, while OctaSpace is still paused. New launchers wait for
-    # our HostLLM lifecycle reservation until the transaction returns.
+    # New launchers wait for our lifecycle reservation. Rental admission stays
+    # running and every new model start rechecks Docker/GPU ownership.
     if previous['miner_was_running'] and not wrappers:
         say('Starting the selected Hive LLM miner...')
         run([hosting.MINER, 'start'], timeout=90)
@@ -254,18 +253,27 @@ def restore(previous):
 
 
 def flight_sheet_current(wallet=Path('/hive-config/wallet.conf'), rig=Path('/hive-config/rig.conf')):
-    expected = ((rig, {'MINER':'custom'}),
-                (wallet, {'CUSTOM_MINER':'llm-hosting',
-                          'CUSTOM_CONFIG_FILENAME':'/hive/miners/custom/llm-hosting/llm-hosting.conf',
-                          'CUSTOM_INSTALL_URL':''}))
+    # Cloud refreshes may shell-quote CUSTOM_MINER and omit the default config
+    # filename. Parse only literal values (never source the file) and preserve
+    # the cloud install URL; exact installed bundle bytes are checked separately.
+    import shlex
     try:
-        for path, fields in expected:
-            if path.is_symlink():return False
-            lines=path.read_text().splitlines()
-            for key,value in fields.items():
-                if [line for line in lines if line.startswith(key+'=')] != [key+'='+value]:return False
-    except OSError:return False
-    return True
+        if rig.is_symlink() or wallet.is_symlink():return False
+        def value(path,key,default=None):
+            rows=[line[len(key)+1:] for line in path.read_text().splitlines() if line.startswith(key+'=')]
+            if not rows:return default
+            if len(rows)!=1:return None
+            words=shlex.split(rows[0]);return words[0] if len(words)==1 else ('' if not words else None)
+        from urllib.parse import urlsplit
+        install_url=value(wallet,'CUSTOM_INSTALL_URL','')
+        if install_url is None:return False
+        parsed=urlsplit(install_url)
+        trusted_url=(not install_url or (parsed.scheme=='https' and not parsed.username and not parsed.password and
+                     not parsed.query and not parsed.fragment and parsed.hostname in ('github.com','raw.githubusercontent.com') and
+                     parsed.path.startswith('/Pukerud/LocalLLM/') and parsed.path.endswith('/llm-hosting.tar.gz')))
+        return (value(rig,'MINER')=='custom' and value(wallet,'CUSTOM_MINER')=='llm-hosting' and trusted_url and
+                value(wallet,'CUSTOM_CONFIG_FILENAME','') in ('','/hive/miners/custom/llm-hosting/llm-hosting.conf'))
+    except (OSError,ValueError):return False
 
 
 def package_current(profile):
@@ -280,7 +288,14 @@ def package_current(profile):
 
 
 def preflight_profile(profile):
-    """Run the new SC117 route's exact readiness check before pausing Hive/OctaSpace."""
+    """Readiness only, before lifecycle mutation; never builds or runs inference."""
+    if profile == 'swift15u-q8':
+        runuser=shutil.which('runuser',path='/usr/sbin:/usr/bin:/sbin:/bin')
+        if not runuser:raise SafetyError('runuser unavailable for Swift data readiness')
+        run([runuser,'-u','user','--','/usr/bin/env','-i','HOME=/home/user','USER=user','LOGNAME=user',
+             'PATH=/usr/bin:/bin','PYTHONDONTWRITEBYTECODE=1','QWEN38_OWNER_USER=user',
+             '/usr/bin/python3','-c','import sys;sys.path.insert(0,"/home/user/LocalLLM");import swift15_assets as A;A.ready();print("Swift shared immutable data metadata ready; no inference")'])
+        return
     if profile == sc117_two.HIVE_PROFILE:
         state = '/home/user/.local/state/locallm-strata/' + sc117_two.STATE_NAME
         runuser = shutil.which('runuser', path='/usr/sbin:/usr/bin:/sbin:/bin')
@@ -394,6 +409,8 @@ def preflight_profile(profile):
 
 
 def switch_profile(profile):
+    if profile not in PROFILES:
+        raise SafetyError('Unknown or retired Hive profile; nothing was stopped')
     if JOURNAL.exists() or JOURNAL.is_symlink():
         raise SafetyError(f'An earlier switch needs recovery: {recovery_command()}')
     inspection = {'allow_fallback_miner': True} if profile in (DEEPSEEK_PROFILE, HERETIC_PROFILE, 'swift15-heretic-re-ple-q8') else {}
@@ -412,9 +429,10 @@ def switch_profile(profile):
                 'owned_teardown': capture_owned_teardown(wrappers, fallback)}
     write_journal(previous)
     try:
-        if previous['osn_was_active']:
-            say('Pausing OctaSpace so it cannot restart the old miner during selection...')
-            run(['systemctl', 'stop', hosting.SERVICE], timeout=60)
+        # Retained routes are renter-first: admission remains running. The
+        # serialized reservation/stop marker and repeated rental checks protect
+        # selection; a new rental blocks the switch, never gets stopped for it.
+        say('Keeping OctaSpace admission running; renters always take priority.')
         remaining = inspect_owned_workload(**inspection)
         remaining_fallback = verified_fallback_miner_jobs(hosting.gpu_jobs()) if fallback else []
         if remaining_fallback and any(not any(same_process(job, original) for original in fallback) for job in remaining_fallback):
