@@ -1,8 +1,14 @@
 # LocalLLM — Swift and SC117
 
-HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default.** SC117 native-262K two-user **[18]** is the operator’s selected miner.
+HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default and the actually observed current server.** SC117 native-262K two-user **[18]** remains retained.
 
-## Latest checkpoint — 2026-11-06
+## Latest preparation — 2026-11-06, Swift left running
+
+[Unsloth V3.1 **UD-IQ4_XS** offline preparation](UNSLOTH_V31_IQ4XS_PREP.md): exact pinned main shards, new Q8 PLE, original-Qwen refusal projection, CPU BF16 vision, supported stock Strata MTP and an **inactive native262K / 2-slot / 8-history** configuration. **Await separate explicit continue before stopping/switching the current LLM, loading/testing the candidate or publishing a serving profile.** Offline checks are not GPU fit/quality/speed qualification. Q4's engram-packaging update was corrected before any Q4 download; IQ4_XS has an explicit “Better UD 3.1 quants” weight-file commit.
+
+Requested TensorSharp **[8]/[19]** menu entries and proven-unused private source/.NET/CUDA13/NuGet/build software have now been removed. Original Swift/SC117 assets, active installed bundle/selection, services and cloud settings are preserved. Only history remains; no TensorSharp/512K retry.
+
+## Historical recovery checkpoint — 2026-11-06, before the later Swift selection
 
 **Cleanup completed; native262K Hive [18] recovered and ACTIVE; TensorSharp GPU deployment rejected.** Hauhau and the single-slot Heretic/SC117 routes were removed. Only unused Hauhau/Heretic model trees were deleted, freeing approximately **137 GiB**; shared SC117 weights, original dense shards, Q8 PLE, CPU vision, runtime and preset metadata remain intact.
 
@@ -18,9 +24,8 @@ See **[the full checkpoint](TENSORSHARP_SWIFT_20261106.md)** and [sanitized resu
 |---:|---:|---|
 | **1** | **12** | Swift 1.5 Uncensored **Q8_K_XL**, existing pinned llama.cpp; BF16 vision, native MTP n3, xhigh, two native-262K slots |
 | **7** | **18** | SC117 abliterated IQ3_S with **Q8_0 PLE**, Strata **.46**; two pipelined slots/groups, 16 GiB/eight histories, CPU vision; unqualified trial |
-| **8** | **19** | TensorSharp / same Swift file — **DISABLED information entries**, not serving or installable profiles |
 
-**[9]** owned stop, **[10]** update, **[11]** exit. Requested former **[2–6] and [13–17]** are gone; their numbers were not reused. The low-level Hive selector retains **[1] Swift / [8] SC117 two-user** only.
+**[9]** owned stop, **[10]** update, **[11]** exit. Former **[2–6], [8], [13–17] and [19]** are gone; their numbers were not reused. The low-level Hive selector retains **[1] Swift / [8] SC117 two-user** only.
 
 Hauhau, Heretic and the original one-slot SC117 IQ4_NL/Q8 routes are retired. Orca/DeepSeek retirement also remains in force. Historical source, wrappers and reports remain audit evidence where useful; they are not current serving instructions or permission to redownload retired models.
 
@@ -31,7 +36,7 @@ Hauhau, Heretic and the original one-slot SC117 IQ4_NL/Q8 routes are retired. Or
 The retained file is the **27B dense Qwen model**, not Flash-Next:
 `Swift-1.5-Qwen3.8-27B-Uncensored-Dynamic-MTP-UD-Q8_K_XL.gguf`.
 
-- Original pinned model/projector unchanged; shared by any explicitly authorized future TensorSharp investigation.
+- Original pinned model/projector retained unchanged; unused TensorSharp software is retired.
 - Existing llama.cpp `4cbe8b07`, four-GPU layer split, Q8 K/V, BF16 vision, embedded target-verified MTP depth 3.
 - Two **262144-token** slots. Its `--ctx-size 524288` is the aggregate allocation for two native windows, **not** a 512K-per-slot extension.
 - Normal xhigh thinking; temperature 1, top-p .95, top-k 20, min-p/presence 0, repetition 1.
@@ -67,10 +72,10 @@ High-level Hive selection verifies exact ownership/ancestry and readiness before
 
 Use only on a trusted, firewalled LAN: **http://192.168.1.69:8080/**, **no mandatory key, dummy token or Authorization header**. Preserve Host/Origin checks and deliberately configured optional auth. Not public hosting.
 
-## TensorSharp status
+## TensorSharp retirement
 
-Pinned **2.8.6 / `9d18a64dbf07efa7b0fb5b7d34dda97f05e2c368`**, private .NET10.0.403/CUDA13.0.2, GGML CUDA SM86. System CUDA12.9/driver unchanged. Exact Host/Origin/fixed-model patch; no numerical source patch.
+The failed **2.8.6** trial is historical, not a serving route. Its private source/.NET10/CUDA13/NuGet/build archives and repository preparation/build helpers were explicitly retired after proving them unused. Small calibration/results and private metadata remain audit evidence. System CUDA12.9, driver and actual Swift model/projector were not changed. External/manual TensorSharp detection remains a safety blocker, not stop authority.
 
-Software build and CPU-only unauthenticated LAN UI/Host/Origin/pidfd-shutdown tests passed. GPU layer split was refused by `qwen35`; TP4 disabled MTP, then faulted during warm-up before serving readiness. **No winning configuration or speed improvement exists.** `prepare_tensorsharp.py --prepare` can verify software only; `--check-ready` refuses GPU deployment. Do not retry automatically after reboot.
+The earlier CPU-only LAN tests did not qualify GPU serving: TP4 faulted before HTTP readiness. **No winning configuration or speed improvement exists. No TensorSharp/512K retry.** See the historical [trial/recovery report](TENSORSHARP_SWIFT_20261106.md).
 
 Historical evidence: [concurrency](SC117_Q8_CONCURRENCY_20261101.md), [two-user activation](SC117_Q8_2SLOT.md), [rejected 512K test](SC117_512K_TEST_20261101.md), [PLE pins](PLE_Q8.md), [retired Heretic](HERETIC_RE.md). Their old menu/install instructions are superseded above.

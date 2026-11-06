@@ -1,5 +1,7 @@
 # 2026-11-06 — cleanup complete; TensorSharp rejected; native Hive18 recovered
 
+> **Historical checkpoint.** Later the operator selected Swift and approved [IQ4_XS V3.1 offline preparation](UNSLOTH_V31_IQ4XS_PREP.md), preserving that running Swift session. TensorSharp [8]/[19] entries and unused private source/.NET/CUDA13/NuGet/build software have since been removed. The build/software statements below describe the earlier completed trial, not currently installed software or permission to retry. Native18's recovery is completed history, not the current selection.
+
 **Latest: recovery COMPLETED after the operator’s manual restart and “continue.”** All four original GPUs recovered, the current-boot fault scan was clear, and **native262K Hive [18] is ACTIVE again** with its unchanged .46/2slots/2groups/16GiB/eight-history/CPU-vision policy. Only this task’s exact fault lease was released after fresh rental/ownership checks; existing owned startup was observed without duplication. UID1000 key-free LAN text/thinking/swapped-vision/concurrent-tags/complete-SSE/tools-format and Host/Origin guards passed. OctaSpace stayed active; cloud configuration was preserved; no renter/container/service was stopped. No lease/journal/test/controller/reset/reboot/retry is pending. TensorSharp stays disabled.
 
 ## Cleanup completed

@@ -1,0 +1,135 @@
+{
+  "schema": 1,
+  "date": "2026-11-06",
+  "phase": "OFFLINE-PREPARED-WAITING-FOR-SEPARATE-EXPLICIT-CONTINUE",
+  "scope": "Preparation only; current Swift preserved. No replacement GPU inference, switch, stop, serving-profile activation or runtime upgrade.",
+  "release": {
+    "repository": "unsloth/Qwen3.8-Flash-Next-GGUF",
+    "revision": "d96201194f103c906994f283f504209dc8d2a10c",
+    "quant": "UD-IQ4_XS",
+    "weight_update_commit": "814db05f88b3b827ea7cfcab5344fd218de494d2",
+    "weight_update_title": "Better UD 3.1 quants",
+    "q4_claim_corrected_before_any_q4_download": true
+  },
+  "assets": [
+    {
+      "role": "model_1",
+      "repo_path": "UD-IQ4_XS/Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00004.gguf",
+      "bytes": 10946618,
+      "sha256": "93ff23a08e5cd7501f24fa16f5b415d5807d0175e04edd3ed6a7a41b601a4eef"
+    },
+    {
+      "role": "model_2",
+      "repo_path": "UD-IQ4_XS/Qwen3.8-Flash-Next-UD-IQ4_XS-00002-of-00004.gguf",
+      "bytes": 49604491008,
+      "sha256": "13d5dc8b93d039e4cfade5a9af7037f10c97f7ec4e53f75bd2e9ae34aae54aeb"
+    },
+    {
+      "role": "model_3",
+      "repo_path": "UD-IQ4_XS/Qwen3.8-Flash-Next-UD-IQ4_XS-00003-of-00004.gguf",
+      "bytes": 15256783680,
+      "sha256": "f6b9b5934908a2043732269dd740155d0f921d0763a1dcdd3452246311651f87"
+    },
+    {
+      "role": "model_4",
+      "repo_path": "UD-IQ4_XS/Qwen3.8-Flash-Next-UD-IQ4_XS-00004-of-00004.gguf",
+      "bytes": 28800138432,
+      "sha256": "5de8b5dbf89409acc39468decafd4a4a95b13c29d88a14b0356107897829ec36"
+    },
+    {
+      "role": "ple_q8",
+      "repo_path": "engram/Qwen3.8-Flash-Next-engram-Q8_0.gguf_file",
+      "bytes": 54400261312,
+      "sha256": "e3d76a2747c1fe53e3420d1bb7fd9593aafd03035fee4926317db80ad5c5296a"
+    }
+  ],
+  "asset_bytes": 148072621050,
+  "full_post_pack_on_disk_hash_check_passed": true,
+  "exact_table_reuse": {
+    "bundled_iq4_nl": true,
+    "new_named_q8_0": true,
+    "old_and_new_full_file_hashes_independently_verified": true,
+    "original_files_rewritten_or_linked": false,
+    "method": "New inode + publisher 192-byte header + original payload; complete target SHA matches exact frozen upstream file."
+  },
+  "cpu_pack": {
+    "runtime": "0.1.46",
+    "source_commit": "90767252f420e25223c739d604145ad15911d48b",
+    "llama_cpp_gguf_py_commit": "3cf03257f219afbe7334045ff7c6a06ac68c627d",
+    "gguf_py_python_file_count": 23,
+    "gguf_py_tree_sha256": "06548579a064de90e0544d6a00ef27fd1271d0d74130b6d5c88abc5639f1000f",
+    "gguf_py_verified_against_official_commit_tree": true,
+    "model_tensor_count": 1224,
+    "native_expert_layers": 48,
+    "pack_files": 10,
+    "pack_bytes": 1495821909,
+    "compat_bf16": true,
+    "recorded_conversion_count": 460,
+    "nonexact_conversion_count": 196,
+    "original_gguf_experts_native_dense_ple_files_unchanged": true
+  },
+  "inactive_config": {
+    "context_per_chat": 262144,
+    "parallel_chats": 2,
+    "batch_groups": 2,
+    "conversation_cache_mib": 16384,
+    "cached_histories": 8,
+    "kv": "int8",
+    "kv_resident": 32768,
+    "ple": "Q8_0 mmap",
+    "vision": "matching BF16 CPU projector",
+    "mtp": "matching stock non-abliterated Qwen Strata Q2_0 experts / Q8 dense, spec3, windows2; concurrent pipelined drafts off",
+    "projection": "original-Qwen unit directions, layers4-44, project per-layer, scale1, default on",
+    "layer_split": "auto; no inherited SC117 speed claim",
+    "fresh_isolated_state": true,
+    "fixed_output_or_thinking_budget_added": false,
+    "api_key_required": false,
+    "activation_allowed": false,
+    "gpu_inference_tested": false,
+    "registered_or_published_in_live_selectors": false,
+    "scope": "Configured targets, not measured full-context/history capacity or fit/quality/speed/stability qualification."
+  },
+  "tensorsharp_retirement": {
+    "direct8_hive19_entries_removed": true,
+    "repository_helpers_removed": 5,
+    "private_software_regular_files": 18236,
+    "inventory_unique_allocated_bytes": 6994198528,
+    "not_a_measured_filesystem_free_delta": true,
+    "historical_calibration_results_metadata_retained": true,
+    "external_manual_workload_safety_detection_retained": true,
+    "gpu_retry_authorized": false
+  },
+  "current": {
+    "model": "Swift 1.5 Uncensored Q8_K_XL",
+    "selection": "profiles/swift15u-q8",
+    "exact_original_process_unchanged": true,
+    "active_installed_bundle_stable_links_unchanged": true,
+    "cloud_configuration_unchanged": true,
+    "admission_unchanged_and_active": true,
+    "retained_swift_sc117_shared_data_unchanged": true,
+    "key_free_uid1000_lan63_after_cleanup": true,
+    "spare_slot_only_existing_model_smoke": true,
+    "current_swift_not_adopted_as_hive_owned": true,
+    "lease_present": false,
+    "switch_journal_present": false,
+    "current_boot_gpu_fault_scan_clear": true
+  },
+  "verification": {
+    "python_tests": 496,
+    "python_skipped": 4,
+    "shell_suites_passed": 8,
+    "real_local_http_download_resume_test_passed": true,
+    "source_and_derived_file_checks_passed": true,
+    "only_cpu_and_existing_swift_smoke_no_candidate_inference": true,
+    "offline_guard_fixture_corrections": [
+      "Pinned llama.cpp is extracted ZIP, not Git submodule: all23 Python files independently verified against exact upstream commit tree, no dependency changed.",
+      "Used identical pinned runtime-shipped routing seed, rather than altering permissions of group-writable legacy seed; fresh CPU rerun only."
+    ]
+  },
+  "lifecycle_actions": [],
+  "live_workload_signals_sent": [],
+  "gpu_driver_kernel_cuda_power_unlock_changes": [],
+  "automatic_test_switch_reboot_pending": false,
+  "next": "Wait for separate explicit switch/testing approval; freshly resolve actual manual/owned Swift session, rentals, requests, hardware and exact identity under reservation. Keep admission running; never override a renter. No TensorSharp/512K retry.",
+  "private_evidence": "/var/lib/localllm-strata/unsloth-v31-iq4xs-prep-20261106/"
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HostLLM: retained Swift / SC117; failed TensorSharp candidate is informational only.
+# HostLLM: retained Swift / SC117. Retired candidates have no menu entries.
 # Owned lifecycle only; rental admission remains running.
 # Rental containers/unidentified GPU workloads are never stopped.
 set -uo pipefail
@@ -236,7 +236,7 @@ show_workload_status() {
     gpu_result="$(nvidia-smi --query-compute-apps=pid,process_name --format=csv,noheader,nounits 2>/dev/null)" || gpu_result=unknown
     [[ -z "$gpu_result" ]] || printf '  Current GPU workload: %s\n' "$gpu_result"
     octa="$(systemctl is-active osn.service 2>/dev/null || true)"
-    printf '  OctaSpace: %s (automatically paused while hosting)\n' "${octa:-unknown}"
+    printf '  OctaSpace: %s (admission kept running; renters have priority)\n' "${octa:-unknown}"
 }
 
 check_update() {
@@ -706,7 +706,6 @@ main() {
         echo ''
         echo '  [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
         echo '  [7] SC117 Q8_0 two-user — Strata 0.1.46 | 2 slots / 2 pipelined groups | 16 GiB / 8-history cache | solo MTP | long-prefill pauses possible'
-        echo '  [8] TensorSharp / Swift Q8_K_XL — DISABLED: GPU fault during startup; no speed comparison established'
         echo ''
         echo '  Native 262K per slot. SC117 remains an unqualified .46 trial with isolated state.'
         echo '  Renters always have priority. No rental, render container, or unknown workload is stopped.'
@@ -714,7 +713,6 @@ main() {
         echo '  [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit'
         echo '  [12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
         echo '  [18] Set next Hive miner - SC117 Q8_0 two-user | Strata 0.1.46 | 2 slots / 2 groups | 16 GiB / 8 histories | solo MTP | long-prefill pauses possible'
-        echo '  [19] TensorSharp Hive candidate — DISABLED; not an installable/serving profile'
         echo '  Hive selections keep OctaSpace running; new rental work blocks LLM startup.'
         echo '  No manual miner stop is needed; rentals and manual hosting sessions are never stopped.'
         read -r -p '  Select: ' choice || return 0
@@ -745,7 +743,6 @@ main() {
                 fi
                 ;;
             q|Q) return 0 ;;
-            8|19) echo 'BLOCKED: TensorSharp failed GPU startup (Xid79 / reboot required). No model/service/selection was changed. Await explicit recovery; no automatic TensorSharp retry.' ;;
             9) stop_owned_engines ;;
             10) check_update ;;
             11|x|X) return 0 ;;

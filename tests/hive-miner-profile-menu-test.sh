@@ -7,10 +7,10 @@ HOST="$ROOT/HostLLM.sh"
 INSTALL="$ROOT/install-hive-llm-miner.sh"
 scratch="$(mktemp -d)";trap 'rm -rf -- "$scratch"' EXIT
 for script in "$HOST" "$MENU" "$INSTALL" "$ROOT/uninstall-hive-llm-miner.sh";do bash -n "$script";done
-for expected in '[1] Swift 1.5 Uncensored' '[7] SC117 Q8_0 two-user' '[9] Stop owned' '[12] Set next Hive miner - Swift' '[18] Set next Hive miner - SC117 Q8_0 two-user' '[8] TensorSharp / Swift Q8_K_XL — DISABLED' '[19] TensorSharp Hive candidate — DISABLED';do grep -Fq "$expected" "$HOST";done
-for retired in 2 3 4 5 6 13 14 15 16 17;do ! grep -Eq "^[[:space:]]*echo .*\\[$retired\\]" "$HOST";done
+for expected in '[1] Swift 1.5 Uncensored' '[7] SC117 Q8_0 two-user' '[9] Stop owned' '[12] Set next Hive miner - Swift' '[18] Set next Hive miner - SC117 Q8_0 two-user';do grep -Fq "$expected" "$HOST";done
+for retired in 2 3 4 5 6 8 13 14 15 16 17 19;do ! grep -Eq "^[[:space:]]*echo .*\\[$retired\\]" "$HOST";done
 grep -Fq '12|18)' "$HOST"
-grep -Fq '8|19) echo '\''BLOCKED: TensorSharp' "$HOST"
+! grep -Fq 'TensorSharp' "$HOST"
 grep -Fq 'sc117_two_slot_command --stop' "$HOST"
 ! grep -Fq 'heretic_profile_command --stop' "$HOST"
 ! grep -Fq 'sc117_trial_command --stop' "$HOST"
@@ -45,5 +45,6 @@ for script in "$HOST" "$MENU" "$INSTALL" "$wrapper";do ! grep -Eq '^[[:space:]]*
 grep -Fq 'lines != [sc117_two.READY]' "$ROOT/hive_profile_switch.py"
 grep -Fq 'Keeping OctaSpace admission running' "$ROOT/hive_profile_switch.py"
 grep -Fq "lease.get('hardware_recovery_required')" "$ROOT/hosting_lifecycle.py"
-grep -Fq 'GPU_DEPLOYMENT_BLOCKED=' "$ROOT/tensorsharp_runtime.py"
-echo 'Retained-only menus, failed TensorSharp disabled, exact two-slot delegated readiness, secure idle-only atomic selection and renter-first/fault-hold guards: PASS'
+for helper in tensorsharp_runtime.py prepare_tensorsharp.py build_tensorsharp.sh tensorsharp_bootstrap_cuda.py tensorsharp_bootstrap_sdk.py;do [[ ! -e "$ROOT/$helper" ]];done
+grep -Fq 'TensorSharp.Server.Host' "$ROOT/engine_safety.py"
+echo 'Retained-only menus, retired TensorSharp software/entries absent, exact two-slot delegated readiness, secure idle-only atomic selection and renter-first/fault-hold guards: PASS'

@@ -186,12 +186,11 @@ if [[ "$EUID" -ne 0 ]]; then
   grep -Eq '^release --lease-id [a-f0-9]{64}$' "$parity_trace"
 fi
 grep -q '\[1\] Swift 1.5 Uncensored Q8_K_XL — DEFAULT' "$root/HostLLM.sh"
-for retired in 2 3 4 5 6 13 14 15 16 17; do ! grep -Eq "^[[:space:]]*echo .*\\[$retired\\]" "$root/HostLLM.sh"; done
+for retired in 2 3 4 5 6 8 13 14 15 16 17 19; do ! grep -Eq "^[[:space:]]*echo .*\\[$retired\\]" "$root/HostLLM.sh"; done
 grep -q '\[7\] SC117 Q8_0 two-user' "$root/HostLLM.sh"
 grep -q '\[12\] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL' "$root/HostLLM.sh"
 grep -q '\[18\] Set next Hive miner - SC117 Q8_0 two-user' "$root/HostLLM.sh"
-grep -q '\[8\] TensorSharp.*DISABLED' "$root/HostLLM.sh"
-grep -q '\[19\] TensorSharp.*DISABLED' "$root/HostLLM.sh"
+! grep -q 'TensorSharp' "$root/HostLLM.sh"
 grep -q 'SC117.*0.0.0.0:8080' "$root/HostLLM.sh"
 grep -q 'pipeline-windows=2' "$root/HostLLM.sh"
 grep -q -- '--prepare-q4ks141' "$root/HostLLM.sh"
@@ -485,4 +484,4 @@ grep -qx -- '--check-ready --profile iq3_s --runtime 0.1.39 --parallel 2 --batch
 )
 grep -qx -- '--check-ready --profile orca-iq3_xxs' "$ready_trace"
 [[ "$(wc -l < "$ready_trace")" -eq 5 ]]
-echo 'Retained Swift [1]/[12] and SC117 [7]/[18], removed-route rejection, disabled TensorSharp, exact leases/reservations/preflight and live-Strata preservation: PASS'
+echo 'Retained Swift [1]/[12] and SC117 [7]/[18], retired TensorSharp menu removed, removed-route rejection, exact leases/reservations/preflight and live-Strata preservation: PASS'

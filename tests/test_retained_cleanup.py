@@ -2,14 +2,14 @@ import unittest,sys,tempfile,subprocess,hashlib,os
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-import hive_profile_switch as S,swift15_assets as A,tensorsharp_runtime as T
+import hive_profile_switch as S,swift15_assets as A
 from engine_safety import SafetyError
 ROOT=Path(__file__).resolve().parents[1]
 RETIRED=('hauhau-q8-fastmtp-q4kv-xhigh','swift15-heretic-re','iq3_s-sc117-abliterated','iq3_s-sc117-abliterated-v0146','swift15-heretic-re-ple-q8','iq3_s-sc117-abliterated-ple-q8-v0146')
 class Retained(unittest.TestCase):
  def test_removed_menu_numbers_are_absent(self):
   text=(ROOT/'HostLLM.sh').read_text()
-  for n in (*range(2,7),*range(13,18)):self.assertNotRegex(text,rf"echo .*\[{n}\]")
+  for n in (*range(2,7),8,*range(13,18),19):self.assertNotRegex(text,rf"echo .*\[{n}\]")
   for n in (1,7,9,10,11,12,18):self.assertIn(f'[{n}]',text)
  def test_retired_switches_fail_before_inspection_or_action(self):
   for name in RETIRED:
@@ -47,30 +47,13 @@ class Retained(unittest.TestCase):
  def test_hauhau_cannot_download_or_launch(self):
   text=(ROOT/'v1qwen38.sh').read_text();self.assertIn("hauhau-*) die 'Hauhau routes/assets were retired",text)
   self.assertNotIn('for candidate in swift15u-q8 hauhau',text)
- def test_tensor_backend_and_bounded_layout(self):
-  a=T.command();self.assertEqual(a[a.index('--backend')+1],'ggml_cuda');self.assertEqual(a[a.index('--layer-split')+1],'4')
-  self.assertEqual(a[a.index('--spec-draft')+1],'3');self.assertEqual(a[a.index('--kv-cache-dtype')+1],'q8_0')
-  self.assertIn(str(A.model()),a);self.assertIn(str(A.projector()),a);self.assertIn('--no-skills',a);self.assertIn('--no-multi-agent',a)
-  self.assertNotIn('--api-key',a);self.assertNotIn('MAX_CONTEXT',T.environment('/tmp/test'))
- def test_tensor_rejects_unreviewed_overrides(self):
-  for kw in ({'degree':3},{'placement':'cpu'},{'spec':7},{'port':12345}):
-   with self.subTest(kw=kw),self.assertRaises(SafetyError):T.command(**kw)
- def test_tensor_scheduler_bounded_at_two_and_no_foreign_env(self):
-  with patch.dict(os.environ,{'CUDA_VISIBLE_DEVICES':'3','TS_SCHED_MAX_RUNNING_SEQS':'99','STRATA_API_KEY':'private'},clear=False):env=T.environment('/tmp/test')
-  self.assertEqual(env['TS_SCHED_MAX_RUNNING_SEQS'],'2');self.assertNotIn('STRATA_API_KEY',env);self.assertNotIn('CUDA_VISIBLE_DEVICES',env)
- def test_failed_tensor_candidate_is_blocked_before_software_or_gpu_work(self):
-  with patch.object(T,'require_source') as source:
-   with self.assertRaisesRegex(SafetyError,'GPU deployment DISABLED'):T.ready()
-   source.assert_not_called()
- def test_disabled_tensor_menu_entries_never_launch_or_pause(self):
+ def test_unused_tensor_helpers_removed_but_safety_detection_retained(self):
+  for name in ('tensorsharp_runtime.py','prepare_tensorsharp.py','build_tensorsharp.sh','tensorsharp_bootstrap_cuda.py','tensorsharp_bootstrap_sdk.py'):
+   self.assertFalse((ROOT/name).exists(),name)
+  self.assertIn('TensorSharp.Server.Host', (ROOT/'engine_safety.py').read_text())
+  self.assertIn('TensorSharp.Server.Host', (ROOT/'hive_profile_switch.py').read_text())
+ def test_removed_tensor_choices_never_launch_pause_or_switch(self):
   for choice in ('8','19'):
    command='source "$1/HostLLM.sh"; detect_engine(){ echo none; };show_workload_status(){ :; };host_gpu_summary(){ :; };run_selected(){ echo UNSAFE; };set_next_hive_profile(){ echo UNSAFE; };main < <(printf "%s\\n11\\n" "$2")'
    p=subprocess.run(['bash','-c',command,'test',str(ROOT),choice],text=True,capture_output=True,timeout=5)
-   self.assertEqual(p.returncode,0,p.stderr);self.assertIn('BLOCKED: TensorSharp',p.stdout);self.assertNotIn('UNSAFE',p.stdout)
- def test_lan_patch_hash_reproduces_exact_upstream(self):
-  # Real pinned source is optional on other hosts; the deployed host tests the full patch bytes.
-  if not T.source().is_dir():self.skipTest('pinned TensorSharp source absent on this host')
-  original=subprocess.check_output(['git','show','HEAD:'+T.PROGRAM],cwd=T.source())
-  self.assertEqual(hashlib.sha256(original).hexdigest(),T.ORIGINAL)
-  new=original.decode().replace('var app = builder.Build();\n','var app = builder.Build();\n'+T.LAN_BOUNDARY)
-  self.assertEqual(hashlib.sha256(new.encode()).hexdigest(),T.PATCHED)
+   self.assertEqual(p.returncode,0,p.stderr);self.assertNotIn('TensorSharp',p.stdout);self.assertNotIn('UNSAFE',p.stdout)
