@@ -254,6 +254,12 @@ check_update() {
 stop_owned_engines() {
     # Each helper validates PID/start time/executable and uses pidfds. No pkill/killall.
     local rc=0
+    # Hive owns its launch token; use its verified supervisor rather than guessing a direct-stop token.
+    if [[ "$(detect_engine)" == strata && -L /hive/miners/custom/llm-hosting/current &&
+          "$(readlink /hive/miners/custom/llm-hosting/current)" == profiles/unsloth-v31-iq4xs-q8-cvec-2slot-v0146 ]]; then
+        run_as_root /usr/bin/python3 "$SCRIPT_DIR/hive_profile_switch.py" --stop-owned-v31
+        return "$?"
+    fi
     sc117_two_slot_command --stop || rc=1
     owned_stop "$SCRIPT_DIR/v1qwen38.sh" --stop || rc=1
     if [[ "$(detect_engine)" == unmanaged ]]; then
@@ -713,6 +719,7 @@ main() {
         echo '  [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit'
         echo '  [12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
         echo '  [18] Set next Hive miner - SC117 Q8_0 two-user | Strata 0.1.46 | 2 slots / 2 groups | 16 GiB / 8 histories | solo MTP | long-prefill pauses possible'
+        echo '  [21] Set next Hive miner - Unsloth V3.1 IQ4_XS | Q8 PLE / projection ON | Strata .46 | 2 native-262K chats / 8 histories | CPU vision / MTP | trial'
         echo '  Hive selections keep OctaSpace running; new rental work blocks LLM startup.'
         echo '  No manual miner stop is needed; rentals and manual hosting sessions are never stopped.'
         read -r -p '  Select: ' choice || return 0
@@ -742,6 +749,7 @@ main() {
                         run_selected v1strata.sh --quickstart --profile "$profile" --runtime 0.1.46 --parallel 2 --batch-groups 2
                 fi
                 ;;
+            21) set_next_hive_profile unsloth-v31-iq4xs-q8-cvec-2slot-v0146 ;;
             q|Q) return 0 ;;
             9) stop_owned_engines ;;
             10) check_update ;;
@@ -763,7 +771,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     if [[ "${1:-}" == --apply-hive-profile ]]; then
         [[ "$EUID" -eq 0 && "$#" -eq 2 ]] || { echo '--apply-hive-profile requires root and one profile' >&2; exit 2; }
         case "$2" in
-            swift15u-q8|iq3_s-sc117-abliterated-ple-q8-2slot-v0146) ;;
+            swift15u-q8|iq3_s-sc117-abliterated-ple-q8-2slot-v0146|unsloth-v31-iq4xs-q8-cvec-2slot-v0146) ;;
             *) echo 'Unknown Hive profile; no files changed.' >&2; exit 2 ;;
         esac
         apply_next_hive_profile "$2"

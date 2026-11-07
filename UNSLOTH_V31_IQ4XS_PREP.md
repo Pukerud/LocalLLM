@@ -1,5 +1,7 @@
 # Unsloth Dynamic V3.1 IQ4_XS — offline preparation, NOT activation
 
+> **Historical preparation stage.** Later separate operator approval authorized the switch/testing and left [IQ4_XS ACTIVE as Hive[21]](UNSLOTH_V31_IQ4XS.md) on November7. The preparation-only hold and registry/start-refusal statements below describe that earlier checkpoint, not the current serving state. Do not undo the later activation or replay saved controllers.
+
 The operator approved preparation only, while continuing to use the existing **Swift** server. **Do not stop/switch it, load the candidate, run replacement inference, or publish/activate a new serving profile until a separate explicit continue.** No TensorSharp/512K retry is authorized.
 
 ## Correct release identity

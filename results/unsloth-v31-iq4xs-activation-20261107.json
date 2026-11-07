@@ -1,0 +1,241 @@
+{
+  "schema": 1,
+  "date": "2026-11-07",
+  "phase": "COMPLETED-IQ4XS-ACTIVE-AS-HIVE-MINER",
+  "operator_authorized": "Switch, test, and leave successful model running as miner; supersedes prior preparation-only hold.",
+  "menu": {
+    "hostllm_hive": 21,
+    "low_level_hive": 9,
+    "hostllm_owned_stop": 9,
+    "profile": "unsloth-v31-iq4xs-q8-cvec-2slot",
+    "hive_profile": "unsloth-v31-iq4xs-q8-cvec-2slot-v0146",
+    "swift_installation_default_unchanged": true,
+    "swift_sc117_alternatives_retained": true,
+    "retired_numbers_reused": false
+  },
+  "model": {
+    "id": "qwen3.8-flash-next-unsloth-v31-iq4_xs-ple-q8_0-projection-2slot",
+    "repository": "unsloth/Qwen3.8-Flash-Next-GGUF",
+    "revision": "d96201194f103c906994f283f504209dc8d2a10c",
+    "quant": "UD-IQ4_XS",
+    "quant_update_commit": "814db05f88b3b827ea7cfcab5344fd218de494d2",
+    "ple_format": "Q8_0",
+    "ple_bytes": 54400261312,
+    "ple_sha256": "e3d76a2747c1fe53e3420d1bb7fd9593aafd03035fee4926317db80ad5c5296a",
+    "projection_sha256": "ef0724c5b79297e481017be85769832bc26eb220c984ecba2b0e1b0c8426312b",
+    "original_gguf_bytes_unchanged": true,
+    "cpu_compatibility_conversions": 460,
+    "nonexact_bf16_compatibility_conversions": 196
+  },
+  "runtime": {
+    "version": "0.1.46",
+    "source_commit": "90767252f420e25223c739d604145ad15911d48b",
+    "inference_uid": 1000,
+    "cpu_vision": true,
+    "context_per_chat": 262144,
+    "slots": 2,
+    "groups": 2,
+    "cache_mib": 16384,
+    "cached_histories": 8,
+    "kv": "int8",
+    "kv_resident": 32768,
+    "spec": 3,
+    "mtp": "Stock original-Qwen non-abliterated Strata Q2_0 experts/Q8 dense; not llama.cpp Q8 MTP artifact",
+    "solo_fixture_drafted": 56,
+    "solo_fixture_accepted": 46,
+    "no_additional_speed_multiplier_claim": true,
+    "pipeline_windows_requested": 2,
+    "pipeline_windows_effective": false,
+    "pipeline_windows_disabled_reason": "Pinned .46 disables this particular option with batch slots; actual two batch groups remain configured.",
+    "layer_split_requested": "auto",
+    "observed_split_initial": "17,20,33",
+    "observed_split_after_restart": "17,20,33",
+    "projection": "project per-layer scale1 layers4-44; default ON; actual on/off request telemetry passed",
+    "n_predict_default": -1,
+    "fixed_output_or_thinking_budget_added": false,
+    "rope_512k_enabled": false
+  },
+  "live_tests": {
+    "initial_smoke": {
+      "model": "qwen3.8-flash-next-unsloth-v31-iq4_xs-ple-q8_0-projection-2slot",
+      "uid": 1000,
+      "key_free_lan": true,
+      "loaded_runtime": "0.1.46",
+      "native_context_per_slot": 262144,
+      "serving_slots": 2,
+      "web_ui": true,
+      "text63_complete_sse": true,
+      "high2099_reasoning": true,
+      "loaded_projection_default_on_request_toggle_off": true,
+      "swapped_ordered_vision": true,
+      "concurrent_tags_complete_sse": true,
+      "observed_occupied_slots": 2,
+      "tools_format_only_no_execution": true,
+      "bad_host": 403,
+      "bad_origin": 403,
+      "same_origin": 200,
+      "cached_histories_reused": 8,
+      "n_predict_default": -1,
+      "scope": "Bounded short functional and ~4K-history cache fixtures; not full-context concurrency, broad quality, speed comparison or sustained stability qualification."
+    },
+    "post_restart_smoke": {
+      "model": "qwen3.8-flash-next-unsloth-v31-iq4_xs-ple-q8_0-projection-2slot",
+      "uid": 1000,
+      "key_free_lan": true,
+      "loaded_runtime": "0.1.46",
+      "native_context_per_slot": 262144,
+      "serving_slots": 2,
+      "web_ui": true,
+      "text63_complete_sse": true
+    },
+    "owned_stop_restart_new_token_verified": true,
+    "active_as_hive_miner": true,
+    "key_free_lan": true,
+    "uid": 1000,
+    "no_lease_or_journal": true,
+    "scope": "Bounded functional/8x4K-cache smoke, not full-context capacity/quality/speed/stability qualification."
+  },
+  "cache_fixture": {
+    "histories": 8,
+    "approx_tokens_each": 4096,
+    "all_reused": true,
+    "followups": [
+      {
+        "history": 7,
+        "reused": 4151
+      },
+      {
+        "history": 6,
+        "reused": 4151
+      },
+      {
+        "history": 5,
+        "reused": 4151
+      },
+      {
+        "history": 4,
+        "reused": 4151
+      },
+      {
+        "history": 3,
+        "reused": 4151
+      },
+      {
+        "history": 2,
+        "reused": 4151
+      },
+      {
+        "history": 1,
+        "reused": 4151
+      },
+      {
+        "history": 0,
+        "reused": 4151
+      }
+    ],
+    "not_full_context_histories": true
+  },
+  "actual_policy_verification": {
+    "flags": {
+      "--max-context": "262144",
+      "--batch": "2",
+      "--batch-groups": "2",
+      "--kv": "int8",
+      "--kv-resident": "32768",
+      "--spec": "3",
+      "--conversation-cache-mib": "16384",
+      "--conversation-cache-slots": "8",
+      "--ple-io": "mmap",
+      "--layer-split": "auto",
+      "--cvec-mode": "project",
+      "--cvec-dir": "per-layer"
+    },
+    "all_family_uid1000": true,
+    "owned_hive_ancestry": true,
+    "active_bundle_matches_source": true,
+    "cloud_bytes_unchanged": true,
+    "admission_active": true,
+    "no_lease_journal_stop_marker": true,
+    "projection_default_on": true,
+    "cpu_vision": true,
+    "key_free_health": true
+  },
+  "handoff": {
+    "prior_model": "Swift 1.5 Uncensored Q8_K_XL",
+    "prior_server_uid": 0,
+    "prior_hive_ancestry_unproven": true,
+    "prior_manual_session_adopted": false,
+    "fresh_exact_operator_authorized_owner_stop_after_natural_request_completion": true,
+    "pidfd_signalling_only": true,
+    "only_known_idle_old_supervision_drained": true,
+    "no_renter_container_or_admission_service_stopped": true,
+    "cloud_rig_wallet_oc_bytes_unchanged": true,
+    "admission_kept_active": true,
+    "new_inference_unprivileged": true
+  },
+  "verification": {
+    "python_tests": 507,
+    "python_skipped": 4,
+    "shell_suites_passed": 8,
+    "full_model_hashes_before_live": true,
+    "full_model_hashes_before_each_spawn": true,
+    "owned_hive_stop_restart_new_token_and_process": true,
+    "new_profile_stop_cli_unit_guards_passed": true,
+    "no_gpu_kernel_fault_observed": true
+  },
+  "observed_resources": {
+    "time": "2026-11-07T01:23:41.408212+01:00",
+    "gpus": [
+      [
+        0.0,
+        23744.0,
+        384.0,
+        57.0,
+        300.0
+      ],
+      [
+        1.0,
+        8452.0,
+        15676.0,
+        58.0,
+        300.0
+      ],
+      [
+        2.0,
+        21972.0,
+        2156.0,
+        56.0,
+        300.0
+      ],
+      [
+        3.0,
+        22918.0,
+        1207.0,
+        60.0,
+        280.0
+      ]
+    ],
+    "mem_available_kib": 49320024,
+    "scope": "One post-restart observation, not peak/full-context capacity evidence."
+  },
+  "limitations": [
+    "Short functional/ordered vision/complete SSE/tools-format/projection/cache probes only; no actual external tool execution.",
+    "No matched speed A/B, broad quality/refusal or published-quant benchmark equivalence.",
+    "No two-full262K concurrency, eight-full-context cache, very-long-output or sustained stability qualification.",
+    "Tight first-GPU free VRAM observed initially (366 MiB); configured native context is not full-workload headroom proof."
+  ],
+  "final": {
+    "active_as_hive_miner": true,
+    "selection": "profiles/unsloth-v31-iq4xs-q8-cvec-2slot-v0146",
+    "url": "http://192.168.1.69:8080/",
+    "api_key_required": false,
+    "uid": 1000,
+    "lease": false,
+    "switch_journal": false,
+    "stop_marker": false,
+    "pending_controller_test_switch_reset_reboot": false,
+    "hardware_driver_kernel_cuda_power_unlock_changes": [],
+    "tensorsharp_or_512k_retry": false
+  },
+  "private_evidence": "/var/lib/localllm-strata/unsloth-v31-iq4xs-activation-20261106/ (task namespace inherited preparation date; actual native logs November7)."
+}

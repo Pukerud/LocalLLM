@@ -40,6 +40,7 @@ import deepseek41_profile as deepseek_profile
 import heretic_profile
 import sc117_q8_2slot_profile as sc117_two
 import ple_q8_profile
+import unsloth_v31_profile as v31
 
 SOURCE_COMMIT = '99f3dbd0b21d1401b3769e0c0d963913607f380b'
 MODEL_REVISION = 'ed59f92082b1e93c0e96d60a8b11aab089b52f09'
@@ -191,6 +192,10 @@ def _effective_host(profile, version, configured_host):
         if requested not in (None, '127.0.0.1', '0.0.0.0'):
             raise SafetyError('Pinned profile binding must be loopback or explicit trusted-LAN 0.0.0.0')
         return requested or configured_host
+    if profile == v31.PROFILE:
+        if requested not in (None, '0.0.0.0'):
+            raise SafetyError('V3.1 trial binding is fixed to trusted-LAN 0.0.0.0')
+        return '0.0.0.0'
     if profile in (sc117_profile.PROFILE, sc117_two.PROFILE):
         if requested not in (None, sc117_profile.TRIAL_BIND_HOST):
             raise SafetyError(f'SC117 trial binding is fixed to trusted-LAN {sc117_profile.TRIAL_BIND_HOST}')
@@ -231,6 +236,10 @@ def ready_q4ks_v0146(root):
 
 
 def ready_runtime(profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, ple_q8=False):
+    if profile == v31.PROFILE:
+        if ple_q8 or runtime != v31.VERSION or (parallel, batch_groups) != (2, 2):
+            raise SafetyError('V3.1 requires explicit .46, two slots/two groups, and inherent Q8/projection')
+        return v31.ready(data_root(), strata_state())
     if profile == sc117_two.PROFILE:
         if ple_q8 or runtime != sc117_two.VERSION or (parallel, batch_groups) != (2, 2):
             raise SafetyError('SC117 two-slot preset requires explicit .46, two slots/two groups, and its own profile')
@@ -751,7 +760,7 @@ def guard_during_run(state):
                  state.get('runtime_version') == deepseek_profile.VERSION) or
                 (state.get('profile') == heretic_profile.PROFILE and
                  state.get('runtime_version') == heretic_profile.VERSION) or
-                state.get('profile') == sc117_two.PROFILE):
+                state.get('profile') in (sc117_two.PROFILE, v31.PROFILE)):
             if state.get('hive_launch_id_sha256'):
                 if host_lifecycle.read_lease() is not None:
                     raise SafetyError('Hive Q4 .41 session conflicts with a HostLLM pause lease')
@@ -1020,14 +1029,14 @@ def startup_config(cfg, version, profile=None):
     """Load retained Q4/SC117 candidate models before opening the API."""
     effective = dict(cfg)
     if (version == q4ks_v01441.RUNTIME_VERSION or
-            (version in runtimes.PROFILE_BOUND_VERSIONS and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, heretic_profile.PROFILE, sc117_two.PROFILE))):
+            (version in runtimes.PROFILE_BOUND_VERSIONS and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, heretic_profile.PROFILE, sc117_two.PROFILE, v31.PROFILE))):
         effective.update(lazy_load=False, idle_unload_s=0)
     return effective
 
 
 def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hosting_lock=None, ple_q8=False):
     api_key = consume_api_key()
-    if os.geteuid() == 0 and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE, heretic_profile.PROFILE, sc117_two.PROFILE):
+    if os.geteuid() == 0 and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE, heretic_profile.PROFILE, sc117_two.PROFILE, v31.PROFILE):
         raise SafetyError('This Strata profile must start as the normal operator; use sudo only for identity-bound administration')
     inherited_fd = host_lifecycle.inherited_launch_reservation_fd()
     requested_lease_id = os.environ.get('HOSTLLM_LAUNCH_LEASE_ID')
@@ -1040,7 +1049,10 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
             raise SafetyError('HostLLM launch lease changed before model startup')
     source, config_path, cfg, version = ready_runtime(
         profile, runtime, parallel, batch_groups, **({'ple_q8': True} if ple_q8 else {}))
-    if ple_q8 or profile == sc117_two.PROFILE:
+    if profile == v31.PROFILE:
+        import stage_unsloth_v31
+        stage_unsloth_v31.check(data_root(), full=True, pristine_state=False)
+    elif ple_q8 or profile == sc117_two.PROFILE:
         ple_q8_profile.ready_asset(data_root(), full=True)  # full data pin before any model/GPU process is spawned
     cfg = startup_config(cfg, version, profile)
     if cfg.get('api_key'):
@@ -1056,6 +1068,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     port = int(os.environ.get('STRATA_PORT', default_port))
     effective_host = _effective_host(profile, version, cfg.get('host', '0.0.0.0'))
     sc117_authorization = None
+    if profile == v31.PROFILE:
+        sc117_authorization = v31.authorize_start(data_root(), cfg, host=effective_host, port=port, state=strata_state())
     if profile == sc117_two.PROFILE:
         sc117_authorization = sc117_two.authorize_start(data_root(), cfg, host=effective_host, port=port, state=strata_state())
     if profile == sc117_profile.PROFILE:
@@ -1068,7 +1082,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     hive_launch_id = None
     if ((profile == ORCA_Q4KS_PROFILE and version in ('0.1.41', q4ks_v01441.RUNTIME_VERSION,
                                                      *runtimes.PROFILE_BOUND_VERSIONS)) or
-            profile in (deepseek_profile.PROFILE, heretic_profile.PROFILE, sc117_two.PROFILE)):
+            profile in (deepseek_profile.PROFILE, heretic_profile.PROFILE, sc117_two.PROFILE, v31.PROFILE)):
         authorization = require_q4ks_candidate_authorization(
             port, requested_lease_id, host_launch_reserved=inherited_fd is not None)
         if authorization['authorization'] == 'hostllm':
@@ -1076,7 +1090,9 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         else:
             hive_launch_id = authorization['launch_id']
     launch_gate(port)
-    if profile == sc117_two.PROFILE:
+    if profile == v31.PROFILE:
+        v31.seed_profile(data_root(), strata_state())
+    elif profile == sc117_two.PROFILE:
         sc117_two.seed_profile(data_root(), strata_state())
     elif ple_q8:
         ple_q8_profile.seed_profile(data_root(), profile, strata_state())
@@ -1101,6 +1117,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         cfg['aliases'] = ['qwen38-iq3s-sc117-abliterated', sc117_profile.PROFILE]
     elif profile == sc117_two.PROFILE:
         cfg['model_name'] = sc117_two.MODEL_ID
+    elif profile == v31.PROFILE:
+        cfg['model_name'] = v31.MODEL_ID
     elif profile == heretic_profile.PROFILE:
         cfg['model_name'] = heretic_profile.A.MODEL_ID
         cfg['aliases'] = [heretic_profile.PROFILE, 'heretic-re']
@@ -1116,6 +1134,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
                        if profile == deepseek_profile.PROFILE else
                        {'temperature': 1.0, 'top_p': 0.95, 'top_k': 20,
                         'experimental_speed_projection': False})
+    if profile == v31.PROFILE:
+        cfg['sampling']['experimental_speed_projection'] = True
     if api_key:
         cfg['api_key'] = api_key
     run_config = state_root / 'run-config.json'
@@ -1128,7 +1148,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     runtime_config_dir = None
     runtime_config_dir_identity = None
     api_key = None
-    if (profile in (deepseek_profile.PROFILE, heretic_profile.PROFILE, sc117_two.PROFILE) or
+    if (profile in (deepseek_profile.PROFILE, heretic_profile.PROFILE, sc117_two.PROFILE, v31.PROFILE) or
             (profile == ORCA_Q4KS_PROFILE and version in (q4ks_v01441.RUNTIME_VERSION,
                                                        *runtimes.PROFILE_BOUND_VERSIONS))):
         env = _q4_v01441_launch_environment()
@@ -1142,6 +1162,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     else:
         env = dict(os.environ)
         env.update(runtimes.runtime_env(version, parallel))
+    if profile == v31.PROFILE:
+        env[v31.TRIAL_ENV] = '1'
     if sc117_authorization == 'trial' or profile == heretic_profile.PROFILE:
         cache_prefix = state_root / 'pycache'
         cache_prefix.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -1207,6 +1229,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         print(sc117_assets.MTP_SOURCE_NOTE)
     elif profile == sc117_two.PROFILE:
         print(sc117_two.READY)
+    elif profile == v31.PROFILE:
+        print(v31.READY)
     elif profile == heretic_profile.PROFILE:
         print(heretic_profile.READY + (ple_q8_profile.A.READY_SUFFIX if ple_q8 else ''))
         print('Heretic-only BF16 L0-gate compatibility engine; publisher gate bytes and shared SC117 .46 runtime unchanged.')
@@ -1247,7 +1271,7 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
                                           'runtime_config_dir_identity': runtime_config_dir_identity})
         raise
     identity = (capture_spawn_identity(child, python, server_args)
-                if ple_q8 or profile == sc117_two.PROFILE else proc(child.pid))
+                if ple_q8 or profile in (sc117_two.PROFILE, v31.PROFILE) else proc(child.pid))
     if not identity or identity['exe'] != str(python.resolve()) or identity['sid'] != child.pid:
         # Popen's exec handshake plus retained child identity, never a guessed global process name.
         child.terminate()
@@ -1283,6 +1307,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         state['ple_sha256'] = ple_q8_profile.A.SHA256
     if profile == sc117_two.PROFILE:
         state['sc117_q8_two_slot'] = True
+    if profile == v31.PROFILE:
+        state.update(unsloth_v31=True, ple_q8=True, ple_sha256=v31.A.ASSETS[-1][4])
     if runtime_config_dir is not None:
         state['runtime_config_dir'] = runtime_config_dir
         state['runtime_config_dir_identity'] = runtime_config_dir_identity
@@ -1386,7 +1412,7 @@ def main():
     modes.add_argument('--enable-q4ks141-vision', action='store_true')
     modes.add_argument('--rollback-q4ks141-vision', action='store_true')
     modes.add_argument('--select-runtime', choices=runtimes.GENERIC_VERSIONS)
-    ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE, ORCA_Q4KS_PROFILE, deepseek_profile.PROFILE, sc117_two.PROFILE], default=None)
+    ap.add_argument('--profile', choices=['iq3_s', ORCA_PROFILE, ORCA_Q4KS_PROFILE, deepseek_profile.PROFILE, sc117_two.PROFILE, v31.PROFILE], default=None)
     ap.add_argument('--ple-q8', action='store_true', help='Opt-in original-Qwen Q8_0 PLE with separate state/cache; no quality claim')
     ap.add_argument('--runtime', choices=['auto', *runtimes.VERSIONS, q4ks_v01441.RUNTIME_VERSION, deepseek_profile.VERSION], default=os.environ.get('STRATA_RUNTIME', 'auto'))
     ap.add_argument('--parallel', type=int, choices=[1, 2], default=os.environ.get('STRATA_PARALLEL', '1'))
@@ -1394,10 +1420,14 @@ def main():
     a = ap.parse_args()
     profile = a.profile or 'iq3_s'
     q4_mutation = not (a.stop or a.status or a.check_ready or a.select_runtime)
-    if os.geteuid() == 0 and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE, heretic_profile.PROFILE, sc117_two.PROFILE) and q4_mutation:
+    if os.geteuid() == 0 and profile in (ORCA_Q4KS_PROFILE, sc117_profile.PROFILE, deepseek_profile.PROFILE, heretic_profile.PROFILE, sc117_two.PROFILE, v31.PROFILE) and q4_mutation:
         print('BLOCKED: this profile must start/configure as the normal operator; use sudo only for identity-bound administration.', file=sys.stderr)
         return 1
     try:
+        if profile == v31.PROFILE:
+            if not (a.quickstart or a.stop or a.status or a.check_ready) or a.ple_q8:
+                raise SafetyError('V3.1 permits explicit start/stop/status/readiness only; Q8/projection are inherent')
+            v31.require_state(strata_state())
         if profile == sc117_two.PROFILE:
             if not (a.quickstart or a.stop or a.status or a.check_ready) or a.ple_q8:
                 raise SafetyError('SC117 two-slot preset permits explicit start/stop/status/readiness only; Q8 is inherent')
@@ -1457,6 +1487,9 @@ def main():
             elif profile == sc117_two.PROFILE:
                 sc117_two.validate_config(data_root(), strata_state(), cfg)
                 print(sc117_two.READY)
+            elif profile == v31.PROFILE:
+                v31.validate_config(data_root(), cfg)
+                print(v31.READY)
             elif profile == heretic_profile.PROFILE:
                 print(heretic_profile.READY + (ple_q8_profile.A.READY_SUFFIX if a.ple_q8 else ''))
             elif profile == deepseek_profile.PROFILE:
@@ -1578,12 +1611,16 @@ def main():
             with (root / 'lifecycle.lock').open('a') as lock:
                 state = acquire_action_lock(lock, stopping=a.stop)
                 if a.stop:
-                    if state and bool(state.get('ple_q8')) != (a.ple_q8 or profile == sc117_two.PROFILE) and family(state):
+                    if state and bool(state.get('ple_q8')) != (a.ple_q8 or profile in (sc117_two.PROFILE, v31.PROFILE)) and family(state):
                         raise SafetyError('A different PLE variant is running; variant-specific stop refused')
                     if (profile == sc117_two.PROFILE and state and
                             (state.get('sc117_q8_two_slot') is not True or
                              (state.get('parallel'), state.get('batch_groups')) != (2, 2)) and family(state)):
                         raise SafetyError('SC117 two-slot state marker/counts differ; variant-specific stop refused')
+                    if (profile == v31.PROFILE and state and
+                            (state.get('unsloth_v31') is not True or state.get('ple_sha256') != v31.A.ASSETS[-1][4] or
+                             (state.get('parallel'), state.get('batch_groups')) != (2, 2)) and family(state)):
+                        raise SafetyError('V3.1 marker/Q8/counts differ; variant-specific stop refused')
                     if a.profile and state and state.get('profile', 'iq3_s') != profile and family(state):
                         raise SafetyError('A different Strata profile is running; profile-specific stop refused')
                     explicit_runtime = any(x == '--runtime' or x.startswith('--runtime=') for x in sys.argv[1:])

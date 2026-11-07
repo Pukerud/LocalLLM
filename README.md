@@ -1,8 +1,12 @@
-# LocalLLM — Swift and SC117
+# LocalLLM — Swift, SC117 and Unsloth V3.1
 
-HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default and the actually observed current server.** SC117 native-262K two-user **[18]** remains retained.
+HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default. Unsloth V3.1 IQ4_XS is now ACTIVE as Hive [21]** after explicit operator approval. Swift and SC117 native-262K two-user **[18]** remain retained.
 
-## Latest preparation — 2026-11-06, Swift left running
+## Latest activation — 2026-11-07, IQ4_XS Hive [21] ACTIVE
+
+[Unsloth V3.1 IQ4_XS active trial](UNSLOTH_V31_IQ4XS.md): real key-free LAN text/thinking/ordered vision, projection on/off telemetry, two occupied chat slots/complete SSE, tool-format-only, Host/Origin guards and **8/8 ~4K cache histories** passed. Actual owned Hive stop/restart/new-token verification passed, and **the new model was left running as the miner**, UID1000, native262144/2slots/2groups/16GiB/eight histories, CPU vision, Q8 PLE and projection on. No full-context/quality/speed/stability qualification. Swift's exact current owner session was explicitly stopped after requests drained, not adopted as Hive-owned. Admission/cloud settings retained; no lease/journal/stop marker or pending controller/reboot. See [sanitized results](results/unsloth-v31-iq4xs-activation-20261107.json).
+
+## Historical preparation — 2026-11-06, before later switch approval
 
 [Unsloth V3.1 **UD-IQ4_XS** offline preparation](UNSLOTH_V31_IQ4XS_PREP.md): exact pinned main shards, new Q8 PLE, original-Qwen refusal projection, CPU BF16 vision, supported stock Strata MTP and an **inactive native262K / 2-slot / 8-history** configuration. **Await separate explicit continue before stopping/switching the current LLM, loading/testing the candidate or publishing a serving profile.** Offline checks are not GPU fit/quality/speed qualification. Q4's engram-packaging update was corrected before any Q4 download; IQ4_XS has an explicit “Better UD 3.1 quants” weight-file commit.
 
@@ -24,8 +28,9 @@ See **[the full checkpoint](TENSORSHARP_SWIFT_20261106.md)** and [sanitized resu
 |---:|---:|---|
 | **1** | **12** | Swift 1.5 Uncensored **Q8_K_XL**, existing pinned llama.cpp; BF16 vision, native MTP n3, xhigh, two native-262K slots |
 | **7** | **18** | SC117 abliterated IQ3_S with **Q8_0 PLE**, Strata **.46**; two pipelined slots/groups, 16 GiB/eight histories, CPU vision; unqualified trial |
+| — | **21** | **ACTIVE** Unsloth V3.1 **IQ4_XS**, Q8 PLE / original-Qwen projection ON, .46 / CPU vision / stock MTP; two native262K chats / 16 GiB / eight histories; bounded functional trial |
 
-**[9]** owned stop, **[10]** update, **[11]** exit. Former **[2–6], [8], [13–17] and [19]** are gone; their numbers were not reused. The low-level Hive selector retains **[1] Swift / [8] SC117 two-user** only.
+**[9]** owned stop, **[10]** update, **[11]** exit. Former **[2–6], [8], [13–17] and [19]** are gone; their numbers were not reused. The low-level Hive selector has **[1] Swift / [8] SC117 two-user / [9] Unsloth V3.1 IQ4_XS**. High-level [9] uses the verified Hive supervisor to stop the active V3.1 profile.
 
 Hauhau, Heretic and the original one-slot SC117 IQ4_NL/Q8 routes are retired. Orca/DeepSeek retirement also remains in force. Historical source, wrappers and reports remain audit evidence where useful; they are not current serving instructions or permission to redownload retired models.
 

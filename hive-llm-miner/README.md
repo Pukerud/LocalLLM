@@ -1,8 +1,8 @@
 # HiveOS LocalLLM custom miner
 
-Atomic next-start selection and identity-bound supervision for the retained **Swift / SC117 two-user** models. Swift remains the installation default.
+Atomic next-start selection and identity-bound supervision for **Swift / SC117 two-user / Unsloth V3.1 IQ4_XS**. Swift remains the installation default. **IQ4_XS is ACTIVE as Hive[21]** after explicit switch/testing approval; see [actual tests and limitations](../UNSLOTH_V31_IQ4XS.md).
 
-**2026-11-06 completed recovery:** after the operator’s manual restart, all four original GPUs recovered and **native262K [18] is ACTIVE again**. Its unchanged .46 two-slot policy and UID1000 key-free LAN text/vision/stream/Host-Origin checks passed. Only the exact task fault lease was released after fresh checks; existing owned startup was observed without duplication. OctaSpace stayed active; no renter/admission override or cloud rewrite. No lease/journal/test/controller/reboot pending. See [the report](../TENSORSHARP_SWIFT_20261106.md). TensorSharp remains disabled; do not replay benchmarks or retry it.
+**Historical 2026-11-06 recovery, before later model selection:** after the operator’s manual restart, all four original GPUs recovered and **native262K [18] is ACTIVE again**. Its unchanged .46 two-slot policy and UID1000 key-free LAN text/vision/stream/Host-Origin checks passed. Only the exact task fault lease was released after fresh checks; existing owned startup was observed without duplication. OctaSpace stayed active; no renter/admission override or cloud rewrite. No lease/journal/test/controller/reboot pending. See [the report](../TENSORSHARP_SWIFT_20261106.md). TensorSharp remains disabled; do not replay benchmarks or retry it.
 
 ## Current choices
 
@@ -10,8 +10,9 @@ Atomic next-start selection and identity-bound supervision for the retained **Sw
 |---:|---:|---:|---|
 | 1 | 12 | 1 | `swift15u-q8` — original llama.cpp, BF16 vision, MTP n3, two native-262K slots |
 | 7 | 18 | 8 | `iq3_s-sc117-abliterated-ple-q8-2slot-v0146` — .46, two pipelined slots/groups, 16 GiB/eight histories, CPU vision, native262K |
+| — | **21** | **9** | **ACTIVE** `unsloth-v31-iq4xs-q8-cvec-2slot-v0146` — .46, Q8 PLE / projection ON, CPU vision/MTP, two native262K slots / eight histories; bounded functional trial |
 
-HostLLM **[8]/[19] TensorSharp** are disabled information entries, **not a runnable Hive profile**. Former high-level [2–6]/[13–17] and low-level Hauhau/Heretic/single-slot SC117 targets are rejected. Historical source wrappers are audit evidence, not supported installed choices.
+Former HostLLM **[8]/[19] TensorSharp** entries and unused software are retired. High-level[9] stops the active verified V3.1 Hive supervisor, not a guessed launch token. Former high-level [2–6]/[13–17] and low-level Hauhau/Heretic/single-slot SC117 targets are rejected. Historical source wrappers are audit evidence, not supported installed choices.
 
 ```bash
 cd /home/user/LocalLLM

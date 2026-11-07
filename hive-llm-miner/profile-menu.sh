@@ -9,7 +9,7 @@ CURRENT_LINK="$CUSTOM_DIR/current"
 LOCK_FILE='/run/llm-hosting-profile-menu.lock'
 LLM_ROOT='/home/user/LocalLLM'
 PORTS=(8080 18080)
-PROFILES=(swift15u-q8 iq3_s-sc117-abliterated-ple-q8-2slot-v0146)
+PROFILES=(swift15u-q8 iq3_s-sc117-abliterated-ple-q8-2slot-v0146 unsloth-v31-iq4xs-q8-cvec-2slot-v0146)
 say() { printf '[llm-hosting-profile] %s\n' "$*"; }
 fail() { say "ERROR: $*" >&2; exit 1; }
 secure_root_dir() {
@@ -32,6 +32,7 @@ profile_label() {
     case "$1" in
         swift15u-q8) printf '%s' 'Swift 1.5 Uncensored Q8_K_XL — DEFAULT | llama.cpp | BF16 vision | native MTP | 2 native-262K slots' ;;
         iq3_s-sc117-abliterated-ple-q8-2slot-v0146) printf '%s' 'SC117 Q8 two-user — Strata .46 | 2 pipelined slots | 16 GiB / 8 histories | CPU vision | solo MTP | unqualified' ;;
+        unsloth-v31-iq4xs-q8-cvec-2slot-v0146) printf '%s' 'Unsloth V3.1 IQ4_XS — Q8 PLE / projection | Strata .46 | 2 slots / 8 histories | CPU vision | trial' ;;
         *) return 1 ;;
     esac
 }
@@ -40,7 +41,7 @@ read_current_profile() {
     [[ -L "$CURRENT_LINK" ]] || return 1
     target="$(readlink -- "$CURRENT_LINK")"
     case "$target" in
-        profiles/swift15u-q8|profiles/iq3_s-sc117-abliterated-ple-q8-2slot-v0146) printf '%s' "${target#profiles/}" ;;
+        profiles/swift15u-q8|profiles/iq3_s-sc117-abliterated-ple-q8-2slot-v0146|profiles/unsloth-v31-iq4xs-q8-cvec-2slot-v0146) printf '%s' "${target#profiles/}" ;;
         *) return 1 ;;
     esac
 }
@@ -64,6 +65,7 @@ show_profiles() {
     printf 'Current profile: %s\n' "$(read_current_profile)"
     printf '  [1] %s\n' "$(profile_label swift15u-q8)"
     printf '  [8] %s\n' "$(profile_label iq3_s-sc117-abliterated-ple-q8-2slot-v0146)"
+    printf '  [9] %s\n' "$(profile_label unsloth-v31-iq4xs-q8-cvec-2slot-v0146)"
 }
 check_selected_profile_ready() {
     local effective="$1"
@@ -106,6 +108,7 @@ case "${1:-}" in
         case "${choice//[[:space:]]/}" in
             1|swift15u-q8) target=swift15u-q8 ;;
             8|iq3_s-sc117-abliterated-ple-q8-2slot-v0146) target=iq3_s-sc117-abliterated-ple-q8-2slot-v0146 ;;
+            9|unsloth-v31-iq4xs-q8-cvec-2slot-v0146) target=unsloth-v31-iq4xs-q8-cvec-2slot-v0146 ;;
             q|Q|'') exit 0 ;;
             *) fail 'invalid/retired selection; no files changed' ;;
         esac ;;

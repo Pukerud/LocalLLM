@@ -19,6 +19,7 @@ import hosting_lifecycle as hosting
 from engine_safety import SafetyError, command_output, docker_empty, proc, same_process
 import ple_q8_assets
 import sc117_q8_2slot_profile as sc117_two
+import unsloth_v31_profile as v31
 
 SCRIPT_ROOT = Path(__file__).resolve().parent
 WRAPPER = Path('/hive/miners/custom/llm-hosting/h-run.sh')
@@ -26,7 +27,7 @@ CURRENT = WRAPPER.parent / 'current'
 CUR_MINER = Path('/run/hive/cur_miner')
 JOURNAL = hosting.ROOT / 'hive-profile-switch.json'
 HERETIC_PROFILE = 'swift15-heretic-re'
-PROFILES = ('swift15u-q8', sc117_two.HIVE_PROFILE)
+PROFILES = ('swift15u-q8', sc117_two.HIVE_PROFILE, v31.HIVE_PROFILE)
 DEEPSEEK_PROFILE = 'deepseek41-abiray-iq2_xxs'  # retained historical recovery/readiness implementation only
 SC117_V0146_PROFILE = 'iq3_s-sc117-abliterated-v0146'
 SC117_V0146_READINESS = (
@@ -296,6 +297,27 @@ def preflight_profile(profile):
              'PATH=/usr/bin:/bin','PYTHONDONTWRITEBYTECODE=1','QWEN38_OWNER_USER=user',
              '/usr/bin/python3','-c','import sys;sys.path.insert(0,"/home/user/LocalLLM");import swift15_assets as A;A.ready();print("Swift shared immutable data metadata ready; no inference")'])
         return
+    if profile == v31.HIVE_PROFILE:
+        state = '/home/user/.local/state/locallm-strata/' + v31.STATE_NAME
+        runuser = shutil.which('runuser', path='/usr/sbin:/usr/bin:/sbin:/bin')
+        if runuser is None:
+            raise SafetyError('runuser unavailable; V3.1 readiness failed before any pause')
+        command = [runuser, '-u', 'user', '--', '/usr/bin/env', '-i',
+                   'HOME=/home/user', 'USER=user', 'LOGNAME=user',
+                   'PATH=/usr/local/cuda-12.9/bin:/usr/local/bin:/usr/bin:/bin',
+                   'PYTHONDONTWRITEBYTECODE=1', 'SETUPTOOLS_USE_DISTUTILS=stdlib',
+                   f'PYTHONPYCACHEPREFIX={state}/pycache', f'STRATA_STATE_ROOT={state}',
+                   'STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata',
+                   v31.TRIAL_ENV + '=1', 'STRATA_RUNTIME=0.1.46',
+                   'STRATA_HOST=0.0.0.0', 'STRATA_PORT=8080', 'STRATA_PARALLEL=2', 'STRATA_BATCH_GROUPS=2',
+                   '/home/user/LocalLLM/v1strata.sh', '--check-ready', '--profile', v31.PROFILE,
+                   '--runtime', '0.1.46', '--parallel', '2', '--batch-groups', '2']
+        result = subprocess.run(command, capture_output=True, text=True, timeout=600)
+        lines = [line for line in result.stdout.splitlines() if line.startswith(('READY CONFIG:', 'TRIAL CONFIG:'))]
+        if result.returncode or lines != [v31.READY]:
+            raise SafetyError('V3.1 exact native262K/Q8/projection/2-slot readiness failed before any pause')
+        say('V3.1 IQ4_XS exact isolated readiness passed; bounded functional trial, not qualification.')
+        return
     if profile == sc117_two.HIVE_PROFILE:
         state = '/home/user/.local/state/locallm-strata/' + sc117_two.STATE_NAME
         runuser = shutil.which('runuser', path='/usr/sbin:/usr/bin:/sbin:/bin')
@@ -474,11 +496,31 @@ def switch_profile(profile):
     say(f'Selected {profile}. Previous miner/OctaSpace running state restored; no manual stop race.')
 
 
+def stop_owned_v31():
+    """Explicit menu stop of the verified Hive trial, never a manual/replacement session."""
+    if JOURNAL.exists() or JOURNAL.is_symlink() or os.readlink(CURRENT) != 'profiles/' + v31.HIVE_PROFILE:
+        raise SafetyError('V3.1 owned-stop selection/journal mismatch; nothing stopped')
+    wrappers = inspect_owned_workload()
+    if not wrappers:
+        say('No Hive-owned V3.1 supervisor to stop.')
+        return
+    records = capture_owned_teardown(wrappers, [])
+    docker_empty()
+    run([hosting.MINER, 'stop', '60'], timeout=90)
+    hosting.STOP.write_text('1\n')
+    wait_owned_teardown(records, timeout=120)
+    hosting.wait_idle(timeout=90)
+    if owned_wrappers() or llm_processes():
+        raise SafetyError('Owned stop did not fully drain; no replacement was signalled')
+    say('Owned V3.1 Hive miner stopped; admission and cloud configuration unchanged.')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--profile', choices=PROFILES)
     group.add_argument('--recover', action='store_true')
+    group.add_argument('--stop-owned-v31', action='store_true')
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error('run through HostLLM or sudo')
@@ -487,7 +529,9 @@ def main():
     signal.signal(signal.SIGTERM, interrupted)
     try:
         with hosting.launch_reservation():
-            if args.recover:
+            if args.stop_owned_v31:
+                stop_owned_v31()
+            elif args.recover:
                 restore(read_journal())
                 say('Previous miner/OctaSpace state restored.')
             else:

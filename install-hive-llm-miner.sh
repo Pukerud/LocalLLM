@@ -18,7 +18,7 @@ CUSTOM_DIR='/hive/miners/custom/llm-hosting'
 RIG_CONF='/hive-config/rig.conf'
 WALLET_CONF='/hive-config/wallet.conf'
 PROFILE_LOCK_FILE='/run/llm-hosting-profile-menu.lock'
-PROFILES=(swift15u-q8 iq3_s-sc117-abliterated-ple-q8-2slot-v0146)
+PROFILES=(swift15u-q8 iq3_s-sc117-abliterated-ple-q8-2slot-v0146 unsloth-v31-iq4xs-q8-cvec-2slot-v0146)
 FILES=(h-manifest.conf h-config.sh h-run.sh h-stats.sh llm-hosting.conf)
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 secure_dir() {
@@ -63,7 +63,7 @@ if [[ -e "$CUSTOM_DIR" ]];then
     secure_dir "$CUSTOM_DIR" || fail 'unsafe installed custom directory'
     if [[ -L "$CUSTOM_DIR/current" ]];then
         target="$(readlink "$CUSTOM_DIR/current")"
-        case "$target" in profiles/swift15u-q8|profiles/iq3_s-sc117-abliterated-ple-q8-2slot-v0146)initial_profile="${target#profiles/}";;*)fail 'retired/unknown current pointer; no automatic migration';;esac
+        case "$target" in profiles/swift15u-q8|profiles/iq3_s-sc117-abliterated-ple-q8-2slot-v0146|profiles/unsloth-v31-iq4xs-q8-cvec-2slot-v0146)initial_profile="${target#profiles/}";;*)fail 'retired/unknown current pointer; no automatic migration';;esac
     elif [[ -e "$CUSTOM_DIR/current" || -e "$CUSTOM_DIR/llm-hosting.conf" ]];then
         fail 'legacy/unknown layout requires explicit audit; not guessed or overwritten'
     fi

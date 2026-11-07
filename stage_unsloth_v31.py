@@ -245,7 +245,7 @@ def prepare(root):
     return check(root)
 
 
-def check(root, full=False):
+def check(root, full=False, *, pristine_state=True):
     root = Path(root)
     folder = A.folder(root)
     d = json.loads(safe(folder / 'prepared.json').read_text())
@@ -284,7 +284,7 @@ def check(root, full=False):
     seed = d['fresh_adaptive_profile']
     if seed['bytes'] != A.ROUTING_SEED_SIZE or seed['sha256'] != A.ROUTING_SEED_SHA:
         raise SafetyError('Inactive fresh routing seed pin changed')
-    if {p.name for p in A.state(owner_home()).iterdir()} != {'expert-profile.bin'}:
+    if pristine_state and {p.name for p in A.state(owner_home()).iterdir()} != {'expert-profile.bin'}:
         raise SafetyError('Inactive state has unrecorded server/history/cache files; no adoption')
     want_command = [str(source / '.venv/bin/python'), str(source / 'tools/iq_pack.py'), '--gguf',
                     str(folder / A.ASSETS[0][2]), '--out', str(folder / 'native-pack'), '--compat-bf16']
@@ -293,7 +293,10 @@ def check(root, full=False):
                     'gguf_py_tree_sha256': A.GGUF_PY_TREE_SHA256, 'no_gpu_or_inference': True}
     if d['pack_request'] != want_request or json.loads((folder / 'pack-request.json').read_text()) != want_request:
         raise SafetyError('Inactive CPU pack provenance/command changed')
-    for row in [*d['dependencies'], *d['pack_files'], d['config'], d['fresh_adaptive_profile']]:
+    records = [*d['dependencies'], *d['pack_files'], d['config']]
+    if pristine_state:
+        records.append(d['fresh_adaptive_profile'])
+    for row in records:
         checked_record(row, full=True)
     F.validate_config(root, json.loads(Path(d['config']['path']).read_text()))
     return d

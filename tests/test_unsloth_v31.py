@@ -260,7 +260,7 @@ class InactiveProfile(unittest.TestCase):
 
     def test_no_start_authority_and_no_published_hive_profile(self):
         with patch.object(S, 'inspect_owned_workload') as inspect, patch.object(S, 'run') as run:
-            with self.assertRaisesRegex(SafetyError, 'OFFLINE ONLY'):
+            with self.assertRaisesRegex(SafetyError, 'unprivileged owner'):
                 F.authorize_start()
             with self.assertRaises(SafetyError):
                 S.switch_profile(A.PROFILE)
