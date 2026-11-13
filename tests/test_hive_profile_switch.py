@@ -59,6 +59,10 @@ class SwitchTransaction(unittest.TestCase):
   self.execute.side_effect=race;S.switch_profile(TARGET);self.assertTrue(self.miner);self.assertFalse(self.journal.exists());self.assertEqual(self.service,'active')
  def test_same_current_profile_needs_no_stop(self):
   S.switch_profile('swift15u-q8');self.execute.assert_not_called();self.assertFalse(self.journal.exists())
+ def test_same_current_profile_with_changed_selector_metadata_is_still_no_stop(self):
+  with mock.patch.object(S,'package_current',return_value=False):
+   S.switch_profile('swift15u-q8')
+  self.execute.assert_not_called();self.assertTrue(self.miner);self.assertFalse(self.journal.exists());self.assertFalse(self.stop.exists())
  def test_already_idle_miner_not_started(self):
   self.miner=False;S.switch_profile(TARGET);self.assertFalse(self.miner);self.assertNotIn((S.hosting.MINER,'start'),self.events);self.assertEqual(self.service,'active')
  def test_inactive_service_and_operator_stop_preserved(self):

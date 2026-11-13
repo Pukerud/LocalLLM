@@ -62,7 +62,7 @@ class Activation(unittest.TestCase):
         text=(ROOT/'strata_launcher.py').read_text()
         self.assertIn('stage_unsloth_v31.check(data_root(), full=True, pristine_state=False)',text)
         self.assertIn("cfg['sampling']['experimental_speed_projection'] = True",text)
-        self.assertIn('profile in (sc117_two.PROFILE, v31.PROFILE) else proc(child.pid)',text)
+        self.assertIn('profile in (sc117_two.PROFILE, v31.PROFILE, v3159.PROFILE) else proc(child.pid)',text)
         self.assertIn("state.update(unsloth_v31=True, ple_q8=True, ple_sha256=v31.A.ASSETS[-1][4])",text)
         self.assertIn(F.HIVE_PROFILE,S.PROFILES)
 
@@ -115,7 +115,10 @@ class Activation(unittest.TestCase):
 
     def test_hive_menu_new_number_and_no_retired_number_reuse(self):
         text=(ROOT/'HostLLM.sh').read_text()
-        self.assertIn('[21] Set next Hive miner - Unsloth V3.1 IQ4_XS',text)
+        rendered=subprocess.run([sys.executable,str(ROOT/'tests/menu_render_fixture.py')],capture_output=True,text=True)
+        self.assertEqual(rendered.returncode,0,rendered.stderr)
+        self.assertIn('[21] Unsloth V3.1 IQ4_XS',rendered.stdout)
+        self.assertIn('hostllm_menu.py',text)
         self.assertIn('21) set_next_hive_profile '+F.HIVE_PROFILE,text)
         for n in (2,3,4,5,6,8,13,14,15,16,17,19):self.assertNotRegex(text,rf'echo .*\[{n}\]')
         low=(ROOT/'hive-llm-miner/profile-menu.sh').read_text()

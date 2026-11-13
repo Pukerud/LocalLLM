@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 import stat
 import struct
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -187,8 +189,10 @@ class Contracts(unittest.TestCase):
             self.assertNotIn(row, text)
         self.assertNotIn('sc117_trial_command --stop --ple-q8', text)
         self.assertNotIn('heretic_profile_command --stop --ple-q8', text)
-        self.assertIn('[7] SC117 Q8_0 two-user', text)
-        self.assertIn('[18] Set next Hive miner - SC117 Q8_0 two-user', text)
+        result=subprocess.run([sys.executable,str(REPO/'tests/menu_render_fixture.py')],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('[7] SC117 Q8 PLE', result.stdout)
+        self.assertIn('[18] SC117 Q8 PLE', result.stdout)
         self.assertIn('--prepare-ple-q8', (REPO / 'v1strata.sh').read_text())
 
     def test_spawn_handoff_requires_complete_stable_owned_exec_and_never_accepts_replacement(self):

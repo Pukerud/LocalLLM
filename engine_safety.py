@@ -229,6 +229,7 @@ def active_engine():
                           base / 'sc117-iq3s-ple-q8-trial', base / 'swift15-heretic-re-ple-q8',
                           base / 'sc117-iq3s-ple-q8-2slot-trial',
                           base / 'unsloth-v31-iq4xs-q8-cvec-2slot-trial',
+                          base / 'unsloth-v31-iq4xs-q8-cvec-2slot-v0159-trial',
                           base / 'deepseek41-abiray'))
     for root in roots:
         s = root / 'server.json'

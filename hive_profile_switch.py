@@ -20,6 +20,7 @@ from engine_safety import SafetyError, command_output, docker_empty, proc, same_
 import ple_q8_assets
 import sc117_q8_2slot_profile as sc117_two
 import unsloth_v31_profile as v31
+import unsloth_v31_v0159_profile as v3159
 
 SCRIPT_ROOT = Path(__file__).resolve().parent
 WRAPPER = Path('/hive/miners/custom/llm-hosting/h-run.sh')
@@ -28,6 +29,7 @@ CUR_MINER = Path('/run/hive/cur_miner')
 JOURNAL = hosting.ROOT / 'hive-profile-switch.json'
 HERETIC_PROFILE = 'swift15-heretic-re'
 PROFILES = ('swift15u-q8', sc117_two.HIVE_PROFILE, v31.HIVE_PROFILE)
+PREPARED_PROFILES = (v3159.HIVE_PROFILE,)  # Published inactive only; never start/switch authority.
 DEEPSEEK_PROFILE = 'deepseek41-abiray-iq2_xxs'  # retained historical recovery/readiness implementation only
 SC117_V0146_PROFILE = 'iq3_s-sc117-abliterated-v0146'
 SC117_V0146_READINESS = (
@@ -288,8 +290,30 @@ def package_current(profile):
                filecmp.cmp(source / src, WRAPPER.parent / dst, shallow=False) for src, dst in files)
 
 
-def preflight_profile(profile):
+def preflight_profile(profile, *, offline=False):
     """Readiness only, before lifecycle mutation; never builds or runs inference."""
+    if profile == v3159.HIVE_PROFILE:
+        if not offline:
+            v3159.authorize_activation()
+        state = '/home/user/.local/state/locallm-strata/' + v3159.STATE_NAME
+        runuser = shutil.which('runuser', path='/usr/sbin:/usr/bin:/sbin:/bin')
+        if runuser is None:
+            raise SafetyError('runuser unavailable; .59 offline readiness refused')
+        args = [runuser, '-u', 'user', '--', '/usr/bin/env', '-i',
+                'HOME=/home/user', 'USER=user', 'LOGNAME=user', 'PATH=/usr/local/bin:/usr/bin:/bin',
+                'PYTHONDONTWRITEBYTECODE=1', 'SETUPTOOLS_USE_DISTUTILS=stdlib',
+                f'PYTHONPYCACHEPREFIX={state}/pycache', f'STRATA_STATE_ROOT={state}',
+                'STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata',
+                v3159.TRIAL_ENV + '=1', 'STRATA_RUNTIME=0.1.59', 'STRATA_PARALLEL=2', 'STRATA_BATCH_GROUPS=2',
+                'STRATA_HOST=0.0.0.0', 'STRATA_PORT=8080',
+                '/home/user/LocalLLM/v1strata.sh', '--check-ready', '--profile', v3159.PROFILE,
+                '--runtime', '0.1.59', '--parallel', '2', '--batch-groups', '2']
+        result = subprocess.run(args, capture_output=True, text=True, timeout=600)
+        lines = [line for line in result.stdout.splitlines() if line.startswith(('OFFLINE CONFIG:', 'READY CONFIG:', 'TRIAL CONFIG:'))]
+        if result.returncode or lines != [v3159.READY]:
+            raise SafetyError('Strata .59 exact OFFLINE-only readiness failed; no lifecycle action')
+        say('Strata .59 offline data/runtime/config checked; activation remains LOCKED; no GPU serving claim.')
+        return
     if profile == 'swift15u-q8':
         runuser=shutil.which('runuser',path='/usr/sbin:/usr/bin:/sbin:/bin')
         if not runuser:raise SafetyError('runuser unavailable for Swift data readiness')
@@ -431,7 +455,9 @@ def preflight_profile(profile):
 
 
 def switch_profile(profile):
-    if profile not in PROFILES:
+    if profile in PREPARED_PROFILES:
+        v3159.authorize_activation()  # Before ownership inspection, journal, service, stop marker or selection.
+    if profile not in PROFILES + PREPARED_PROFILES:
         raise SafetyError('Unknown or retired Hive profile; nothing was stopped')
     if JOURNAL.exists() or JOURNAL.is_symlink():
         raise SafetyError(f'An earlier switch needs recovery: {recovery_command()}')
@@ -439,8 +465,12 @@ def switch_profile(profile):
     wrappers = inspect_owned_workload(**inspection)
     fallback = verified_fallback_miner_jobs(hosting.gpu_jobs()) if inspection and not wrappers else []
     preflight_profile(profile)
-    if not fallback and os.readlink(CURRENT) == f'profiles/{profile}' and package_current(profile):
-        say(f'{profile} is already selected; no stop/reload is needed.')
+    if not fallback and os.readlink(CURRENT) == f'profiles/{profile}':
+        if package_current(profile):
+            say(f'{profile} is already selected; no stop/reload is needed.')
+        else:
+            say(f'{profile} is already selected; package/menu metadata differs, but the running server is left alone. '
+                'Use the no-stop inactive publisher for menu updates; active bundle changes need separate explicit maintenance.')
         return
     if hosting.STOP.is_symlink():
         raise SafetyError('Hive stop marker is symlinked; nothing was stopped')
@@ -496,9 +526,11 @@ def switch_profile(profile):
     say(f'Selected {profile}. Previous miner/OctaSpace running state restored; no manual stop race.')
 
 
-def stop_owned_v31():
-    """Explicit menu stop of the verified Hive trial, never a manual/replacement session."""
-    if JOURNAL.exists() or JOURNAL.is_symlink() or os.readlink(CURRENT) != 'profiles/' + v31.HIVE_PROFILE:
+def stop_owned_v31(profile=v31.HIVE_PROFILE):
+    """Explicit menu stop of an exact verified Hive V3.1 variant, never manual/replacement work."""
+    if profile not in (v31.HIVE_PROFILE, v3159.HIVE_PROFILE):
+        raise SafetyError('Unknown V3.1 owned-stop variant')
+    if JOURNAL.exists() or JOURNAL.is_symlink() or os.readlink(CURRENT) != 'profiles/' + profile:
         raise SafetyError('V3.1 owned-stop selection/journal mismatch; nothing stopped')
     wrappers = inspect_owned_workload()
     if not wrappers:
@@ -518,9 +550,10 @@ def stop_owned_v31():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--profile', choices=PROFILES)
+    group.add_argument('--profile', choices=PROFILES + PREPARED_PROFILES)
     group.add_argument('--recover', action='store_true')
     group.add_argument('--stop-owned-v31', action='store_true')
+    group.add_argument('--stop-owned-v3159', action='store_true')
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error('run through HostLLM or sudo')
@@ -528,9 +561,13 @@ def main():
         raise KeyboardInterrupt('profile switch interrupted')
     signal.signal(signal.SIGTERM, interrupted)
     try:
+        if args.profile in PREPARED_PROFILES:
+            v3159.authorize_activation()  # Even the lifecycle lock is untouched while preparation-only.
         with hosting.launch_reservation():
             if args.stop_owned_v31:
                 stop_owned_v31()
+            elif args.stop_owned_v3159:
+                stop_owned_v31(v3159.HIVE_PROFILE)
             elif args.recover:
                 restore(read_journal())
                 say('Previous miner/OctaSpace state restored.')

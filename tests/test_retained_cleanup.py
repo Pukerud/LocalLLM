@@ -7,10 +7,24 @@ from engine_safety import SafetyError
 ROOT=Path(__file__).resolve().parents[1]
 RETIRED=('hauhau-q8-fastmtp-q4kv-xhigh','swift15-heretic-re','iq3_s-sc117-abliterated','iq3_s-sc117-abliterated-v0146','swift15-heretic-re-ple-q8','iq3_s-sc117-abliterated-ple-q8-v0146')
 class Retained(unittest.TestCase):
+ def test_publisher_prepared_active_requires_live_preflight(self):
+  import install_retained_profiles as P
+  with patch.object(S,'preflight_profile',side_effect=SafetyError('LOCKED')) as preflight:
+   with self.assertRaisesRegex(SafetyError,'LOCKED'):P.validate_active_selection(S.v3159.HIVE_PROFILE)
+   preflight.assert_called_once_with(S.v3159.HIVE_PROFILE)
+  with patch.object(S,'preflight_profile') as preflight:
+   P.validate_active_selection(S.v3159.HIVE_PROFILE)
+   preflight.assert_called_once_with(S.v3159.HIVE_PROFILE)
+ def test_publisher_unknown_active_refuses_without_authorizing_or_touching_it(self):
+  import install_retained_profiles as P
+  with patch.object(S,'preflight_profile') as preflight:
+   with self.assertRaisesRegex(SafetyError,'retired/unknown'):P.validate_active_selection('unrecognized-profile')
+   preflight.assert_not_called()
  def test_removed_menu_numbers_are_absent(self):
-  text=(ROOT/'HostLLM.sh').read_text()
-  for n in (*range(2,7),8,*range(13,18),19):self.assertNotRegex(text,rf"echo .*\[{n}\]")
-  for n in (1,7,9,10,11,12,18):self.assertIn(f'[{n}]',text)
+  result=subprocess.run([sys.executable,str(ROOT/'tests/menu_render_fixture.py')],capture_output=True,text=True)
+  self.assertEqual(result.returncode,0,result.stderr);text=result.stdout
+  for n in (*range(2,7),8,*range(13,18),19):self.assertNotIn(f'[{n}]',text)
+  for n in (1,7,9,10,11,12,18,21,22):self.assertIn(f'[{n}]',text)
  def test_retired_switches_fail_before_inspection_or_action(self):
   for name in RETIRED:
    with self.subTest(name=name),patch.object(S,'inspect_owned_workload') as inspect,patch.object(S,'run') as run:
@@ -54,6 +68,6 @@ class Retained(unittest.TestCase):
   self.assertIn('TensorSharp.Server.Host', (ROOT/'hive_profile_switch.py').read_text())
  def test_removed_tensor_choices_never_launch_pause_or_switch(self):
   for choice in ('8','19'):
-   command='source "$1/HostLLM.sh"; detect_engine(){ echo none; };show_workload_status(){ :; };host_gpu_summary(){ :; };run_selected(){ echo UNSAFE; };set_next_hive_profile(){ echo UNSAFE; };main < <(printf "%s\\n11\\n" "$2")'
+   command='source "$1/HostLLM.sh"; detect_engine(){ echo none; };show_menu(){ :; };run_selected(){ echo UNSAFE; };set_next_hive_profile(){ echo UNSAFE; };main < <(printf "%s\\n11\\n" "$2")'
    p=subprocess.run(['bash','-c',command,'test',str(ROOT),choice],text=True,capture_output=True,timeout=5)
    self.assertEqual(p.returncode,0,p.stderr);self.assertNotIn('TensorSharp',p.stdout);self.assertNotIn('UNSAFE',p.stdout)

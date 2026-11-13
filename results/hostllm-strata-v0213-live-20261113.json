@@ -1,0 +1,134 @@
+{
+  "schema": 1,
+  "phase": "LIVE-VALIDATED-BOUNDED-TRIAL-LEFT-ACTIVE-BY-OPERATOR",
+  "date_utc": "2026-11-13",
+  "operator_scope": "Explicit OK to guarded .59 switch after saved .46 baseline; later explicitly requested leaving the new version up. No further switch/restart pending.",
+  "active": {
+    "hive_menu": 22,
+    "low_selector": 10,
+    "profile": "unsloth-v31-iq4xs-q8-cvec-2slot-v0159",
+    "app_version": "0.2.13",
+    "engine_version": "0.1.59",
+    "model": "qwen3.8-flash-next-unsloth-v31-iq4_xs-ple-q8_0-projection-2slot-v0159",
+    "backend_uid": 1000,
+    "context_per_chat": 262144,
+    "slots": 2,
+    "batch_groups": 2,
+    "history_cache_mib": 16384,
+    "history_cache_entries": 8,
+    "kv": "int8/32768 resident",
+    "ple": "frozen Q8_0",
+    "projection": "original-Qwen per-layer4-44 ON",
+    "vision": "BF16 CPU",
+    "mtp": "stock Q2-expert/Q8-dense depth3",
+    "layer_split": "auto; actual17,20,33 on both .59 starts",
+    "extra_solo_pipeline_with_batch": false,
+    "n_predict_default": -1,
+    "original_gguf_or_compatibility_pack_rewritten": false,
+    "installation_default": "Swift unchanged",
+    "retained_previous_hive_option": 21
+  },
+  "pins": {
+    "frontend_tag_commit": "d2f096475817d4666c364c820b0ca830f751cfc5",
+    "native_build_id": "712fec6b4297+cuda13.0",
+    "archive_bytes": 723498702,
+    "archive_sha256": "42ab04fa3201e41bef5fac28c05f5c35c909419ec937d879b505bf1516742610",
+    "model_revision": "d96201194f103c906994f283f504209dc8d2a10c",
+    "full_shared_data_hashes_required_before_each_spawn": true,
+    "runtime_numerical_or_auth_patch": false,
+    "external_lifecycle_only_frontend_patch": true
+  },
+  "matched_speed": {
+    "scope": "Existing long-lived .46 profile versus fresh separately seeded prepared .59 profile; single active request, not isolated engine-kernel causality",
+    "fixture_sha256": "e3b1b43331c7fee033c47178571cc622272679d7aa8524aafd358b596b975f78",
+    "repetitions_each": 3,
+    "input_tokens": {"short":256,"half-context":131072},
+    "output_tokens_each": 128,
+    "actual_kv_reuse_each": 0,
+    "concurrent_requests_observed": false,
+    "sampling": "request-local temperature0/top-p1/top-k1/seed719/no-thinking/projectionON",
+    "medians_46": {
+      "short":{"prefill_tokens_s":239.9,"decode_tokens_s":119.7,"ttft_s":1.0830792309716344,"wall_s":2.0772539359750226},
+      "half-context":{"prefill_tokens_s":1794.1,"decode_tokens_s":99.6,"ttft_s":73.1413860419998,"wall_s":74.40921269205865}
+    },
+    "medians_59": {
+      "short":{"prefill_tokens_s":117.7,"decode_tokens_s":125.8,"ttft_s":2.190083669964224,"wall_s":3.196521215955727},
+      "half-context":{"prefill_tokens_s":1387.5,"decode_tokens_s":95.2,"ttft_s":94.55235822196119,"wall_s":95.88420214201324}
+    },
+    "delta_percent_59_vs_46": {
+      "short":{"prefill_tokens_s":-50.937890787828266,"decode_tokens_s":5.096073517126154,"ttft_s":102.20899887439371,"wall_s":53.88206326615248},
+      "half-context":{"prefill_tokens_s":-22.6631737361351,"decode_tokens_s":-4.417670682730912,"ttft_s":29.273402294655206,"wall_s":28.86065941703817}
+    },
+    "samples_59": [
+      {"name":"short-r1","prefill_tokens_s":222.6,"decode_tokens_s":117.8,"ttft_s":1.165,"drafted":120,"accepted":67},
+      {"name":"half-context-r1","prefill_tokens_s":1350.9,"decode_tokens_s":94.7,"ttft_s":97.119,"drafted":130,"accepted":62},
+      {"name":"short-r2","prefill_tokens_s":107.8,"decode_tokens_s":127.9,"ttft_s":2.390,"drafted":114,"accepted":70},
+      {"name":"half-context-r2","prefill_tokens_s":1389.2,"decode_tokens_s":104.3,"ttft_s":94.436,"drafted":118,"accepted":68},
+      {"name":"short-r3","prefill_tokens_s":117.7,"decode_tokens_s":125.8,"ttft_s":2.190,"drafted":116,"accepted":70},
+      {"name":"half-context-r3","prefill_tokens_s":1387.5,"decode_tokens_s":95.2,"ttft_s":94.552,"drafted":128,"accepted":63}
+    ],
+    "exact_capped_greedy_answer_text_matches": 0,
+    "exact_capped_greedy_answer_text_cases": 6,
+    "speed_win": false,
+    "conclusion": "Slower prefill and longer TTFT in these fixtures; short decode+5.1%, half-context decode-4.4%. Operator elected to leave .59 running. Same weights do not establish identical answers or unchanged intelligence."
+  },
+  "real_lan_checks": {
+    "without_Authorization_x_api_key_or_dummy_token": true,
+    "loaded_runtime_model_native_context_and_web_ui": true,
+    "text63_complete_SSE": true,
+    "high2099_with_reasoning": true,
+    "projection_default_on_and_request_off_telemetry": true,
+    "ordered_red_blue_and_swapped_blue_red_vision": true,
+    "concurrent_isolated_CEDAR37_MAPLE82_complete_SSE": true,
+    "actual_simultaneously_occupied_slots": 2,
+    "emit_number63_tools_format_only_no_execution": true,
+    "bad_host_POST":403,
+    "foreign_origin_POST":403,
+    "same_origin_POST":200,
+    "separate_approximately4K_histories_reused_over1000_tokens_each":8,
+    "actual_owned_Hive_stop_and_complete_drain":true,
+    "new_Hive_token_new_process_birth_after_restart":true,
+    "new_live_UID1000_exe_argv_parent_session_identity_verified":true,
+    "fresh63_after_restart":true,
+    "fresh63_after_selector_only_publication":true
+  },
+  "issues_resolved": [
+    "Initial handoff selected .59 successfully, but first startup refused before main-LLM/GPU loading: root mkdir0755 under umask077 created approvals0700. Explicitly corrected only that new public permission-data directory to0755, preserved private directories, archived the exact failed task grant, and published the updated checksum-bound policy.",
+    "Publication now explicitly chmods newly created approval directory0755 and validates the real UID1000 policy read BEFORE stop/switch. Existing private directories still require explicit administrator correction; stale policies are never silently replaced. Four new mocked tests and real restrictive-umask fixture pass.",
+    "One diagnostic family check initially used dict.values on the list returned by family(); corrected the read-only diagnostic, not ownership rules.",
+    "Initial start observation command exceeded90s while normal hashing/loading continued. Observed the existing owned startup without duplication; no pending controller remained.",
+    "After actual owned stop/drain, normal Hive startup appeared naturally. Observed the new token/new process and fresh63 instead of issuing a duplicate start.",
+    "Locked unit fixtures now use their own absent permission path, never borrow the real deployment approval.",
+    "Selector-only publisher originally refused a now-approved prepared profile as active. It now requires real live preflight for that registry member; unknown/retired profiles still refuse and active bundle bytes remain protected. Two new tests pass.",
+    "Low selector now displays TRIAL AUTHORIZED only when the exact permission validates; locked branch and mandatory pre-mutation permission gate remain. Selector-only publication had zero lifecycle actions."
+  ],
+  "resources_observed_during_speed": {
+    "read_only_safety_samples":138,
+    "maximum_gpu_temperature_C":72.0,
+    "minimum_MemAvailable_GiB":39.745819091796875,
+    "minimum_free_gpu_MiB_original_order":[650,14918,1760,1177],
+    "hardware_kernel_or_rental_safety_abort":false
+  },
+  "regression":{"python_tests":558,"result":"OK","skipped":4,"shell_suites_passed":8,"upstream43_CPU_checks":"historical offline pass; full upstream discovery incomplete after240s, not a pass"},
+  "safety": {
+    "admission_kept_active":true,
+    "renter_container_or_unknown_workload_stopped":false,
+    "original_cloud_configuration_preserved":true,
+    "original_four_GPUs_driver_kernel_power_boot_preserved":true,
+    "system_CUDA_driver_power_clock_unlock_reset_reboot_change":false,
+    "TensorSharp_or512K_retry":false,
+    "separate_root_checksum_bound_trial_permission":true,
+    "offline_prepared_receipts_and_bundle_preparation_flags_retained_as_history":true,
+    "model_history_KV_or_adaptation_copied_from46":false,
+    "private_tokens_PIDs_conversations_in_public_report":false,
+    "automatic_test_switch_retry_or_reboot_pending":false
+  },
+  "limitations":[
+    "Bounded functional and one half-context fixture only; not full-context concurrency/capacity, broad quality/refusal equivalence or sustained stability qualification.",
+    "No KV reuse is not cold disk/model/PLE page-cache performance; old warm/adaptive state was neither reset nor copied to the candidate.",
+    "Three repetitions and noisy short-prefill measurements; profile-level regression observed, not an isolated engine-cause diagnosis.",
+    "Original-Qwen activation projection is experimental, not permanent weight abliteration or guaranteed unchanged ordinary answers.",
+    "Two slots/eight cache histories are not eight concurrent full-context chats; no added global output/thinking cap."
+  ],
+  "private_evidence":"/var/lib/localllm-strata/strata-v0213-activation-20261113/ and matching UID1000 calibration directories; completed audit only, never future replay/stop authority"
+}

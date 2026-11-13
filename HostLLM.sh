@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HostLLM: retained Swift / SC117. Retired candidates have no menu entries.
+# HostLLM: compact retained-model picker; stable IDs and a locked .59 candidate.
 # Owned lifecycle only; rental admission remains running.
 # Rental containers/unidentified GPU workloads are never stopped.
 set -uo pipefail
@@ -214,29 +214,19 @@ heretic_profile_command() {
 }
 
 host_gpu_summary() {
-    nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null || printf 'GPU inventory unavailable\n'
+    PYTHONDONTWRITEBYTECODE=1 python3 "$SCRIPT_DIR/hostllm_menu.py" --gpus
 }
 
 show_workload_status() {
-    local docker_result gpu_result octa
-    if ! docker_result="$(docker ps --format '{{.ID}}' 2>/dev/null)"; then
-        if [[ "$EUID" -ne 0 ]]; then
-            docker_result="$(sudo -n docker ps --format '{{.ID}}' 2>/dev/null)" || docker_result=unknown
-        else
-            docker_result=unknown
-        fi
-    fi
-    if [[ "$docker_result" == unknown ]]; then
-        echo '  Docker: UNKNOWN; all starts fail closed'
-    elif [[ -n "$docker_result" ]]; then
-        echo '  Docker: workload/rental present; all starts blocked'
-    else
-        echo '  Docker: no running containers'
-    fi
-    gpu_result="$(nvidia-smi --query-compute-apps=pid,process_name --format=csv,noheader,nounits 2>/dev/null)" || gpu_result=unknown
-    [[ -z "$gpu_result" ]] || printf '  Current GPU workload: %s\n' "$gpu_result"
-    octa="$(systemctl is-active osn.service 2>/dev/null || true)"
-    printf '  OctaSpace: %s (admission kept running; renters have priority)\n' "${octa:-unknown}"
+    PYTHONDONTWRITEBYTECODE=1 python3 "$SCRIPT_DIR/hostllm_menu.py" --status --active "${1:-unknown}"
+}
+
+show_profile_details() {
+    PYTHONDONTWRITEBYTECODE=1 python3 "$SCRIPT_DIR/hostllm_menu.py" --details
+}
+
+show_menu() {
+    PYTHONDONTWRITEBYTECODE=1 python3 "$SCRIPT_DIR/hostllm_menu.py" --menu --active "$1" "${@:2}"
 }
 
 check_update() {
@@ -255,10 +245,15 @@ stop_owned_engines() {
     # Each helper validates PID/start time/executable and uses pidfds. No pkill/killall.
     local rc=0
     # Hive owns its launch token; use its verified supervisor rather than guessing a direct-stop token.
-    if [[ "$(detect_engine)" == strata && -L /hive/miners/custom/llm-hosting/current &&
-          "$(readlink /hive/miners/custom/llm-hosting/current)" == profiles/unsloth-v31-iq4xs-q8-cvec-2slot-v0146 ]]; then
-        run_as_root /usr/bin/python3 "$SCRIPT_DIR/hive_profile_switch.py" --stop-owned-v31
-        return "$?"
+    if [[ "$(detect_engine)" == strata && -L /hive/miners/custom/llm-hosting/current ]]; then
+        case "$(readlink /hive/miners/custom/llm-hosting/current)" in
+            profiles/unsloth-v31-iq4xs-q8-cvec-2slot-v0146)
+                run_as_root /usr/bin/python3 "$SCRIPT_DIR/hive_profile_switch.py" --stop-owned-v31
+                return "$?" ;;
+            profiles/unsloth-v31-iq4xs-q8-cvec-2slot-v0159)
+                run_as_root /usr/bin/python3 "$SCRIPT_DIR/hive_profile_switch.py" --stop-owned-v3159
+                return "$?" ;;
+        esac
     fi
     sc117_two_slot_command --stop || rc=1
     owned_stop "$SCRIPT_DIR/v1qwen38.sh" --stop || rc=1
@@ -703,25 +698,7 @@ main() {
     while true; do
         [[ -t 1 ]] && clear 2>/dev/null || true
         active="$(detect_engine)"
-        echo '=========================================================='
-        echo '  HostLLM — Engine Picker'
-        echo '=========================================================='
-        printf '  LLM status: %s\n' "$active"
-        show_workload_status
-        host_gpu_summary
-        echo ''
-        echo '  [1] Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
-        echo '  [7] SC117 Q8_0 two-user — Strata 0.1.46 | 2 slots / 2 pipelined groups | 16 GiB / 8-history cache | solo MTP | long-prefill pauses possible'
-        echo ''
-        echo '  Native 262K per slot. SC117 remains an unqualified .46 trial with isolated state.'
-        echo '  Renters always have priority. No rental, render container, or unknown workload is stopped.'
-        echo '  LAN access is unauthenticated unless an optional hosting key is configured: use only on a trusted, firewalled network.'
-        echo '  [9] Stop owned Qwen/Strata LLMs   [10] Update   [11] Exit'
-        echo '  [12] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL — DEFAULT | BF16 vision | MTP | xhigh | 2 native-262K slots'
-        echo '  [18] Set next Hive miner - SC117 Q8_0 two-user | Strata 0.1.46 | 2 slots / 2 groups | 16 GiB / 8 histories | solo MTP | long-prefill pauses possible'
-        echo '  [21] Set next Hive miner - Unsloth V3.1 IQ4_XS | Q8 PLE / projection ON | Strata .46 | 2 native-262K chats / 8 histories | CPU vision / MTP | trial'
-        echo '  Hive selections keep OctaSpace running; new rental work blocks LLM startup.'
-        echo '  No manual miner stop is needed; rentals and manual hosting sessions are never stopped.'
+        show_menu "$active"
         read -r -p '  Select: ' choice || return 0
         choice="${choice//[[:space:]]/}"
         case "$choice" in
@@ -750,6 +727,8 @@ main() {
                 fi
                 ;;
             21) set_next_hive_profile unsloth-v31-iq4xs-q8-cvec-2slot-v0146 ;;
+            22) set_next_hive_profile unsloth-v31-iq4xs-q8-cvec-2slot-v0159 ;;
+            d|D) show_profile_details ;;
             q|Q) return 0 ;;
             9) stop_owned_engines ;;
             10) check_update ;;
@@ -768,10 +747,22 @@ main() {
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     trap 'release_menu_lease_on_exit || true' EXIT
+    if [[ "${1:-}" == --show-menu ]]; then
+        [[ "$#" -eq 1 || ( "$#" -eq 2 && "$2" == --plain ) ]] || { echo 'Usage: --show-menu [--plain]' >&2; exit 2; }
+        show_menu "$(detect_engine)" "${@:2}"
+        exit "$?"
+    fi
+    if [[ "${1:-}" == --details ]]; then
+        [[ "$#" -eq 1 ]] || { echo '--details takes no extra flags' >&2; exit 2; }
+        show_profile_details
+        exit "$?"
+    fi
     if [[ "${1:-}" == --apply-hive-profile ]]; then
         [[ "$EUID" -eq 0 && "$#" -eq 2 ]] || { echo '--apply-hive-profile requires root and one profile' >&2; exit 2; }
         case "$2" in
             swift15u-q8|iq3_s-sc117-abliterated-ple-q8-2slot-v0146|unsloth-v31-iq4xs-q8-cvec-2slot-v0146) ;;
+            unsloth-v31-iq4xs-q8-cvec-2slot-v0159)
+                PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -c 'import sys;sys.path.insert(0,sys.argv[1]);import unsloth_v31_v0159_profile as C;C.authorize_activation()' "$SCRIPT_DIR" || exit 1 ;;
             *) echo 'Unknown Hive profile; no files changed.' >&2; exit 2 ;;
         esac
         apply_next_hive_profile "$2"

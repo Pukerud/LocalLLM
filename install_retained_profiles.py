@@ -31,6 +31,13 @@ def unused(paths):
   except (FileNotFoundError,ProcessLookupError):continue
   except PermissionError:raise SafetyError('Cannot prove retired package unused')
 
+def validate_active_selection(active):
+ if active in S.PROFILES:return
+ if active in S.PREPARED_PROFILES:
+  S.preflight_profile(active) # Exact live permission, not mere membership in the offline registry.
+  return
+ raise SafetyError('An explicitly retired/unknown profile is still selected; not removed or stopped')
+
 def publish():
  if os.geteuid()!=0:raise SafetyError('Root package publication only; runtime preparation runs as user')
  U.trusted_layout()
@@ -42,8 +49,9 @@ def publish():
   if S.hosting.read_lease() is not None or S.JOURNAL.exists() or S.JOURNAL.is_symlink():raise SafetyError('Hosting lease/switch journal present; no publication')
   docker_empty();S.inspect_owned_workload();before=stable()
   active=Path(before['current']).name
-  if active not in S.PROFILES:raise SafetyError('An explicitly retired/unknown profile is still selected; not removed or stopped')
+  validate_active_selection(active)
   for profile in S.PROFILES:S.preflight_profile(profile)
+  for profile in S.PREPARED_PROFILES:S.preflight_profile(profile,offline=True)
   candidates={}
   for profile in RETIRED:
    path=U.ROOT/'profiles'/profile
@@ -53,7 +61,7 @@ def publish():
    candidates[profile]={n:U.checked_file(path/n,installed=True) for n in U.FILES}
   unused([U.ROOT/'profiles'/p for p in candidates]);docker_empty()
   if stable()!=before:raise SafetyError('Active/selection/cloud state changed before publication')
-  added={p:U.install_inactive_profile(U.SOURCE/'profiles'/p,U.ROOT/'profiles'/p) for p in S.PROFILES if p!=active}
+  added={p:U.install_inactive_profile(U.SOURCE/'profiles'/p,U.ROOT/'profiles'/p) for p in S.PROFILES+S.PREPARED_PROFILES if p!=active}
   if any(U.checked_file(U.SOURCE/'profiles'/active/n)!=U.checked_file(U.ROOT/'profiles'/active/n,installed=True) for n in U.FILES):
    raise SafetyError('Active bundle differs; no hot overwrite allowed')
   if stable()!=before:raise SafetyError('Active state changed; selector not published')

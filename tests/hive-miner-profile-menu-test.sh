@@ -7,7 +7,8 @@ HOST="$ROOT/HostLLM.sh"
 INSTALL="$ROOT/install-hive-llm-miner.sh"
 scratch="$(mktemp -d)";trap 'rm -rf -- "$scratch"' EXIT
 for script in "$HOST" "$MENU" "$INSTALL" "$ROOT/uninstall-hive-llm-miner.sh";do bash -n "$script";done
-for expected in '[1] Swift 1.5 Uncensored' '[7] SC117 Q8_0 two-user' '[9] Stop owned' '[12] Set next Hive miner - Swift' '[18] Set next Hive miner - SC117 Q8_0 two-user';do grep -Fq "$expected" "$HOST";done
+PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/menu_render_fixture.py" > "$scratch/rendered-menu"
+for expected in '[1] Swift 1.5 Uncensored' '[7] SC117 Q8 PLE' '[9] Stop owned' '[12] Swift' '[18] SC117 Q8 PLE' '[21] Unsloth' '[22] Unsloth' 'LOCKED';do grep -Fq "$expected" "$scratch/rendered-menu";done
 for retired in 2 3 4 5 6 8 13 14 15 16 17 19;do ! grep -Eq "^[[:space:]]*echo .*\\[$retired\\]" "$HOST";done
 grep -Fq '12|18)' "$HOST"
 ! grep -Fq 'TensorSharp' "$HOST"

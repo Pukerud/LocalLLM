@@ -77,6 +77,8 @@ grep -q 'HostLLM \[7\], Hive \[18\]' "$scratch/menu"
 (choose_profile <<< 2 > "$scratch/invalid-menu")
 grep -q 'Cancelled.' "$scratch/invalid-menu"
 source "$root/HostLLM.sh"
+# Pure UI has dedicated fixture tests; lifecycle tests must never query live display state.
+show_menu() { :; }
 exit_lease_trace="$scratch/exit-lease.trace"
 (
   detect_engine() { echo none; }
@@ -185,11 +187,12 @@ if [[ "$EUID" -ne 0 ]]; then
   grep -Eq '^--verify-orca-q4ks-141-parity --lease-id [a-f0-9]{64} --port 18200$' "$parity_trace"
   grep -Eq '^release --lease-id [a-f0-9]{64}$' "$parity_trace"
 fi
-grep -q '\[1\] Swift 1.5 Uncensored Q8_K_XL — DEFAULT' "$root/HostLLM.sh"
-for retired in 2 3 4 5 6 8 13 14 15 16 17 19; do ! grep -Eq "^[[:space:]]*echo .*\\[$retired\\]" "$root/HostLLM.sh"; done
-grep -q '\[7\] SC117 Q8_0 two-user' "$root/HostLLM.sh"
-grep -q '\[12\] Set next Hive miner - Swift 1.5 Uncensored Q8_K_XL' "$root/HostLLM.sh"
-grep -q '\[18\] Set next Hive miner - SC117 Q8_0 two-user' "$root/HostLLM.sh"
+PYTHONDONTWRITEBYTECODE=1 python3 "$root/tests/menu_render_fixture.py" > "$scratch/rendered-menu"
+grep -Fq '[1] Swift 1.5 Uncensored Q8' "$scratch/rendered-menu"
+for retired in 2 3 4 5 6 8 13 14 15 16 17 19; do ! grep -Eq "\\[$retired\\]" "$scratch/rendered-menu"; done
+grep -Fq '[7] SC117 Q8 PLE' "$scratch/rendered-menu"
+grep -Fq '[12] Swift 1.5 Uncensored Q8' "$scratch/rendered-menu"
+grep -Fq '[18] SC117 Q8 PLE' "$scratch/rendered-menu"
 ! grep -q 'TensorSharp' "$root/HostLLM.sh"
 grep -q 'SC117.*0.0.0.0:8080' "$root/HostLLM.sh"
 grep -q 'pipeline-windows=2' "$root/HostLLM.sh"

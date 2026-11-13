@@ -125,14 +125,14 @@ class Profile(unittest.TestCase):
     def test_actual_menu_dispatch_7_and_18_preserves_other_entries(self):
         for choice,expected in [('7','--profile sc117-q8-2slot --runtime 0.1.46 --parallel 2 --batch-groups 2'),('18',T.HIVE_PROFILE)]:
             command='''source "$1/HostLLM.sh"
-detect_engine() { echo none; }; show_workload_status() { :; }; host_gpu_summary() { :; }
+detect_engine() { echo none; }; show_menu() { python3 "$SCRIPT_DIR/tests/menu_render_fixture.py"; }
 run_selected() { printf 'DISPATCH %s\\n' "$*"; }; set_next_hive_profile() { printf 'DISPATCH %s\\n' "$*"; }
 main < <(printf '%s\\n11\\n' "$2")
 '''
             p=subprocess.run(['/bin/bash','-c',command,'test',str(REPO),choice],text=True,capture_output=True,timeout=5)
             self.assertEqual(p.returncode,0,p.stderr);self.assertIn(expected,p.stdout)
             self.assertNotIn('[17] Set next Hive miner - SC117 IQ3_S | Q8_0',p.stdout)
-            self.assertIn('[12] Set next Hive miner - Swift',p.stdout)
-            self.assertIn('[18] Set next Hive miner - SC117 Q8_0 two-user',p.stdout)
+            self.assertIn('[12] Swift',p.stdout)
+            self.assertIn('[18] SC117 Q8 PLE',p.stdout)
 
 if __name__=='__main__':unittest.main()

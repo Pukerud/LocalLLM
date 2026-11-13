@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "phase": "BASELINE-COMPLETE-CURRENT46-PRESERVED-CANDIDATE59-LOCKED",
+  "date_utc": "2026-11-13",
+  "authorization_scope": "Existing .46 API-only speed baseline. Candidate .59 lifecycle/GPU tests, commit and push still require separate explicit OK.",
+  "runtime": "0.1.46",
+  "hive_selection": 21,
+  "model": "qwen3.8-flash-next-unsloth-v31-iq4_xs-ple-q8_0-projection-2slot",
+  "context_tokens_per_chat": 262144,
+  "configured_slots": 2,
+  "configured_batch_groups": 2,
+  "benchmark_concurrency": 1,
+  "repetitions_per_case": 3,
+  "input_tokens": {"short": 256, "half-context": 131072},
+  "output_tokens_each": 128,
+  "fixture_sha256": "e3b1b43331c7fee033c47178571cc622272679d7aa8524aafd358b596b975f78",
+  "fixture_path_private": "/home/user/.local/share/localllm-strata/calibration/strata-v0213-live-20261113/fixtures.json",
+  "sampling_request_local": {
+    "temperature": 0,
+    "top_p": 1,
+    "top_k": 1,
+    "seed": 719,
+    "reasoning_effort": "none",
+    "chat_template_kwargs": {"enable_thinking": false},
+    "experimental_speed_projection": true,
+    "max_tokens": 128
+  },
+  "method": {
+    "order": ["short-r1", "half-context-r1", "short-r2", "half-context-r2", "short-r3", "half-context-r3"],
+    "prompts": "Deterministic neutral reference text plus a request for numbered Python HTTP-timeout troubleshooting tips; unique early system nonce per case; exact frozen messages retained for future comparison.",
+    "token_count": "Loaded frontend CPU-only /v1/messages/count_tokens; same disabled-thinking text template; count-to-generation equivalence verified by actual usage on every run.",
+    "prefill_decode_clock": "Native per-request SSE timings.prompt_per_second / predicted_per_second",
+    "ttft_clock": "Client monotonic HTTP send to first nonempty model delta",
+    "warmup": "Untimed known-working 7*9=63 before samples; fresh untimed 63 after samples/regression",
+    "authentication": "Real UID1000 trusted-LAN requests without Authorization/x-api-key/dummy token",
+    "cache": "Actual native cache_n=0 for every measured sample; weights/page cache/adaptation NOT reset",
+    "occupancy": "No concurrent request observed; live.running polled every0.5s; max1 per sample; natural idle awaited before each request",
+    "hardware_monitor": "106 fresh read-only original-GPU/driver/power/kernel/fault/rental/identity/resource checks; zero safety aborts"
+  },
+  "medians": {
+    "short": {
+      "prefill_tokens_s": 239.9,
+      "decode_tokens_s": 119.7,
+      "ttft_s": 1.0830792309716344,
+      "client_decode_tokens_s": 120.14610799832987,
+      "wall_s": 2.0772539359750226
+    },
+    "half-context": {
+      "prefill_tokens_s": 1794.1,
+      "decode_tokens_s": 99.6,
+      "ttft_s": 73.1413860419998,
+      "client_decode_tokens_s": 99.85466311296763,
+      "wall_s": 74.40921269205865
+    }
+  },
+  "samples": [
+    {"name":"short-r1","input_tokens":256,"output_tokens":128,"cache_n":0,"prefill_tokens_s":311.8,"decode_tokens_s":117.4,"ttft_s":0.8366664480417967,"wall_s":1.915806903038174,"draft_n":120,"draft_n_accepted":67,"messages_sha256":"f8014adbe78c9cad97044ac262eac07c024e06b33c546d64f3f61a41c763e4e4"},
+    {"name":"half-context-r1","input_tokens":131072,"output_tokens":128,"cache_n":0,"prefill_tokens_s":1768.0,"decode_tokens_s":99.4,"ttft_s":74.22551237395965,"wall_s":75.49968375894241,"draft_n":124,"draft_n_accepted":65,"messages_sha256":"246bc7c07b70571df53d6a91d4e16ac399a944d91a493e8c77c0e9cdf9e14e03"},
+    {"name":"short-r2","input_tokens":256,"output_tokens":128,"cache_n":0,"prefill_tokens_s":237.7,"decode_tokens_s":119.7,"ttft_s":1.0934115999843925,"wall_s":2.150730750989169,"draft_n":120,"draft_n_accepted":68,"messages_sha256":"ab9b4570d1a0d4c7b78969764bf78850623c393a3b3b97b938a7d6f80e3fa310"},
+    {"name":"half-context-r2","input_tokens":131072,"output_tokens":128,"cache_n":0,"prefill_tokens_s":1806.9,"decode_tokens_s":99.6,"ttft_s":72.62138634303119,"wall_s":73.89355167606845,"draft_n":124,"draft_n_accepted":65,"messages_sha256":"93438ab425d1841d9b811968a33012f9dd3580835e2fdac029de2e8d82033f9c"},
+    {"name":"short-r3","input_tokens":256,"output_tokens":128,"cache_n":0,"prefill_tokens_s":239.9,"decode_tokens_s":127.2,"ttft_s":1.0830792309716344,"wall_s":2.0772539359750226,"draft_n":112,"draft_n_accepted":72,"messages_sha256":"7bb671ccb8dfbdd8861cba9a5488b35cd767e668a910731e156406464d1ed569"},
+    {"name":"half-context-r3","input_tokens":131072,"output_tokens":128,"cache_n":0,"prefill_tokens_s":1794.1,"decode_tokens_s":99.9,"ttft_s":73.1413860419998,"wall_s":74.40921269205865,"draft_n":124,"draft_n_accepted":65,"messages_sha256":"d975f7f12d2be206cddac8284b9e6a74ec06e56b90c1cd811153edfe39f9211b"}
+  ],
+  "resources_observed": {
+    "minimum_MemAvailable_GiB": 32.630470275878906,
+    "maximum_gpu_temperature_C": 77.0,
+    "minimum_gpu_free_MiB_by_original_order": [380,15640,2118,1167],
+    "kernel_gpu_fault_detected": false,
+    "rental_or_unknown_workload_detected": false
+  },
+  "preservation": {
+    "same_exact_frontend_and_complete_family": true,
+    "same_allowed_executable_hashes": true,
+    "same_run_config_hash": true,
+    "same_active_bundle_current_links_cloud_service_markers": true,
+    "same_boot_original_hardware_driver_power_kernel": true,
+    "normal_inference_cache_adaptation_occurred": true,
+    "manual_state_reset_or_copy": false,
+    "lifecycle_actions": [],
+    "candidate_permission_present": false,
+    "candidate_state_generic_seed_only": true,
+    "candidate_gpu_inference_tested": false,
+    "lease_or_switch_journal": false,
+    "final_real_key_free_LAN_63_complete_SSE": true,
+    "automatic_actions_pending": [],
+    "commit_push_performed": false
+  },
+  "regression": {"python_tests":551,"result":"OK","skipped":4,"shell_suites_passed":8,"new_benchmark_unit_tests":8,"diff_check":"PASS both repositories"},
+  "limitations": [
+    "Only existing .46 measured; no .59 result or speedup claim.",
+    "Three short samples show substantial short-prefill variation (237.7-311.8 tok/s); use ranges/medians rather than overinterpreting small gains.",
+    "Single active request and half one native context; not full-context capacity, concurrent throughput, quality/refusal equivalence or sustained stability qualification.",
+    "Current long-lived warm/adaptive state retained; later .59 begins separate generic-only state. Neither state reset nor copied, so any future comparison is profile-level, not isolated engine-kernel causality.",
+    "No KV prefix reuse does not mean cold disk/model/PLE page cache.",
+    "Benchmark max_tokens=128 is request-local; original server output/thinking/context policy unchanged."
+  ]
+}
