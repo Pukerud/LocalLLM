@@ -1,0 +1,94 @@
+{
+  "build": {
+    "build.json": {
+      "bytes": 1553,
+      "sha256": "eb561fb976ac9052b605b4d15799fee213a6eedb238c49b65b05efa3c29dbbac"
+    },
+    "libstrata_kq.so": {
+      "bytes": 9883488,
+      "sha256": "9c3bb058dbac8d893fcda2ae8e2f0fb25fb1fc3d59ba47d7e794e2a7be0b8a1d"
+    },
+    "strata": {
+      "bytes": 88366688,
+      "sha256": "5d9184cef67c6ad898aecb8b2733ba0c3a4e285f13ab0159aaa84adb5eaa0d9e"
+    }
+  },
+  "case": "batch-pipeline",
+  "dependencies": [
+    {
+      "bytes": 240936,
+      "path": "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+      "sha256": "595bcdc306999711a5a9c787e5d01618f94eb92c4c09a178e875a324f1072d89"
+    },
+    {
+      "bytes": 2220400,
+      "path": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+      "sha256": "5955dead1a55f545cf9cf34a40b2eb65deb84ea503ac467a266d061073315fa7"
+    },
+    {
+      "bytes": 91505672,
+      "path": "/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07",
+      "sha256": "4839b5da17cd8f58a8e9c57e97c9b61f3c41be7934479f48afc983416b2492c3"
+    },
+    {
+      "bytes": 14432,
+      "path": "/usr/lib/x86_64-linux-gnu/libdl.so.2",
+      "sha256": "15ba6ee5171eb72f8317c22e2c18ac1a1174e6e274fa458be17550764ef8e993"
+    },
+    {
+      "bytes": 125488,
+      "path": "/usr/lib/x86_64-linux-gnu/libgcc_s.so.1",
+      "sha256": "39c9bb846d8491ec41e89b7d34b824e7b6e7ff37d7b9de549305a15c2f7a6cf7"
+    },
+    {
+      "bytes": 940560,
+      "path": "/usr/lib/x86_64-linux-gnu/libm.so.6",
+      "sha256": "3d448cb402aa7973d3a58f1fefbbe6ac856989702858c9b6ae4128193b0083bf"
+    },
+    {
+      "bytes": 21448,
+      "path": "/usr/lib/x86_64-linux-gnu/libpthread.so.0",
+      "sha256": "fdfd7d83a335ba12bd73e857f95a798dae0355f37935231966fd088647978e23"
+    },
+    {
+      "bytes": 14664,
+      "path": "/usr/lib/x86_64-linux-gnu/librt.so.1",
+      "sha256": "fa2b83203da2d25fb690140e8bc2da0c034532a045eec9fb8264849bad04f219"
+    },
+    {
+      "bytes": 2260296,
+      "path": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.30",
+      "sha256": "41c4cd10be11160dec736958a59eb0553357ad77008e9ba56250d4fd8698b8ec"
+    },
+    {
+      "bytes": 105140976,
+      "path": "/usr/local/cuda-12.9/targets/x86_64-linux/lib/libcublas.so.12.9.2.10",
+      "sha256": "5757ab5839fb4f203ca47ecb336110d10f4a5606b1e097f195fbca89774569e2"
+    },
+    {
+      "bytes": 749210000,
+      "path": "/usr/local/cuda-12.9/targets/x86_64-linux/lib/libcublasLt.so.12.9.2.10",
+      "sha256": "2c9006a75c74b3bea2dc7ae2ec38ab038b0e45ea02cb4b717a915e8a5796acb1"
+    },
+    {
+      "bytes": 741088,
+      "path": "/usr/local/cuda-12.9/targets/x86_64-linux/lib/libcudart.so.12.9.79",
+      "sha256": "256e6409e4f06f618e1fb53d4844a6b81cdded1013afa8ade40c22f99eb133b7"
+    }
+  ],
+  "qualification": {
+    "path": "results/strata-v0159-overnight-qualification-20261114.json",
+    "sha256": "49f09e61c5d17443c4f603727504e5b705aab9690480ee7ef785cdea15963eb4"
+  },
+  "schema": 1,
+  "source_commit": "d2f096475817d4666c364c820b0ca830f751cfc5",
+  "spec": {
+    "engine": "q5mmq",
+    "env": {
+      "STRATA_PF_GROUP_SCRATCH": "1",
+      "STRATA_PF_HC_REGION": "1",
+      "STRATA_PW_WITH_BATCH": "1"
+    },
+    "layer_split": "12,24,36"
+  }
+}

@@ -253,6 +253,9 @@ stop_owned_engines() {
             profiles/unsloth-v31-iq4xs-q8-cvec-2slot-v0159)
                 run_as_root /usr/bin/python3 "$SCRIPT_DIR/hive_profile_switch.py" --stop-owned-v3159
                 return "$?" ;;
+            profiles/unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned)
+                run_as_root /usr/bin/python3 "$SCRIPT_DIR/hive_profile_switch.py" --stop-owned-v3159-tuned
+                return "$?" ;;
         esac
     fi
     sc117_two_slot_command --stop || rc=1
@@ -728,6 +731,7 @@ main() {
                 ;;
             21) set_next_hive_profile unsloth-v31-iq4xs-q8-cvec-2slot-v0146 ;;
             22) set_next_hive_profile unsloth-v31-iq4xs-q8-cvec-2slot-v0159 ;;
+            23) set_next_hive_profile unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned ;;
             d|D) show_profile_details ;;
             q|Q) return 0 ;;
             9) stop_owned_engines ;;
@@ -763,6 +767,8 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
             swift15u-q8|iq3_s-sc117-abliterated-ple-q8-2slot-v0146|unsloth-v31-iq4xs-q8-cvec-2slot-v0146) ;;
             unsloth-v31-iq4xs-q8-cvec-2slot-v0159)
                 PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -c 'import sys;sys.path.insert(0,sys.argv[1]);import unsloth_v31_v0159_profile as C;C.authorize_activation()' "$SCRIPT_DIR" || exit 1 ;;
+            unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned)
+                PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -c 'import sys;sys.path.insert(0,sys.argv[1]);import unsloth_v31_v0159_tuned_profile as C;C.authorize_activation()' "$SCRIPT_DIR" || exit 1 ;;
             *) echo 'Unknown Hive profile; no files changed.' >&2; exit 2 ;;
         esac
         apply_next_hive_profile "$2"

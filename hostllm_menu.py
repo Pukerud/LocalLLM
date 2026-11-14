@@ -19,15 +19,18 @@ BASE = owner_home() / '.local/state/locallm-strata'
 DATA = owner_home() / '.local/share/localllm-strata'
 CURRENT = Path('/hive/miners/custom/llm-hosting/current')
 CANDIDATE = 'unsloth-v31-iq4xs-q8-cvec-2slot-v0159'
+TUNED = CANDIDATE + '-tuned'
 PROFILES = {
     'swift15u-q8': 'Swift 1.5 Uncensored Q8',
     'iq3_s-sc117-abliterated-ple-q8-2slot-v0146': 'SC117 Q8 PLE / Strata 0.1.46',
     'unsloth-v31-iq4xs-q8-cvec-2slot-v0146': 'Unsloth V3.1 IQ4_XS / Strata 0.1.46',
     CANDIDATE: 'Unsloth V3.1 IQ4_XS / Strata 0.1.59',
+    TUNED: 'Unsloth V3.1 IQ4_XS / Strata 0.1.59 TUNED',
 }
 STATES = (
     ('unsloth-v31-iq4xs-q8-cvec-2slot-trial', 'unsloth-v31-iq4xs-q8-cvec-2slot', 'Unsloth V3.1 IQ4_XS / Strata 0.1.46'),
     (CANDIDATE + '-trial', CANDIDATE, 'Unsloth V3.1 IQ4_XS / Strata 0.1.59'),
+    (TUNED + '-trial', TUNED, 'Unsloth V3.1 IQ4_XS / Strata 0.1.59 TUNED'),
     ('sc117-iq3s-ple-q8-2slot-trial', 'sc117-q8-2slot', 'SC117 Q8 PLE / Strata 0.1.46'),
 )
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
@@ -123,6 +126,15 @@ def candidate_authorized():
         return False
 
 
+def tuned_authorized():
+    try:
+        import unsloth_v31_v0159_tuned_profile as U
+        U.authorize_activation()
+        return True
+    except (SafetyError, OSError, ValueError):
+        return False
+
+
 def snapshot(active):
     containers = query(['docker', 'ps', '--format', '{{.ID}}'])
     if containers is None and os.geteuid() != 0:
@@ -135,6 +147,7 @@ def snapshot(active):
         'compute': compute_summary(query(['nvidia-smi', '--query-compute-apps=pid,process_name', '--format=csv,noheader,nounits'])),
         'gpus': gpu_rows(query(['nvidia-smi', '--query-gpu=index,memory.used,memory.total', '--format=csv,noheader,nounits'])),
         'prepared': offline_prepared(), 'candidate_authorized': candidate_authorized(),
+        'tuned_authorized': tuned_authorized(),
     }
 
 
@@ -249,6 +262,12 @@ def render_menu(data, *, width=80, color=False, unicode=True):
     if selected_candidate:
         note += ' / SELECTED'
     p.option(22, 'Unsloth V3.1 IQ4_XS', note, selected=selected_candidate, locked=not authorized)
+    tuned_ok = data.get('tuned_authorized', False)
+    tuned_selected = data['selected'] == TUNED
+    tuned_note = '.59 TUNED / ' + ('TRIAL AUTHORIZED' if tuned_ok else 'LOCKED')
+    if tuned_selected:
+        tuned_note += ' / SELECTED'
+    p.option(23, 'Unsloth V3.1 IQ4_XS', tuned_note, selected=tuned_selected, locked=not tuned_ok)
     p.row(p.ink('        Unsloth: Q8 PLE / projection ON / CPU vision / MTP', 'muted'))
     p.row(p.ink('        2 x native 262K / 16 GiB / 8 cached histories', 'muted'))
     p.row()
@@ -265,6 +284,8 @@ def render_menu(data, *, width=80, color=False, unicode=True):
         p.row(p.ink('[9]', 'accent') + ' Stop owned LLM  ' + p.ink('[10]', 'accent') + ' Update')
         p.row(p.ink('[d]', 'accent') + ' Details  ' + p.ink('[11]', 'accent') + ' Exit / q')
     p.row(p.ink('Renters first. Admission stays on. Trusted, firewalled LAN only.', 'muted'))
+    if tuned_ok:
+        p.row(p.ink('[23] Frozen tuned recipe; bounded quality/context/feature evidence.', 'muted'))
     if authorized:
         p.row(p.ink('[22] Explicit trial permission; GPU/feature results are separate.', 'warn'))
     else:
@@ -277,11 +298,15 @@ def details():
     print('HostLLM / profile details (read-only)')
     print('  [1]/[12] Swift: llama.cpp, Q8_K_XL, BF16 vision, MTP, xhigh.')
     print('  [7]/[18] SC117: Strata .46, Q8 PLE, CPU vision, solo MTP; trial.')
-    print('  [21] Unsloth V3.1 IQ4_XS: Strata .46; retained current trial.')
+    print('  [21] Unsloth V3.1 IQ4_XS: Strata .46; retained rollback trial.')
     print('  [22] Same exact GGUFs/Q8 PLE/projection, Strata .59 (app .2.13).')
     print('       ' + ('Explicit trial permission present; not a quality/speed claim.' if candidate_authorized() else
                       'OFFLINE ONLY / LOCKED pending explicit operator OK + GPU tests.'))
-    print('  Unsloth [21]/[22]: projection ON, original-Qwen layers 4-44;')
+    print('  [23] Frozen .59 tuned recipe: Q5_0 MMQ, buffer reuse, balanced')
+    print('       GPU layers and fit-checked solo pipeline; same immutable assets.')
+    print('       Separate state/root permission; [22] official rollback retained.')
+    print('       Bounded regression/native-context/feature evidence, not universal IQ.')
+    print('  Unsloth [21]/[22]/[23]: projection ON, original-Qwen layers 4-44;')
     print('       CPU BF16 vision, stock Strata MTP depth 3, INT8/32768 KV,')
     print('       2 chats x native 262144, 2 groups, 16 GiB / 8 cached histories.')
     print('       Eight histories are not eight simultaneous/full-context chats.')
@@ -293,7 +318,7 @@ def details():
     print('       pipeline-windows=2 with batch slots; its two groups still run.')
     print('  Hive switching verifies ownership; rentals/manual sessions never stop.')
     print('  Admission stays running. Key-free API: trusted, firewalled LAN only.')
-    print('  Stable IDs: local [1]/[7], Hive [12]/[18]/[21]/[22].')
+    print('  Stable IDs: local [1]/[7], Hive [12]/[18]/[21]/[22]/[23].')
 
 
 def main():

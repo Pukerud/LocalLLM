@@ -9,7 +9,7 @@ CURRENT_LINK="$CUSTOM_DIR/current"
 LOCK_FILE='/run/llm-hosting-profile-menu.lock'
 LLM_ROOT='/home/user/LocalLLM'
 PORTS=(8080 18080)
-PROFILES=(swift15u-q8 iq3_s-sc117-abliterated-ple-q8-2slot-v0146 unsloth-v31-iq4xs-q8-cvec-2slot-v0146 unsloth-v31-iq4xs-q8-cvec-2slot-v0159)
+PROFILES=(swift15u-q8 iq3_s-sc117-abliterated-ple-q8-2slot-v0146 unsloth-v31-iq4xs-q8-cvec-2slot-v0146 unsloth-v31-iq4xs-q8-cvec-2slot-v0159 unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned)
 say() { printf '[llm-hosting-profile] %s\n' "$*"; }
 fail() { say "ERROR: $*" >&2; exit 1; }
 secure_root_dir() {
@@ -40,6 +40,13 @@ profile_label() {
             else
                 printf '%s' 'Unsloth V3.1 IQ4_XS - Strata .59 / LOCKED'
             fi ;;
+        unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned)
+            if /usr/bin/env -i HOME=/home/user USER=root LOGNAME=root PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 \
+              /usr/bin/python3 -c 'import sys;sys.path.insert(0,"/home/user/LocalLLM");import unsloth_v31_v0159_tuned_profile as C;C.authorize_activation()' >/dev/null 2>&1; then
+                printf '%s' 'Unsloth V3.1 IQ4_XS - Strata .59 TUNED / TRIAL AUTHORIZED'
+            else
+                printf '%s' 'Unsloth V3.1 IQ4_XS - Strata .59 TUNED / LOCKED'
+            fi ;;
         *) return 1 ;;
     esac
 }
@@ -48,7 +55,7 @@ read_current_profile() {
     [[ -L "$CURRENT_LINK" ]] || return 1
     target="$(readlink -- "$CURRENT_LINK")"
     case "$target" in
-        profiles/swift15u-q8|profiles/iq3_s-sc117-abliterated-ple-q8-2slot-v0146|profiles/unsloth-v31-iq4xs-q8-cvec-2slot-v0146|profiles/unsloth-v31-iq4xs-q8-cvec-2slot-v0159) printf '%s' "${target#profiles/}" ;;
+        profiles/swift15u-q8|profiles/iq3_s-sc117-abliterated-ple-q8-2slot-v0146|profiles/unsloth-v31-iq4xs-q8-cvec-2slot-v0146|profiles/unsloth-v31-iq4xs-q8-cvec-2slot-v0159|profiles/unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned) printf '%s' "${target#profiles/}" ;;
         *) return 1 ;;
     esac
 }
@@ -74,6 +81,7 @@ show_profiles() {
     printf '  [8] %s\n' "$(profile_label iq3_s-sc117-abliterated-ple-q8-2slot-v0146)"
     printf '  [9] %s\n' "$(profile_label unsloth-v31-iq4xs-q8-cvec-2slot-v0146)"
     printf ' [10] %s\n' "$(profile_label unsloth-v31-iq4xs-q8-cvec-2slot-v0159)"
+    printf ' [11] %s\n' "$(profile_label unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned)"
 }
 check_selected_profile_ready() {
     local effective="$1"
@@ -118,6 +126,7 @@ case "${1:-}" in
             8|iq3_s-sc117-abliterated-ple-q8-2slot-v0146) target=iq3_s-sc117-abliterated-ple-q8-2slot-v0146 ;;
             9|unsloth-v31-iq4xs-q8-cvec-2slot-v0146) target=unsloth-v31-iq4xs-q8-cvec-2slot-v0146 ;;
             10|unsloth-v31-iq4xs-q8-cvec-2slot-v0159) target=unsloth-v31-iq4xs-q8-cvec-2slot-v0159 ;;
+            11|unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned) target=unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned ;;
             q|Q|'') exit 0 ;;
             *) fail 'invalid/retired selection; no files changed' ;;
         esac ;;
@@ -126,6 +135,10 @@ esac
 if [[ "$target" == unsloth-v31-iq4xs-q8-cvec-2slot-v0159 ]]; then
     /usr/bin/env -i HOME=/home/user USER=root LOGNAME=root PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 \
       /usr/bin/python3 -c 'import sys;sys.path.insert(0,"/home/user/LocalLLM");import unsloth_v31_v0159_profile as C;C.authorize_activation()' || fail 'candidate locked; no pointer/marker/process/service action'
+fi
+if [[ "$target" == unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned ]]; then
+    /usr/bin/env -i HOME=/home/user USER=root LOGNAME=root PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 \
+      /usr/bin/python3 -c 'import sys;sys.path.insert(0,"/home/user/LocalLLM");import unsloth_v31_v0159_tuned_profile as C;C.authorize_activation()' || fail 'tuned candidate locked; no pointer/marker/process/service action'
 fi
 [[ -d /run && ! -L /run && "$(stat -c '%u' /run)" == 0 ]] || fail 'unsafe /run'
 [[ ! -L "$LOCK_FILE" ]] || fail 'symlinked profile lock'

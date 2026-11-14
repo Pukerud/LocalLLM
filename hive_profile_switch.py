@@ -21,6 +21,7 @@ import ple_q8_assets
 import sc117_q8_2slot_profile as sc117_two
 import unsloth_v31_profile as v31
 import unsloth_v31_v0159_profile as v3159
+import unsloth_v31_v0159_tuned_profile as v3159_tuned
 
 SCRIPT_ROOT = Path(__file__).resolve().parent
 WRAPPER = Path('/hive/miners/custom/llm-hosting/h-run.sh')
@@ -29,7 +30,7 @@ CUR_MINER = Path('/run/hive/cur_miner')
 JOURNAL = hosting.ROOT / 'hive-profile-switch.json'
 HERETIC_PROFILE = 'swift15-heretic-re'
 PROFILES = ('swift15u-q8', sc117_two.HIVE_PROFILE, v31.HIVE_PROFILE)
-PREPARED_PROFILES = (v3159.HIVE_PROFILE,)  # Published inactive only; never start/switch authority.
+PREPARED_PROFILES = (v3159.HIVE_PROFILE, v3159_tuned.HIVE_PROFILE)  # Each requires its OWN exact permission, never membership-only authority.
 DEEPSEEK_PROFILE = 'deepseek41-abiray-iq2_xxs'  # retained historical recovery/readiness implementation only
 SC117_V0146_PROFILE = 'iq3_s-sc117-abliterated-v0146'
 SC117_V0146_READINESS = (
@@ -38,6 +39,14 @@ SC117_V0146_READINESS = (
     'one serving slot/group; prefill=auto; split=14,24,36; trim-stage-weights; '
     'conversation cache=8192 MiB / 4 slots; pipeline-windows=2; new SM86 release defaults enabled. This is not qualification.'
 )
+
+
+def prepared_profile_module(profile):
+    if profile == v3159.HIVE_PROFILE:
+        return v3159
+    if profile == v3159_tuned.HIVE_PROFILE:
+        return v3159_tuned
+    raise SafetyError('Unknown prepared variant; no shared permission bypass')
 
 
 def say(message):
@@ -60,7 +69,7 @@ def llm_processes():
         except (FileNotFoundError, ProcessLookupError):
             continue
         names = {os.path.basename(arg) for arg in args}
-        if not (names & {b'llama-server', b'strata', b'strata-dsv41', b'strata-vision', b'strata_launcher.py', b'v1qwen38.sh', b'tensorsharp_launcher.py', b'TensorSharp.Server.Host.dll', b'TensorSharp.Server.Host'} or
+        if not (names & {b'llama-server', b'strata', b'strata-dsv41', b'strata-vision', b'strata_launcher.py', b'v0159_tuned_strata_launcher.py', b'v1qwen38.sh', b'tensorsharp_launcher.py', b'TensorSharp.Server.Host.dll', b'TensorSharp.Server.Host'} or
                 b'serve.server' in args or b'llama_cpp.server' in args):
             continue
         identity = proc(int(directory.name))
@@ -292,6 +301,28 @@ def package_current(profile):
 
 def preflight_profile(profile, *, offline=False):
     """Readiness only, before lifecycle mutation; never builds or runs inference."""
+    if profile == v3159_tuned.HIVE_PROFILE:
+        if not offline:
+            v3159_tuned.authorize_activation()
+        state = str(v3159_tuned.state_root())
+        runuser = shutil.which('runuser', path='/usr/sbin:/usr/bin:/sbin:/bin')
+        if runuser is None:
+            raise SafetyError('runuser unavailable; tuned readiness refused')
+        args = [runuser, '-u', 'user', '--', '/usr/bin/env', '-i',
+                'HOME=/home/user', 'USER=user', 'LOGNAME=user', 'PATH=/usr/local/cuda-12.9/bin:/usr/bin:/bin',
+                'PYTHONDONTWRITEBYTECODE=1', 'SETUPTOOLS_USE_DISTUTILS=stdlib',
+                f'PYTHONPYCACHEPREFIX={state}/pycache', f'STRATA_STATE_ROOT={state}',
+                'STRATA_DATA_ROOT=/home/user/.local/share/localllm-strata',
+                v3159_tuned.TRIAL_ENV + '=1', 'STRATA_RUNTIME=0.1.59', 'STRATA_PARALLEL=2', 'STRATA_BATCH_GROUPS=2',
+                'STRATA_HOST=0.0.0.0', 'STRATA_PORT=8080',
+                str(SCRIPT_ROOT / 'v0159_tuned_strata_launcher.py'), '--check-ready', '--profile', v3159_tuned.PROFILE,
+                '--runtime', '0.1.59', '--parallel', '2', '--batch-groups', '2']
+        result = subprocess.run(args, capture_output=True, text=True, timeout=600)
+        lines = [line for line in result.stdout.splitlines() if line.startswith(('OFFLINE CONFIG:', 'READY CONFIG:', 'TRIAL CONFIG:'))]
+        if result.returncode or lines != [v3159_tuned.READY]:
+            raise SafetyError('Tuned exact recipe/data/runtime/2/2/8 readiness failed; no lifecycle action')
+        say('Tuned immutable recipe/runtime/features checked; bounded qualification, separate exact permission still mandatory.')
+        return
     if profile == v3159.HIVE_PROFILE:
         if not offline:
             v3159.authorize_activation()
@@ -456,7 +487,7 @@ def preflight_profile(profile, *, offline=False):
 
 def switch_profile(profile):
     if profile in PREPARED_PROFILES:
-        v3159.authorize_activation()  # Before ownership inspection, journal, service, stop marker or selection.
+        prepared_profile_module(profile).authorize_activation()  # Before ownership inspection, journal, service, stop marker or selection.
     if profile not in PROFILES + PREPARED_PROFILES:
         raise SafetyError('Unknown or retired Hive profile; nothing was stopped')
     if JOURNAL.exists() or JOURNAL.is_symlink():
@@ -528,7 +559,7 @@ def switch_profile(profile):
 
 def stop_owned_v31(profile=v31.HIVE_PROFILE):
     """Explicit menu stop of an exact verified Hive V3.1 variant, never manual/replacement work."""
-    if profile not in (v31.HIVE_PROFILE, v3159.HIVE_PROFILE):
+    if profile not in (v31.HIVE_PROFILE, v3159.HIVE_PROFILE, v3159_tuned.HIVE_PROFILE):
         raise SafetyError('Unknown V3.1 owned-stop variant')
     if JOURNAL.exists() or JOURNAL.is_symlink() or os.readlink(CURRENT) != 'profiles/' + profile:
         raise SafetyError('V3.1 owned-stop selection/journal mismatch; nothing stopped')
@@ -554,6 +585,7 @@ def main():
     group.add_argument('--recover', action='store_true')
     group.add_argument('--stop-owned-v31', action='store_true')
     group.add_argument('--stop-owned-v3159', action='store_true')
+    group.add_argument('--stop-owned-v3159-tuned', action='store_true')
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error('run through HostLLM or sudo')
@@ -562,12 +594,14 @@ def main():
     signal.signal(signal.SIGTERM, interrupted)
     try:
         if args.profile in PREPARED_PROFILES:
-            v3159.authorize_activation()  # Even the lifecycle lock is untouched while preparation-only.
+            prepared_profile_module(args.profile).authorize_activation()  # Correct variant's grant before any lock/mutation.
         with hosting.launch_reservation():
             if args.stop_owned_v31:
                 stop_owned_v31()
             elif args.stop_owned_v3159:
                 stop_owned_v31(v3159.HIVE_PROFILE)
+            elif args.stop_owned_v3159_tuned:
+                stop_owned_v31(v3159_tuned.HIVE_PROFILE)
             elif args.recover:
                 restore(read_journal())
                 say('Previous miner/OctaSpace state restored.')

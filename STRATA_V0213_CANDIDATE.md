@@ -1,6 +1,8 @@
-# Strata0.2.13 / engine0.1.59 — active bounded trial
+# Strata0.2.13 / engine0.1.59 — official rollback / historical activation
 
-## Current operator selection — 2026-11-13
+**Later operator-authorized overnight work,2026-11-14:** separate tuned Hive[23]/low[11] is now active; official[22] below is retained unchanged as rollback. See [the tuned profile](STRATA_V0159_TUNED.md). This historical report is not an instruction to revert the newer selection or replay its completed activation controller.
+
+## Historical operator selection — 2026-11-13
 
 After saving the current .46 baseline, the operator explicitly approved .59 switching/testing, then explicitly asked to **leave the new version up**. **Hive[22] / low[10] / `unsloth-v31-iq4xs-q8-cvec-2slot-v0159` is ACTIVE.** No further switch/restart is pending. Original .46 Hive[21]/low[9], Swift[1]/[12] and SC117[7]/[18] remain retained; installation-default Swift unchanged.
 

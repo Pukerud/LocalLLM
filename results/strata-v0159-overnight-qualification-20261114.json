@@ -1,0 +1,204 @@
+{
+  "app": "0.2.13",
+  "candidate": {
+    "labels": [
+      "confirm-batch-pipeline-a-speed",
+      "confirm-batch-pipeline-b-speed"
+    ],
+    "medians": {
+      "half": {
+        "decode": 113.25,
+        "prefill": 6419.85,
+        "samples": 6,
+        "ttft_s": 20.505165891954675,
+        "wall_s": 21.621214403014164
+      },
+      "interactive": {
+        "decode": 134.2,
+        "prefill": 2001.4,
+        "samples": 6,
+        "ttft_s": 2.0641057174652815,
+        "wall_s": 3.006421889469493
+      },
+      "medium": {
+        "decode": 124.95,
+        "prefill": 4730.35,
+        "samples": 6,
+        "ttft_s": 6.9609737765276805,
+        "wall_s": 8.019515569962095
+      },
+      "short": {
+        "decode": 135.2,
+        "prefill": 183.10000000000002,
+        "samples": 6,
+        "ttft_s": 1.412818523007445,
+        "wall_s": 2.3439659340074286
+      }
+    },
+    "pair": {
+      "wall_s": 7.858438506023958
+    },
+    "solo_mtp": {
+      "accepted": 1564,
+      "active_samples": 24,
+      "drafted": 2996,
+      "samples": 24
+    }
+  },
+  "case": "batch-pipeline",
+  "control_order": "Fresh referenceA -> candidateA blocks -> fresh referenceB -> candidateB blocks -> fresh referenceC; main rates useA/C bracket",
+  "date": "2026-11-14",
+  "features": {
+    "bad_host": 403,
+    "bad_origin": 403,
+    "cached_histories_reused": 8,
+    "concurrent_tags_complete_sse": true,
+    "high2099_reasoning": true,
+    "key_free_lan": true,
+    "loaded_projection_default_on_request_toggle_off": true,
+    "loaded_runtime": "0.1.59",
+    "model": "qwen3.8-flash-next-unsloth-v31-iq4_xs-ple-q8_0-projection-2slot-v0159-night-batch-pipeline",
+    "n_predict_default": -1,
+    "native_context_per_slot": 262144,
+    "observed_occupied_slots": 2,
+    "same_origin": 200,
+    "scope": "Bounded short functional and ~4K-history cache fixtures; not full-context concurrency, broad quality, speed comparison or sustained stability qualification.",
+    "serving_slots": 2,
+    "swapped_ordered_vision": true,
+    "text63_complete_sse": true,
+    "tools_format_only_no_execution": true,
+    "uid": 1000,
+    "web_ui": true
+  },
+  "frozen_contract": {
+    "batch_groups": 2,
+    "cache_mib": 16384,
+    "histories": 8,
+    "kv": "INT8/32768 unchanged",
+    "mtp": "stock head/spec3 unchanged, actual solo drafting observed",
+    "native_per_chat": 262144,
+    "output_default": -1,
+    "ple": "Q8_0 unchanged",
+    "projection": "ON4-44 unchanged",
+    "serving_slots": 2,
+    "state_copied": false,
+    "vision": "BF16 CPU unchanged",
+    "weights_rewritten": false
+  },
+  "frozen_model_revision": "d96201194f103c906994f283f504209dc8d2a10c",
+  "limitations": [
+    "72 objective tasks, not universal intelligence equivalence",
+    "one populated native window at a time, not two simultaneous full windows",
+    "six sequential samples per workload per confirmed arm; two pair observations",
+    "Bracketing reduces temporal drift; this is not a randomized/exhaustive factorial trial",
+    "Not universal intelligence/answer equivalence; no full-window two-user simultaneous capacity claim"
+  ],
+  "native_long": [
+    {
+      "input": 196608,
+      "output": 21,
+      "passed": true,
+      "wall_s": 30.086087896954268
+    },
+    {
+      "input": 259000,
+      "output": 21,
+      "passed": true,
+      "wall_s": 41.81856993306428
+    }
+  ],
+  "native_long_and_features": true,
+  "new_quality_losses": [],
+  "phase": "QUALIFICATION-PASSED",
+  "quality": {
+    "holdout_candidate": {
+      "passed": 24,
+      "total": 24
+    },
+    "holdout_fixture_sha256": "c82d2d539b5efbacdee2cd0e7ff7af5739d5f49ba5f43ef6303783e6f7dd06c5",
+    "holdout_reference": {
+      "passed": 24,
+      "total": 24
+    },
+    "primary_candidate": {
+      "passed": 32,
+      "total": 48
+    },
+    "primary_reference": {
+      "passed": 32,
+      "total": 48
+    }
+  },
+  "ratios": {
+    "geomean_latency_speedup": 2.2640128804769035,
+    "half_prefill_speedup": 4.672209890469779,
+    "latency_speedups": {
+      "half": 4.477197408578637,
+      "interactive": 1.8877861777662928,
+      "medium": 3.1606775148612085,
+      "short": 1.3226261461520779
+    },
+    "minimum_decode_ratio": 1.128216704288939,
+    "pair_speedup": 1.683519419588643
+  },
+  "reference": {
+    "labels": [
+      "confirm-reference-a-speed",
+      "confirm-final-reference-c-speed"
+    ],
+    "medians": {
+      "half": {
+        "decode": 96.35,
+        "prefill": 1374.05,
+        "samples": 6,
+        "ttft_s": 95.47646202897886,
+        "wall_s": 96.80244509549811
+      },
+      "interactive": {
+        "decode": 113.4,
+        "prefill": 901.0999999999999,
+        "samples": 6,
+        "ttft_s": 4.5628136994782835,
+        "wall_s": 5.67548168747453
+      },
+      "medium": {
+        "decode": 110.75,
+        "prefill": 1355.8000000000002,
+        "samples": 6,
+        "ttft_s": 24.202816586010158,
+        "wall_s": 25.347102542058565
+      },
+      "short": {
+        "decode": 119.65,
+        "prefill": 126.35,
+        "samples": 6,
+        "ttft_s": 2.041536269010976,
+        "wall_s": 3.100190630008001
+      }
+    },
+    "pair": {
+      "wall_s": 13.229833832534496
+    },
+    "solo_mtp": {
+      "accepted": 1584,
+      "active_samples": 24,
+      "drafted": 2954,
+      "samples": 24
+    }
+  },
+  "runtime": "0.1.59",
+  "schema": 1,
+  "scope": "Pre-deployment bounded qualification. New Hive-owned lifecycle/soak must still pass before leaving it up.",
+  "selection_rule": "Prefer exact-kernel/memory/layout/scheduling recipe without GDN/HC precision changes when within3% of fastest qualifying result",
+  "source_commit": "d2f096475817d4666c364c820b0ca830f751cfc5",
+  "spec": {
+    "engine": "q5mmq",
+    "env": {
+      "STRATA_PF_GROUP_SCRATCH": "1",
+      "STRATA_PF_HC_REGION": "1",
+      "STRATA_PW_WITH_BATCH": "1"
+    },
+    "layer_split": "12,24,36"
+  },
+  "speed_gate": true
+}

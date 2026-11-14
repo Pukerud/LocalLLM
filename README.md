@@ -1,8 +1,12 @@
 # LocalLLM — Swift, SC117 and Unsloth V3.1
 
-HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default. Unsloth V3.1 IQ4_XS is now ACTIVE as Hive [21]** after explicit operator approval. Swift and SC117 native-262K two-user **[18]** remain retained.
+HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default. Tuned Unsloth V3.1 IQ4_XS / Strata .59 is ACTIVE as Hive [23]** after the operator-authorized overnight optimization. Official .59[22], .46[21], Swift and SC117[18] remain retained.
 
-## Latest activation — 2026-11-07, IQ4_XS Hive [21] ACTIVE
+## Latest — 2026-11-14, tuned .59 Hive [23]
+
+[Full tuned profile/evidence](STRATA_V0159_TUNED.md): separate Q5_0-MMQ build, scratch reuse, balanced12/24/36 layers and fit-checked solo pipeline. Same frozen weights/Q8 PLE/projection/CPU BF16 vision/stock MTP3/native262K per chat/two slots/16GiB/eight histories; unlimited default unchanged. Six-sample bracketed medians: half-context prefill1374→6420tok/s, request96.80→21.62s; decode roughly13–18% faster across fixtures.72 objective tasks matched baseline outcomes (56correct, no new failures), both196K/259K retrievals and real features/owned Hive restart passed. Bounded evidence, not universal IQ/full-window concurrency assurance. See the separate [qualification receipt](results/strata-v0159-overnight-qualification-20261114.json) and final live/soak checkpoint linked in the profile document.
+
+## Historical activation — 2026-11-07, IQ4_XS Hive [21] then ACTIVE
 
 [Unsloth V3.1 IQ4_XS active trial](UNSLOTH_V31_IQ4XS.md): real key-free LAN text/thinking/ordered vision, projection on/off telemetry, two occupied chat slots/complete SSE, tool-format-only, Host/Origin guards and **8/8 ~4K cache histories** passed. Actual owned Hive stop/restart/new-token verification passed, and **the new model was left running as the miner**, UID1000, native262144/2slots/2groups/16GiB/eight histories, CPU vision, Q8 PLE and projection on. No full-context/quality/speed/stability qualification. Swift's exact current owner session was explicitly stopped after requests drained, not adopted as Hive-owned. Admission/cloud settings retained; no lease/journal/stop marker or pending controller/reboot. See [sanitized results](results/unsloth-v31-iq4xs-activation-20261107.json).
 
@@ -28,9 +32,11 @@ See **[the full checkpoint](TENSORSHARP_SWIFT_20261106.md)** and [sanitized resu
 |---:|---:|---|
 | **1** | **12** | Swift 1.5 Uncensored **Q8_K_XL**, existing pinned llama.cpp; BF16 vision, native MTP n3, xhigh, two native-262K slots |
 | **7** | **18** | SC117 abliterated IQ3_S with **Q8_0 PLE**, Strata **.46**; two pipelined slots/groups, 16 GiB/eight histories, CPU vision; unqualified trial |
-| — | **21** | **ACTIVE** Unsloth V3.1 **IQ4_XS**, Q8 PLE / original-Qwen projection ON, .46 / CPU vision / stock MTP; two native262K chats / 16 GiB / eight histories; bounded functional trial |
+| — | **21** | Retained Unsloth V3.1 **IQ4_XS** .46 rollback; Q8 PLE/projection/CPU vision/stock MTP; native262K/two users/eight histories |
+| — | **22** | Retained official Unsloth V3.1 **IQ4_XS** .59 rollback; same frozen model/features |
+| — | **23** | **ACTIVE tuned .59** Unsloth V3.1 IQ4_XS; Q5_0 MMQ, balanced layers/buffer reuse/solo pipeline; same native262K/vision/two users/eight histories |
 
-**[9]** owned stop, **[10]** update, **[11]** exit. Former **[2–6], [8], [13–17] and [19]** are gone; their numbers were not reused. The low-level Hive selector has **[1] Swift / [8] SC117 two-user / [9] Unsloth V3.1 IQ4_XS**. High-level [9] uses the verified Hive supervisor to stop the active V3.1 profile.
+**[9]** owned stop, **[10]** update, **[11]** exit. Former **[2–6], [8], [13–17] and [19]** are gone; their numbers were not reused. The low-level Hive selector has **[1] Swift / [8] SC117 / [9] Unsloth .46 / [10] official .59 / [11] tuned .59**. High-level [9] uses the verified Hive supervisor to stop the active V3.1 profile.
 
 Hauhau, Heretic and the original one-slot SC117 IQ4_NL/Q8 routes are retired. Orca/DeepSeek retirement also remains in force. Historical source, wrappers and reports remain audit evidence where useful; they are not current serving instructions or permission to redownload retired models.
 

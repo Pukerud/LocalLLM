@@ -715,6 +715,8 @@ def family(state):
             known = recorded.get(p['pid'])
             isolated_release = (state.get('runtime_version') == '0.1.46' or
                                 (state.get('profile') == v3159.PROFILE and state.get('runtime_version') == v3159.VERSION) or
+                                (state.get('profile') == 'unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned' and
+                                 state.get('runtime_version') == '0.1.59') or
                                 (state.get('profile') == 'deepseek41-abiray-iq2_xxs' and
                                  state.get('runtime_version') == '0.1.51'))
             if (not isolated_release or
