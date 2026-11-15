@@ -77,6 +77,7 @@ def provider():
     def compatible_config(root=T.ROOT,home=None):
         cfg=original_config(root,home)
         cfg['aliases']=[MODEL_ID,PROFILE,C.MODEL_ID,C.PROFILE]
+        cfg['undeclared_tool_calls']='call'
         return cfg
     p.canonical_config=compatible_config
     return p

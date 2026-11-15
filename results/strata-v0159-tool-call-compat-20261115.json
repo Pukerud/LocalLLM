@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "date": "2026-11-15",
+  "phase": "OFFLINE-COMPAT-PREPARED-CURRENT46-PRESERVED",
+  "operator_scope": "Change only inactive option23's undeclared_tool_calls setting; do not disturb the running server; operator switches and tests manually later",
+  "prepared_profile": {
+    "hive_menu": 23,
+    "low_selector": 11,
+    "profile": "unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned",
+    "runtime": "0.1.59",
+    "undeclared_tool_calls": "call",
+    "previous_value": "text (upstream default; key previously absent)",
+    "only_serving_configuration_delta": true,
+    "native_context_per_chat": 262144,
+    "slots": 2,
+    "groups": 2,
+    "cache_mib": 16384,
+    "cached_histories": 8,
+    "unlimited_default_unchanged": true,
+    "model_template_sampling_vision_projection_mtp_tuning_unchanged": true
+  },
+  "implementation": {
+    "profile_source": "unsloth_v31_v0159_tuned_profile.py",
+    "inactive_expected_config_updated": true,
+    "historical_last_run_config_untouched": true,
+    "exact_permission_refreshed": true,
+    "permission_owner_uid": 0,
+    "permission_mode": "0644",
+    "configuration_sha256_before": "508f58be2601df9aa12a25a76353ea0735e06448af9de3a1cad0550102ccf562",
+    "configuration_sha256_after": "4179a6849005620a03d2625a55bc58d574bf3106eb68adf41f4e20733bf776a6",
+    "profile_source_sha256_before": "975167f70413cd4cb6eb3b8eeda658011e932b5995dbf19da235ac7eb327aad5",
+    "profile_source_sha256_after": "19847aba62c9c81de98cc4bb5f36e17001c7b3a2e0c88fd8396a970677f66fba",
+    "all_other_permission_fields_and_policy_hashes_unchanged": true,
+    "original_official_permission_unchanged": true,
+    "frozen_recipe_qualification_and_runtime_unchanged": true,
+    "hive_bundles_selector_and_entrypoint_links_unchanged": true
+  },
+  "validation": {
+    "real_uid1000_check_ready": true,
+    "real_uid1000_both_independent_permissions": true,
+    "cpu_http_sse": {
+      "requests": 12,
+      "actual_canonical_setting_used": true,
+      "streaming_and_nonstreaming": true,
+      "unknown_name_forwarded_unchanged": true,
+      "client_allowlist_error_then_corrected_call_and_final63": true,
+      "known_working_key_free63": true,
+      "no_tools_still_returns_text": true,
+      "default_text_control": true,
+      "prose_not_executed": true,
+      "gpu_or_model_inference": false,
+      "external_tools_executed": false,
+      "production_endpoint_contacted": false
+    },
+    "python_tests": 610,
+    "python_ok": true,
+    "python_skipped": 4,
+    "shell_suites_passed": 8,
+    "read_only_installed_selector_passed": true
+  },
+  "preservation": {
+    "verified_utc": "2026-11-15T11:23:49.251744+00:00",
+    "active_hive_menu": 21,
+    "active_runtime": "0.1.46",
+    "same_frontend_and_complete_owned_family": true,
+    "active_run_config_state_bundle_links_unchanged": true,
+    "inactive_adaptive_profile_and_last_run_config_unchanged": true,
+    "cloud_unchanged": true,
+    "admission_active": true,
+    "same_boot": true,
+    "no_pause_lease_switch_journal_stop_marker": true,
+    "candidate_not_running": true,
+    "production_generation_requests": 0,
+    "known_working_key_free_gets": ["/", "/health", "/v1/status"],
+    "lifecycle_actions": [],
+    "pending_automatic_actions": [],
+    "no_renter_container_service_gpu_driver_power_reset_reboot_action": true
+  },
+  "limits": [
+    "Operator will manually switch/test option23 later; no automatic activation is queued",
+    "Mock HTTP/SSE verifies protocol handling, not a real-model improvement on the operator's tasks",
+    "Unknown tool names must still be validated/rejected by the client; server-side arbitrary execution is not enabled",
+    "Malformed calls, invalid arguments and independent reasoning regressions may remain",
+    "Earlier overnight56/72 parity was versus stock .59, not .46, and forced-tool tests were not real agent-loop qualification",
+    "Dated private snapshots are audit only, never future start/stop/adoption authority"
+  ],
+  "upstream": [
+    "https://github.com/Niko1221/Strata/issues/5933",
+    "https://github.com/Niko1221/Strata/issues/4622"
+  ]
+}

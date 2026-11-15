@@ -28,6 +28,29 @@ class TunedIntegration(unittest.TestCase):
         with mock.patch.object(S.v3159,'authorize_activation',side_effect=SafetyError('ORIGINAL LOCKED')),mock.patch.object(U,'authorize_activation') as other,mock.patch.object(S,'inspect_owned_workload') as inspect:
             with self.assertRaisesRegex(SafetyError,'ORIGINAL LOCKED'):S.switch_profile(S.v3159.HIVE_PROFILE)
             other.assert_not_called();inspect.assert_not_called()
+    def test_tool_compat_is_only_additional_serving_setting(self):
+        recipe={'case':'batch-pipeline','spec':U.T.registry()['batch-pipeline']}
+        with mock.patch.object(U,'recipe',return_value=recipe):
+            provider=U.provider()
+            previous=U.T.TrialProfile.canonical_config(provider,U.T.ROOT)
+            previous['aliases']=[U.MODEL_ID,U.PROFILE,U.C.MODEL_ID,U.C.PROFILE]
+            cfg=provider.canonical_config(U.T.ROOT)
+            self.assertEqual(cfg,{**previous,'undeclared_tool_calls':'call'})
+            self.assertEqual(U.canonical_config(U.T.ROOT),cfg)
+            self.assertEqual(U.validate_config(U.T.ROOT,cfg),cfg)
+            self.assertEqual(provider.validate_config(U.T.ROOT,cfg),cfg)
+    def test_tool_compat_cannot_silently_revert_or_change(self):
+        recipe={'case':'batch-pipeline','spec':U.T.registry()['batch-pipeline']}
+        with mock.patch.object(U,'recipe',return_value=recipe):
+            cfg=U.canonical_config(U.T.ROOT)
+            for value in ('text',True,'unknown',None):
+                bad=dict(cfg)
+                if value is None:bad.pop('undeclared_tool_calls')
+                else:bad['undeclared_tool_calls']=value
+                with self.subTest(value=value),self.assertRaises(SafetyError):U.validate_config(U.T.ROOT,bad)
+    def test_tool_compat_not_added_to_official_or_native_profiles(self):
+        self.assertNotIn('undeclared_tool_calls',U.C.canonical_config(U.T.ROOT,Path('/home/user')))
+        self.assertNotIn('undeclared_tool_calls',U.C.BASE.canonical_config(U.T.ROOT,Path('/home/user')))
     def test_offline_readiness_not_start_permission(self):
         result=types.SimpleNamespace(returncode=0,stdout='Runtime ready\n'+U.READY+'\n',stderr='')
         with mock.patch.object(U,'authorize_activation') as auth,mock.patch.object(S.shutil,'which',return_value='/usr/sbin/runuser'),mock.patch.object(S.subprocess,'run',return_value=result) as run:

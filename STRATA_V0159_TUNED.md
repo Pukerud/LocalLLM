@@ -1,6 +1,16 @@
 # Unsloth V3.1 IQ4_XS — tuned .59 Hive trial, 2026-11-14
 
-## Serving selection
+## Latest — 2026-11-15, setting-only update; .46 stays running
+
+The operator currently uses **.46 Hive[21]/low[9]**, reporting better real-task/tool reliability than .59, and requested preparing [23] for a later manual test **without disturbing that session**.
+
+Only [23]'s canonical configuration now adds **`"undeclared_tool_calls": "call"`**. Its inactive `config.expected.json` and exact root grant's configuration/profile-source hashes were refreshed; original[22]/[21], frozen recipe/qualification/runtime/binaries/model/template/sampling/features and all Hive bundle/selector bytes remain unchanged. A future normal [23] launch gets this setting; no current run-config/history/adaptive state was rewritten, no switch/restart/generation/controller was run or queued. The previous overnight activation record below is historical, not current selection or replay authority.
+
+The setting lets a **validating client** reject an unknown tool with a structured error, allowing correction/retry; the server does not execute unknown tools or guess names. Actual-config **CPU-only mock HTTP/SSE12requests** passed (unknown call→client error→corrected call→63; no-tools/prose/default-text controls). Real UID1000 readiness/independent permission reads,610Python OK/4skipped and all8shell suites passed. This is offline preparation, **not a demonstrated fix for real model tasks**; the operator will switch/test manually later. The original56/72 results were versus **stock .59**, not .46; forced `emit_number` tests were not full agent-loop qualification.
+
+See `results/strata-v0159-tool-call-compat-20261115.json` and pi-profile `reports/2026-11-15-strata-v0159-tool-call-compat.md`. Upstream context: [#5933](https://github.com/Niko1221/Strata/issues/5933), [#4622](https://github.com/Niko1221/Strata/issues/4622). This does not install experimental parser/template/CUDA patches or remove lifecycle/auth/rental gates.
+
+## Historical serving selection — 2026-11-14
 
 **Hive [23] / low selector [11]** is the separately published tuned profile:
 `unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned`.
