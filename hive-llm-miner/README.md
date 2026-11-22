@@ -1,6 +1,6 @@
 # HiveOS LocalLLM custom miner
 
-Atomic next-start selection and identity-bound supervision for **Swift / SC117 two-user / Unsloth V3.1 IQ4_XS**. Swift remains the installation default. **.46 Hive[21] is currently running**. Inactive tuned .59[23] now has `undeclared_tool_calls="call"` prepared for the operator's later manual test, without disturbing .46; see [results and limits](../STRATA_V0159_TUNED.md). Official .59[22] remains rollback. No automatic switch/test is queued.
+Atomic next-start selection and identity-bound supervision for **Swift / SC117 two-user / Unsloth V3.1 IQ4_XS**. Swift remains the installation default. **Tuned .59 Hive[23] is currently running** after the operator-authorized2026-11-22 power-guard repair. The read-only guard accepts exact300/300/300/280W or300/300/300/300W, without writing any GPU setting or weakening identity/fault/rental gates. Existing normal Hive supervision restored[23]; real UID1000/Hive ownership and key-free LAN63/completeSSE passed. `undeclared_tool_calls="call"` retained; see [results and limits](../STRATA_V0159_TUNED.md). Original .46[21]/official .59[22] remain rollback. No automatic switch/test is queued.
 
 **Historical 2026-11-06 recovery, before later model selection:** after the operator’s manual restart, all four original GPUs recovered and **native262K [18] is ACTIVE again**. Its unchanged .46 two-slot policy and UID1000 key-free LAN text/vision/stream/Host-Origin checks passed. Only the exact task fault lease was released after fresh checks; existing owned startup was observed without duplication. OctaSpace stayed active; no renter/admission override or cloud rewrite. No lease/journal/test/controller/reboot pending. See [the report](../TENSORSHARP_SWIFT_20261106.md). TensorSharp remains disabled; do not replay benchmarks or retry it.
 
@@ -10,9 +10,9 @@ Atomic next-start selection and identity-bound supervision for **Swift / SC117 t
 |---:|---:|---:|---|
 | 1 | 12 | 1 | `swift15u-q8` — original llama.cpp, BF16 vision, MTP n3, two native-262K slots |
 | 7 | 18 | 8 | `iq3_s-sc117-abliterated-ple-q8-2slot-v0146` — .46, two pipelined slots/groups, 16 GiB/eight histories, CPU vision, native262K |
-| — | **21** | **9** | **CURRENT** `unsloth-v31-iq4xs-q8-cvec-2slot-v0146` — .46 |
+| — | **21** | **9** | `unsloth-v31-iq4xs-q8-cvec-2slot-v0146` — retained .46 rollback |
 | — | **22** | **10** | `unsloth-v31-iq4xs-q8-cvec-2slot-v0159` — retained official .59 rollback |
-| — | **23** | **11** | Prepared `unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned` — `undeclared_tool_calls=call`, later manual test; same Q5-MMQ/balanced/buffer/pipeline tuning and frozen model/features |
+| — | **23** | **11** | **CURRENT** `unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned` — `undeclared_tool_calls=call`; same Q5-MMQ/balanced/buffer/pipeline tuning and frozen model/features; read-only guard accepts approved280/300W last-GPU profiles |
 
 Former HostLLM **[8]/[19] TensorSharp** entries and unused software are retired. High-level[9] stops the active verified V3.1 Hive supervisor, not a guessed launch token. Former high-level [2–6]/[13–17] and low-level Hauhau/Heretic/single-slot SC117 targets are rejected. Historical source wrappers are audit evidence, not supported installed choices.
 

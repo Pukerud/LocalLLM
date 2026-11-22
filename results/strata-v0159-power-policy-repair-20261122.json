@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "date": "2026-11-22",
+  "scope": "Operator-authorized read-only power-policy repair; no GPU setting write or runtime upgrade",
+  "completed": true,
+  "live_observed_utc": "2026-11-22T22:22:19.367432+00:00",
+  "profile": "unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned",
+  "hive_menu": 23,
+  "low_menu": 11,
+  "runtime": "0.1.59",
+  "model": "qwen3.8-flash-next-unsloth-v31-iq4_xs-ple-q8_0-projection-2slot-v0159-tuned",
+  "cause": "Old exact power snapshot rejected 300/300/300/300 W despite unchanged GPU identity/order/driver/VRAM",
+  "approved_power_profiles_w": [[300, 300, 300, 280], [300, 300, 300, 300]],
+  "observed_live_power_caps_w": [300, 300, 300, 300],
+  "saved_hive_power_config_changed": false,
+  "guard": {
+    "read_only": true,
+    "unapproved_power_profiles_rejected": true,
+    "original_four_gpu_uuid_and_order_required": true,
+    "driver_required": "595.91.07",
+    "kernel_required": "6.10.0-hiveos",
+    "vram_mib_per_gpu_required": 24576,
+    "current_boot_xid_io_page_fault_reboot_required_still_rejected": true,
+    "field_specific_errors": true
+  },
+  "policy_source": {
+    "path": "strata_v0213_activation.py",
+    "sha256_before": "2b3a1fd365f8c31b3e8661bf9d0493920ffd2cff0ea7db7f094f01d2de34311c",
+    "sha256_after": "05f51f4544cf9fa695d36bf128167f56548a4dc1ad2db345c5431ae74281924f",
+    "official_and_tuned_approval_delta": "ONLY this one policy source hash; no other permission field changed"
+  },
+  "validation": {
+    "python_tests": 620,
+    "python_skipped": 4,
+    "python_result": "OK",
+    "shell_suites_passed": 8,
+    "test_uid": 1000,
+    "offline_real_uid1000_readiness": true,
+    "both_real_uid1000_permissions_valid": true,
+    "restored_by_existing_normal_hive_supervision": true,
+    "actual_live_hive_token_birth_exe_argv_uid_parent_proven": true,
+    "all_inference_uid1000": true,
+    "key_free_lan_text63": true,
+    "complete_sse_with_usage": true,
+    "production_smoke_generation_requests": 1,
+    "ui_health_loaded_status_props_http200": true,
+    "native_context_per_chat": 262144,
+    "serving_slots": 2,
+    "batch_groups": 2,
+    "default_n_predict": -1,
+    "undeclared_tool_calls": "call",
+    "admission_active": true,
+    "no_pause_lease_switch_journal_stop_marker": true
+  },
+  "preserved": [
+    "Selected profile and installed bundle/selector bytes",
+    "Cloud rig/wallet and saved Hive power configuration",
+    "Both canonical serving configurations and expected configuration",
+    "Frozen tuned recipe and qualification; original runtimes/models/template/vision/tuning/cache/output defaults",
+    "Rental priority, optional auth, Host/Origin and exact owned-process/pidfd gates"
+  ],
+  "actions_not_taken": [
+    "GPU power/clock/driver/kernel/reset/reboot changes",
+    "Manual miner start/stop, duplicate startup or service/container/renter stop",
+    "Live-history/adaptive-state copy or reset",
+    "Strata .60 upgrade or TensorSharp/512K retry"
+  ],
+  "limits": "Old 280-W-last-GPU profile validated by CPU mocks without writing GPU settings. Single live 63 request proves startup/inference restoration, not speed, broad quality, tool-agent parity or indefinite stability.",
+  "future_identity_or_lifecycle_authority": false,
+  "pending_action": null
+}

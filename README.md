@@ -1,8 +1,12 @@
 # LocalLLM — Swift, SC117 and Unsloth V3.1
 
-HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default. The operator currently uses Unsloth .46 Hive[21]**. Tuned .59[23] is prepared for a later manual tool-compatibility test; official .59[22], Swift and SC117[18] remain retained.
+HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default. Tuned Unsloth .59 Hive[23]/low[11] is currently running**. Original .46[21], official .59[22], Swift and SC117[18] remain retained.
 
-## Latest — 2026-11-15, [23] call-mode staged without disturbing .46
+## Latest — 2026-11-22, [23] power-guard repair completed
+
+The operator approved exact300/300/300/280W **or300/300/300/300W**. The read-only hardware guard now accepts both full profiles while preserving all GPU identity/order/driver/VRAM/kernel/fault and rental/ownership gates. **No actual power limits, clocks, drivers, Hive/cloud settings or serving configuration changed.** Both .59 permissions refreshed only for this guard's source SHA. Existing Hive supervision naturally restored selected[23], no manual/duplicate start. Fresh real Hive/UID1000 ownership, key-free LAN63/completeSSE/usage, loaded .59/native262K/two slots/defaultn_predict-1 passed; `undeclared_tool_calls="call"` retained. **620Python OK/4skipped +all8shell**; admission active, no renter stopped, no lease/journal/stop marker or pending controller/test/switch. [Evidence](results/strata-v0159-power-policy-repair-20261122.json) / [profile](STRATA_V0159_TUNED.md). This is startup-repair evidence, not a new speed or real-agent-quality claim.
+
+## Historical — 2026-11-15, [23] call-mode staged without disturbing .46
 
 Only [23] now adds `"undeclared_tool_calls": "call"`, with matching inactive expected config/exact permission. Current .46 process/config/selection and all binaries/weights/templates/tuning remain untouched. CPU HTTP/SSE mock/error-correction checks, real owner readiness,610Python OK/4skipped and8shell suites passed; no candidate GPU request or switch/restart queued. User will test manually later. See [details/limits](STRATA_V0159_TUNED.md); earlier quality results were versus stock .59, not .46 or real agent-task parity.
 

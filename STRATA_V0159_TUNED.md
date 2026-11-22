@@ -1,6 +1,14 @@
 # Unsloth V3.1 IQ4_XS — tuned .59 Hive trial, 2026-11-14
 
-## Latest — 2026-11-15, setting-only update; .46 stays running
+## Latest — 2026-11-22, read-only hardware-policy repair; [23] restored
+
+The operator's current selection is **tuned .59 Hive[23]/low[11]**, restored through its existing normal Hive supervision after repeated hardware-guard refusals. Actual GPU identities/driver/VRAM were unchanged; power caps had differed from the old exact300/300/300/280W snapshot. The operator explicitly approved **both300/300/300/280W and300/300/300/300W**.
+
+The read-only guard now accepts exactly those two complete power profiles, with clearer field-specific errors. It still rejects different UUID/order/driver/kernel/VRAM, all other cap sets, and current-boot GPU faults. **No power limits, clocks, drivers, Hive/cloud settings, resets or reboots were changed.** Only the shared hardware-policy source and that source hash in both .59 permissions changed; all serving configs, frozen recipe/qualification/native binaries/model/template/tuning/cache/output defaults stayed intact. No manual or duplicate start was issued; no rental/service was stopped.
+
+Actual caps300/300/300/300, fresh Hive-owned token/UID1000/birth/exe/argv/parent proof, key-free LAN63 completeSSE/usage, loaded .59/native262K/two slots and defaultn_predict-1 passed. `undeclared_tool_calls="call"` retained. **620Python OK/4skipped +all8shell**; admission active, no lease/journal/stop marker or pending test/controller/switch. This is startup-repair evidence, not a new quality/speed benchmark. See `results/strata-v0159-power-policy-repair-20261122.json` and matching pi-profile report.
+
+## Historical — 2026-11-15, setting-only update; .46 then stayed running
 
 The operator currently uses **.46 Hive[21]/low[9]**, reporting better real-task/tool reliability than .59, and requested preparing [23] for a later manual test **without disturbing that session**.
 

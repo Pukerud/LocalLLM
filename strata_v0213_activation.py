@@ -23,10 +23,12 @@ STATE = Path('/home/user/.local/state/locallm-strata') / OLD.STATE_NAME / 'serve
 GPUS = ('GPU-b4b74f60-cb72-137e-2edd-ff3a98c23141', 'GPU-aa05a399-603d-8cb7-1f8b-a452692e9c73',
         'GPU-8bcaf2d8-276f-6058-b88b-15d4a6e1e109', 'GPU-335cd5c4-a226-bd46-42d4-ef96dea816c9')
 POWERS = (300.0, 300.0, 300.0, 280.0)
+# Exact operator-approved profiles (2026-11-22); never set/restore power limits here.
+APPROVED_POWER_PROFILES = (POWERS, (300.0, 300.0, 300.0, 300.0))
 
 
 def hardware():
-    """Read only. A change/fault is a blocker, never a reset/power/driver/retry request."""
+    """Read only. Unapproved caps or identity/fault changes block; no GPU setting is written."""
     if os.uname().release != '6.10.0-hiveos':
         raise SafetyError('Kernel changed; no switch authorized by this prepared policy')
     r = subprocess.run(['nvidia-smi', '--query-gpu=uuid,driver_version,power.limit,memory.total',
@@ -34,12 +36,28 @@ def hardware():
     rows = list(csv.reader(r.stdout.splitlines(), skipinitialspace=True))
     if len(rows) != 4:
         raise SafetyError('Original four-GPU inventory unavailable; no switch')
+    powers = []
     for i, row in enumerate(rows):
-        if len(row) != 4 or row[0].strip() != GPUS[i] or row[1].strip() != '595.91.07' or float(row[2]) != POWERS[i] or int(row[3]) != 24576:
-            raise SafetyError('GPU identity/order/driver/power/memory changed; nothing stopped')
+        if len(row) != 4:
+            raise SafetyError(f'GPU{i} inventory row is incomplete; nothing stopped')
+        if row[0].strip() != GPUS[i]:
+            raise SafetyError(f'GPU{i} identity/order changed; nothing stopped')
+        if row[1].strip() != '595.91.07':
+            raise SafetyError(f'GPU{i} driver changed: expected 595.91.07, observed {row[1].strip()}; nothing stopped')
+        try:
+            power, memory = float(row[2]), int(row[3])
+        except ValueError as exc:
+            raise SafetyError(f'GPU{i} power/VRAM telemetry is unreadable; nothing stopped') from exc
+        if memory != 24576:
+            raise SafetyError(f'GPU{i} VRAM changed: expected 24576 MiB, observed {memory}; nothing stopped')
+        powers.append(power)
     kernel = subprocess.run(['dmesg'], capture_output=True, text=True, timeout=15, check=True).stdout
     if re.search(r'NVRM:.*\bXid\b|AMD-Vi:.*IO_PAGE_FAULT|Node Reboot Required', kernel, re.I):
         raise SafetyError('Current-boot GPU/kernel fault: no switch, retry, reset or recovery is attempted')
+    if tuple(powers) not in APPROVED_POWER_PROFILES:
+        observed = '/'.join(f'{p:g}' for p in powers)
+        approved = ' or '.join('/'.join(f'{p:g}' for p in profile) for profile in APPROVED_POWER_PROFILES)
+        raise SafetyError(f'GPU power caps {observed} W are not approved (expected {approved} W); no power settings changed')
 
 
 def current_state():
