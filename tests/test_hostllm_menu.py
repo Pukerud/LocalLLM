@@ -38,7 +38,7 @@ class Menu(unittest.TestCase):
     def test_all_stable_ids_and_clear_lock_are_visible(self):
         for width in (54, 80, 92):
             text = M.render_menu(DATA, width=width, color=False, unicode=False)
-            for n in (1, 7, 9, 10, 11, 12, 18, 21, 22, 23):
+            for n in (1, 7, 9, 10, 11, 12, 18, 21, 22, 23, 24):
                 self.assertIn(f'[{n}]', text)
             self.assertIn('LOCKED', text)
             self.assertIn('SELECTED', text)
@@ -73,10 +73,19 @@ class Menu(unittest.TestCase):
         d = {**DATA, 'candidate_authorized': False, 'tuned_authorized': True, 'selected': M.TUNED}
         text = M.render_menu(d, width=92, color=False, unicode=False)
         self.assertIn('LOCKED', text.split('[22]', 1)[1].split('[23]', 1)[0])
-        tuned_region = text.split('[23]', 1)[1].split('LOCAL HOSTING', 1)[0]
+        tuned_region = text.split('[23]', 1)[1].split('[24]', 1)[0]
         self.assertIn('TRIAL AUTHORIZED', tuned_region)
         self.assertIn('SELECTED', tuned_region)
         self.assertNotIn('LOCKED', tuned_region)
+
+    def test_native66_does_not_borrow_tuned_authorization(self):
+        d = {**DATA, 'native66_authorized': True, 'tuned_authorized': False, 'selected': M.NATIVE66}
+        text = M.render_menu(d, width=92, color=False, unicode=False)
+        self.assertIn('LOCKED', text.split('[23]', 1)[1].split('[24]', 1)[0])
+        region = text.split('[24]', 1)[1].split('LOCAL HOSTING', 1)[0]
+        self.assertIn('TRIAL AUTHORIZED', region)
+        self.assertIn('SELECTED', region)
+        self.assertNotIn('LOCKED', region)
 
     def test_draft_is_not_mislabeled_prepared(self):
         text = M.render_menu({**DATA, 'prepared': False}, color=False, unicode=False)

@@ -717,6 +717,8 @@ def family(state):
                                 (state.get('profile') == v3159.PROFILE and state.get('runtime_version') == v3159.VERSION) or
                                 (state.get('profile') == 'unsloth-v31-iq4xs-q8-cvec-2slot-v0159-tuned' and
                                  state.get('runtime_version') == '0.1.59') or
+                                (state.get('profile') == 'unsloth-v31-iq4xs-q8-cvec-2slot-v0166' and
+                                 state.get('runtime_version') == '0.1.66') or
                                 (state.get('profile') == 'deepseek41-abiray-iq2_xxs' and
                                  state.get('runtime_version') == '0.1.51'))
             if (not isolated_release or
@@ -1285,8 +1287,9 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
         with log.open('a') as out:
             server_args = [str(python), '-m', 'serve.server', '--engine', 'strata', '--config', config_arg,
                            '--host', cfg['host'], '--port', str(port)]
-            if profile == deepseek_profile.PROFILE and not cfg.get('api_key'):
-                server_args.append('--no-api-key')  # real upstream opt-out, never a dummy token
+            if (profile == deepseek_profile.PROFILE or
+                    (profile == v3159.PROFILE and version == '0.1.66')) and not cfg.get('api_key'):
+                server_args.append('--no-api-key')  # real upstream opt-out; Host/Origin and optional auth stay intact
             child = subprocess.Popen(server_args, cwd=source, env=env,
                                      stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
     except Exception:
@@ -1335,7 +1338,8 @@ def start(lock, profile='iq3_s', runtime='auto', parallel=1, batch_groups=1, hos
     if profile == v31.PROFILE:
         state.update(unsloth_v31=True, ple_q8=True, ple_sha256=v31.A.ASSETS[-1][4])
     if profile == v3159.PROFILE:
-        state.update(unsloth_v31=True, unsloth_v31_v0159=True, ple_q8=True, ple_sha256=v3159.A.ASSETS[-1][4])
+        state.update(unsloth_v31=True, ple_q8=True, ple_sha256=v3159.A.ASSETS[-1][4])
+        state['unsloth_v31_v0166' if version == '0.1.66' else 'unsloth_v31_v0159'] = True
     if runtime_config_dir is not None:
         state['runtime_config_dir'] = runtime_config_dir
         state['runtime_config_dir_identity'] = runtime_config_dir_identity
@@ -1658,7 +1662,7 @@ def main():
                              (state.get('parallel'), state.get('batch_groups')) != (2, 2)) and family(state)):
                         raise SafetyError('V3.1 marker/Q8/counts differ; variant-specific stop refused')
                     if (profile == v3159.PROFILE and state and
-                            (state.get('unsloth_v31_v0159') is not True or state.get('ple_sha256') != v3159.A.ASSETS[-1][4] or
+                            (state.get('unsloth_v31_v0166' if v3159.VERSION == '0.1.66' else 'unsloth_v31_v0159') is not True or state.get('ple_sha256') != v3159.A.ASSETS[-1][4] or
                              state.get('runtime_version') != v3159.VERSION or
                              (state.get('parallel'), state.get('batch_groups')) != (2, 2)) and family(state)):
                         raise SafetyError('Strata .59 V3.1 marker/Q8/runtime/counts differ; stop refused')

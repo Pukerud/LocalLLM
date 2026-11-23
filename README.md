@@ -1,8 +1,12 @@
 # LocalLLM — Swift, SC117 and Unsloth V3.1
 
-HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default. Tuned Unsloth .59 Hive[23]/low[11] is currently running**. Original .46[21], official .59[22], Swift and SC117[18] remain retained.
+HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default. New Unsloth app0.2.20/engine0.1.66 Hive[24]/low[12] is selected for manual testing after the operator reboots. No LLM runs on the current faulted boot.** Tuned .59[23], original .46[21], official .59[22], Swift and SC117[18] remain retained.
 
-## Latest — 2026-11-22, [23] power-guard repair completed
+## Latest — 2026-11-23, new option/manual post-reboot test; no power-cap locking
+
+[New option and status](STRATA_V0220_CANDIDATE.md): exact signed separate runtime/private state, compatible existing tuning/fixes, same V3.1/Q8 PLE/projection/CPU vision/MTP3/native262K/2users/16GiB8histories/default-1. All power-cap comparisons removed; no LocalLLM power/clock writes, HiveOS owns its normal settings. GPU/VRAM/fault/renter/token/UID/pidfd/Host-Origin checks remain. Initial real .66 short feature suite passed;131K prefill failed with GPU3 Xid79/Xid154, cause unknown. Tests stopped, exact owned cleanup performed, no reset/reboot/retry. Latest user explicitly will reboot/test manually: fresh [24] permission excludes this faulted boot; normal Hive can load it only after a different healthy boot. **639Python OK/4skipped +all8shell**, no automated test/controller queued; [23] retained rollback, admission active. [Sanitized evidence](results/strata-v0220-trial-20261123.json). No full-context/quality/speed-win claim.
+
+## Historical — 2026-11-22, [23] power-guard repair completed
 
 The operator approved exact300/300/300/280W **or300/300/300/300W**. The read-only hardware guard now accepts both full profiles while preserving all GPU identity/order/driver/VRAM/kernel/fault and rental/ownership gates. **No actual power limits, clocks, drivers, Hive/cloud settings or serving configuration changed.** Both .59 permissions refreshed only for this guard's source SHA. Existing Hive supervision naturally restored selected[23], no manual/duplicate start. Fresh real Hive/UID1000 ownership, key-free LAN63/completeSSE/usage, loaded .59/native262K/two slots/defaultn_predict-1 passed; `undeclared_tool_calls="call"` retained. **620Python OK/4skipped +all8shell**; admission active, no renter stopped, no lease/journal/stop marker or pending controller/test/switch. [Evidence](results/strata-v0159-power-policy-repair-20261122.json) / [profile](STRATA_V0159_TUNED.md). This is startup-repair evidence, not a new speed or real-agent-quality claim.
 

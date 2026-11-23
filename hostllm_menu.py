@@ -20,17 +20,20 @@ DATA = owner_home() / '.local/share/localllm-strata'
 CURRENT = Path('/hive/miners/custom/llm-hosting/current')
 CANDIDATE = 'unsloth-v31-iq4xs-q8-cvec-2slot-v0159'
 TUNED = CANDIDATE + '-tuned'
+NATIVE66 = 'unsloth-v31-iq4xs-q8-cvec-2slot-v0166'
 PROFILES = {
     'swift15u-q8': 'Swift 1.5 Uncensored Q8',
     'iq3_s-sc117-abliterated-ple-q8-2slot-v0146': 'SC117 Q8 PLE / Strata 0.1.46',
     'unsloth-v31-iq4xs-q8-cvec-2slot-v0146': 'Unsloth V3.1 IQ4_XS / Strata 0.1.46',
     CANDIDATE: 'Unsloth V3.1 IQ4_XS / Strata 0.1.59',
     TUNED: 'Unsloth V3.1 IQ4_XS / Strata 0.1.59 TUNED',
+    NATIVE66: 'Unsloth V3.1 IQ4_XS / app0.2.20 engine0.1.66',
 }
 STATES = (
     ('unsloth-v31-iq4xs-q8-cvec-2slot-trial', 'unsloth-v31-iq4xs-q8-cvec-2slot', 'Unsloth V3.1 IQ4_XS / Strata 0.1.46'),
     (CANDIDATE + '-trial', CANDIDATE, 'Unsloth V3.1 IQ4_XS / Strata 0.1.59'),
     (TUNED + '-trial', TUNED, 'Unsloth V3.1 IQ4_XS / Strata 0.1.59 TUNED'),
+    (NATIVE66 + '-trial', NATIVE66, 'Unsloth V3.1 IQ4_XS / app0.2.20 engine0.1.66'),
     ('sc117-iq3s-ple-q8-2slot-trial', 'sc117-q8-2slot', 'SC117 Q8 PLE / Strata 0.1.46'),
 )
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
@@ -135,6 +138,15 @@ def tuned_authorized():
         return False
 
 
+def native66_authorized():
+    try:
+        import unsloth_v31_v0166_profile as P
+        P.authorize_activation()
+        return True
+    except (SafetyError, OSError, ValueError):
+        return False
+
+
 def snapshot(active):
     containers = query(['docker', 'ps', '--format', '{{.ID}}'])
     if containers is None and os.geteuid() != 0:
@@ -147,7 +159,7 @@ def snapshot(active):
         'compute': compute_summary(query(['nvidia-smi', '--query-compute-apps=pid,process_name', '--format=csv,noheader,nounits'])),
         'gpus': gpu_rows(query(['nvidia-smi', '--query-gpu=index,memory.used,memory.total', '--format=csv,noheader,nounits'])),
         'prepared': offline_prepared(), 'candidate_authorized': candidate_authorized(),
-        'tuned_authorized': tuned_authorized(),
+        'tuned_authorized': tuned_authorized(), 'native66_authorized': native66_authorized(),
     }
 
 
@@ -268,6 +280,12 @@ def render_menu(data, *, width=80, color=False, unicode=True):
     if tuned_selected:
         tuned_note += ' / SELECTED'
     p.option(23, 'Unsloth V3.1 IQ4_XS', tuned_note, selected=tuned_selected, locked=not tuned_ok)
+    native_ok = data.get('native66_authorized', False)
+    native_selected = data['selected'] == NATIVE66
+    native_note = '.66 / app.2.20 / ' + ('TRIAL AUTHORIZED' if native_ok else 'LOCKED')
+    if native_selected:
+        native_note += ' / SELECTED'
+    p.option(24, 'Unsloth V3.1 IQ4_XS', native_note, selected=native_selected, locked=not native_ok)
     p.row(p.ink('        Unsloth: Q8 PLE / projection ON / CPU vision / MTP', 'muted'))
     p.row(p.ink('        2 x native 262K / 16 GiB / 8 cached histories', 'muted'))
     p.row()

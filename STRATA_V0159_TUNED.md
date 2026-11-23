@@ -1,6 +1,12 @@
 # Unsloth V3.1 IQ4_XS — tuned .59 Hive trial, 2026-11-14
 
-## Latest — 2026-11-22, read-only hardware-policy repair; [23] restored
+## Latest — 2026-11-23, retained rollback; no LLM running pending operator reboot
+
+New app0.2.20/engine0.1.66 [24]/low[12] was added on request. Its short feature checks passed, but during131K prefill GPU3 suffered Xid79/Xid154; cause unknown, tests stopped, no retry/reset/reboot. The operator will reboot/test manually; [24] is selected with exact post-reboot-only approval, current faulted boot blocked. **Original [23] remains retained, unchanged as a serving recipe/config, but is NOT currently running** because hardware is unavailable. See `STRATA_V0220_CANDIDATE.md`.
+
+The same request removed power-cap comparisons from ALL model options. No actual power/clock/HiveOS setting changed. Hardware identity/VRAM/fault/renter/ownership gates remain. Old .59 permissions were refreshed only for the reviewed shared safety/integration source hashes, not their configurations, recipe, runtime or model assets. Native context/two users/cache/default unlimited and `undeclared_tool_calls="call"` remain intact. No automatic GPU test/controller/restoration is queued.
+
+## Historical — 2026-11-22, read-only hardware-policy repair; [23] then restored
 
 The operator's current selection is **tuned .59 Hive[23]/low[11]**, restored through its existing normal Hive supervision after repeated hardware-guard refusals. Actual GPU identities/driver/VRAM were unchanged; power caps had differed from the old exact300/300/300/280W snapshot. The operator explicitly approved **both300/300/300/280W and300/300/300/300W**.
 
