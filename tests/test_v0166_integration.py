@@ -17,10 +17,14 @@ class Native66Integration(unittest.TestCase):
   with mock.patch.object(P,'authorize_activation',side_effect=SafetyError('66 LOCKED')),mock.patch.object(S,'inspect_owned_workload') as inspect,mock.patch.object(S,'run') as run,mock.patch.object(S,'write_journal') as journal:
    with self.assertRaisesRegex(SafetyError,'66 LOCKED'):S.switch_profile(P.PROFILE)
    inspect.assert_not_called();run.assert_not_called();journal.assert_not_called()
- def test_same_frozen_weights_features_args_except_separate_routing_state(self):
+ def test_same_weights_features_except_explicit_context_rope_and_separate_routing_state(self):
   old=P.C.canonical_config(P.ROOT,Path('/home/user'));new=P.canonical_config();args=list(new['args'])
   args[args.index('--expert-profile')+1]=old['args'][old['args'].index('--expert-profile')+1]
+  self.assertEqual(args[args.index('--max-context')+1],'524288');args[args.index('--max-context')+1]='262144'
+  self.assertEqual(args[-6:],['--rope-scaling','yarn','--rope-scale','2','--yarn-orig-ctx','262144']);del args[-6:]
   self.assertEqual(args,old['args'])
+  self.assertNotIn('max_tokens',new.get('sampling',{}));self.assertEqual(P.UI_MAX_TOKENS,65536)
+  self.assertIn('yarn2-524k',P.STATE_NAME);self.assertNotEqual(P.STATE_NAME,P.OLD_NATIVE_STATE_NAME)
   allowed={'args','exe','cwd','lib_dirs','layer_split','model_name','aliases','env','undeclared_tool_calls','vision'}
   self.assertEqual({k:v for k,v in old.items() if k not in allowed},{k:v for k,v in new.items() if k not in allowed})
   vision=dict(new['vision']);vision['exe']=old['vision']['exe'];self.assertEqual(vision,old['vision'])
@@ -42,7 +46,7 @@ class Native66Integration(unittest.TestCase):
     with self.assertRaises(SafetyError):V.main()
     core.assert_not_called()
  def test_foreign_state_refuses(self):
-  for p in (P.C.state_root(),S.v3159_tuned.state_root(),Path('/tmp/unowned')):
+  for p in (P.C.state_root(),S.v3159_tuned.state_root(),P.state_root().parent/P.OLD_NATIVE_STATE_NAME,Path('/tmp/unowned')):
    with self.subTest(state=p),self.assertRaises(SafetyError):P.require_state(p)
  def test_offline_ready_does_not_authorize_start(self):
   result=types.SimpleNamespace(returncode=0,stdout=P.READY+'\n',stderr='')

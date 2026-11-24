@@ -13,7 +13,7 @@ STRATA_LAUNCHER="${LLM_ROOT}/v0166_strata_launcher.py"
 STRATA_OWNER_USER='user'
 STRATA_HOME='/home/user'
 STRATA_DATA_ROOT='/home/user/.local/share/localllm-strata'
-STRATA_STATE_ROOT='/home/user/.local/state/locallm-strata/unsloth-v31-iq4xs-q8-cvec-2slot-v0166-trial'
+STRATA_STATE_ROOT='/home/user/.local/state/locallm-strata/unsloth-v31-iq4xs-q8-cvec-2slot-v0166-yarn2-524k-trial'
 PROFILE='unsloth-v31-iq4xs-q8-cvec-2slot-v0166'
 RUNTIME='0.1.66'
 PORT='8080'
@@ -296,14 +296,14 @@ if (( available_mib < 65536 )); then
 fi
 abort_if_stopping
 
-say 'checking isolated Unsloth V3.1 IQ4_XS app0.2.20/engine.66 configuration: native 262144, two slots/groups, 16 GiB/eight histories, CPU vision, stock solo MTP; bounded trial'
+say 'checking isolated Unsloth V3.1 IQ4_XS app0.2.20/engine.66: YaRN2 524288 (trained262144), UI output64K, two slots/groups, 16 GiB/eight histories, CPU vision, stock solo MTP; bounded trial'
 readiness="$(run_strata_user "$STRATA_LAUNCHER" --check-ready --profile "$PROFILE" \
         --runtime "$RUNTIME" --parallel 2 --batch-groups 2)" || {
     say 'Unsloth V3.1 IQ4_XS trial preflight failed; no existing service was stopped'
     request_hive_stop
     exit 1
 }
-expected_readiness='READY CONFIG: Unsloth V3.1 IQ4_XS app0.2.20/engine0.1.66; Q8 PLE/projection ON4-44/BF16 CPU vision/stock MTP3; native262144 per chat/2slots/2groups/16384MiB/8histories/INT8-32768; compatible tuning/native kernels; bounded trial, not qualification.'
+expected_readiness='READY CONFIG: Unsloth V3.1 IQ4_XS app0.2.20/engine0.1.66; Q8 PLE/projection ON4-44/BF16 CPU vision/stock MTP3; YaRN2/524288 per chat (trained262144)/UI64K/2slots/2groups/16384MiB/8histories/INT8-32768; compatible tuning/native kernels; bounded trial, not qualification.'
 actual_readiness="$(grep '^READY CONFIG:' <<< "$readiness" || true)"
 if [[ "$actual_readiness" != "$expected_readiness" || "$readiness" == *'OFFLINE CONFIG:'* || "$readiness" == *'TRIAL CONFIG:'* ]]; then
     say 'Unsloth V3.1 IQ4_XS isolated trial preflight line is missing or mismatched; refusing start'

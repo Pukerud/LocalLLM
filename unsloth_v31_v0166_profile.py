@@ -10,12 +10,15 @@ REPO=Path(__file__).resolve().parent
 A=C.A
 VERSION=R.VERSION
 PROFILE=HIVE_PROFILE=A.PROFILE+'-v0166'
-STATE_NAME=PROFILE+'-trial'
+OLD_NATIVE_STATE_NAME=PROFILE+'-trial'
+STATE_NAME=PROFILE+'-yarn2-524k-trial'
+CONTEXT=524288
+UI_MAX_TOKENS=65536
 TRIAL_ENV='STRATA_UNSLOTH_V31_V0166_TRIAL'
 MODEL_ID=C.BASE.MODEL_ID+'-v0166'
 APPROVAL=Path('/var/lib/localllm-strata/approvals/unsloth-v31-iq4xs-v0166.json')
 READY=('READY CONFIG: Unsloth V3.1 IQ4_XS app0.2.20/engine0.1.66; Q8 PLE/projection ON4-44/BF16 CPU vision/stock MTP3; '
-       'native262144 per chat/2slots/2groups/16384MiB/8histories/INT8-32768; compatible tuning/native kernels; bounded trial, not qualification.')
+       'YaRN2/524288 per chat (trained262144)/UI64K/2slots/2groups/16384MiB/8histories/INT8-32768; compatible tuning/native kernels; bounded trial, not qualification.')
 LOCKED='Strata0166 option LOCKED: exact source/runtime/config and independent root approval required.'
 # Operator approved manual testing AFTER reboot, never another load on the faulted boot.
 FAULT_BOOT_SHA256='b161f45d2cb47b93362fc6d5ca62231a9b455f702f756d4a070d61e5eebc1441'
@@ -26,6 +29,7 @@ ENV={**C.ENV,'STRATA_PF_HC_REGION':'1','STRATA_PF_GROUP_SCRATCH':'0','STRATA_PW_
      'STRATA_ROUTE_TAIL_SKIP':'0','STRATA_ADAPT_FETCH':'0','STRATA_VHEAD_BITPLANE':'0',
      'STRATA_DENSE_I8_TC':'1','STRATA_DENSE_I8_TC_MIN_T':'9'}
 POLICIES=('unsloth_v31_v0166_profile.py','v0166_strata_launcher.py','strata_v0220_runtime.py','prepare_strata_v0220.py',
+ 'strata_v0166_ui_defaults.py','publish_v0166_defaults.py',
  'unsloth_v31_v0159_profile.py','unsloth_v31_v0159_tuned_profile.py','unsloth_v31_profile.py','unsloth_v31_assets.py','stage_unsloth_v31.py',
  'strata_v0213_runtime.py','strata_v0213_activation.py','strata_launcher.py','hive_profile_switch.py','engine_safety.py','hosting_lifecycle.py',
  'hive-llm-miner/profiles/'+PROFILE+'/h-run.sh')
@@ -36,6 +40,8 @@ def canonical_config(root=ROOT,home=None):
  if Path(root)!=ROOT:raise SafetyError('0166 data root differs')
  state=state_root(home);cfg=copy.deepcopy(C.canonical_config(ROOT,Path('/home/user')));base=R.folder(ROOT)
  cfg['args'][cfg['args'].index('--expert-profile')+1]=str(state/'expert-profile.bin')
+ cfg['args'][cfg['args'].index('--max-context')+1]=str(CONTEXT)
+ cfg['args']+=['--rope-scaling','yarn','--rope-scale','2','--yarn-orig-ctx','262144']
  cfg.update(exe=str(base/'payload/strata'),cwd=str(base/'source/terminal'),lib_dirs=[str(base/'payload')],layer_split='12,24,36',
             model_name=MODEL_ID,aliases=[PROFILE,C.MODEL_ID,C.PROFILE,C.MODEL_ID+'-tuned',C.PROFILE+'-tuned'],
             env=dict(ENV,STRATA_PARALLEL='2',STRATA_BATCH_GROUPS='2'),undeclared_tool_calls='call',engine_silence_s=0)
@@ -59,7 +65,8 @@ def require_environment(state):
  if any(k.startswith('STRATA_') and k not in allowed for k in os.environ):raise SafetyError('0166 inherited STRATA override refused')
 def approval_contract():
  cfg=canonical_config();base=R.folder(ROOT)
- return {'schema':1,'scope':'OPERATOR-APPROVED-POST-REBOOT-MANUAL-STRATA0220-TRIAL','blocked_boot_sha256':FAULT_BOOT_SHA256,'profile':PROFILE,'owner_uid':1000,'runtime':VERSION,'source_commit':R.PIN,
+ return {'schema':1,'scope':'OPERATOR-APPROVED-STRATA0166-524K-UI64K-DEFAULT-20261124','blocked_boot_sha256':FAULT_BOOT_SHA256,'profile':PROFILE,'owner_uid':1000,'runtime':VERSION,'source_commit':R.PIN,
+ 'ui_app_original_sha256':R.UI.WEB_ORIGINAL_SHA256,'ui_app_patched_sha256':R.UI.WEB_PATCHED_SHA256,'ui_only_default_max_tokens':UI_MAX_TOKENS,
  'model_revision':A.REVISION,'ple_sha256':A.ASSETS[-1][4],'engine_sha256':R.OFFICIAL_FILES['strata'][1],
  'configuration_sha256':hashlib.sha256(json.dumps(cfg,sort_keys=True,separators=(',',':')).encode()).hexdigest(),
  'runtime_manifest_sha256':R.digest(base/'prepared.json'),'policy_sha256':{p:R.digest(REPO/p) for p in POLICIES}}

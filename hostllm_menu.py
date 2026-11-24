@@ -27,13 +27,14 @@ PROFILES = {
     'unsloth-v31-iq4xs-q8-cvec-2slot-v0146': 'Unsloth V3.1 IQ4_XS / Strata 0.1.46',
     CANDIDATE: 'Unsloth V3.1 IQ4_XS / Strata 0.1.59',
     TUNED: 'Unsloth V3.1 IQ4_XS / Strata 0.1.59 TUNED',
-    NATIVE66: 'Unsloth V3.1 IQ4_XS / app0.2.20 engine0.1.66',
+    NATIVE66: 'Unsloth V3.1 IQ4_XS / .66 / 512K YaRN2 / UI64K',
 }
 STATES = (
     ('unsloth-v31-iq4xs-q8-cvec-2slot-trial', 'unsloth-v31-iq4xs-q8-cvec-2slot', 'Unsloth V3.1 IQ4_XS / Strata 0.1.46'),
     (CANDIDATE + '-trial', CANDIDATE, 'Unsloth V3.1 IQ4_XS / Strata 0.1.59'),
     (TUNED + '-trial', TUNED, 'Unsloth V3.1 IQ4_XS / Strata 0.1.59 TUNED'),
-    (NATIVE66 + '-trial', NATIVE66, 'Unsloth V3.1 IQ4_XS / app0.2.20 engine0.1.66'),
+    (NATIVE66 + '-trial', NATIVE66, 'Unsloth .66 retained native262K state'),
+    (NATIVE66 + '-yarn2-524k-trial', NATIVE66, 'Unsloth .66 / 512K YaRN2 / UI64K'),
     ('sc117-iq3s-ple-q8-2slot-trial', 'sc117-q8-2slot', 'SC117 Q8 PLE / Strata 0.1.46'),
 )
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
@@ -282,12 +283,13 @@ def render_menu(data, *, width=80, color=False, unicode=True):
     p.option(23, 'Unsloth V3.1 IQ4_XS', tuned_note, selected=tuned_selected, locked=not tuned_ok)
     native_ok = data.get('native66_authorized', False)
     native_selected = data['selected'] == NATIVE66
-    native_note = '.66 / app.2.20 / ' + ('TRIAL AUTHORIZED' if native_ok else 'LOCKED')
+    native_note = '.66 / 512K YaRN2 / UI64K / ' + ('TRIAL AUTHORIZED' if native_ok else 'LOCKED')
     if native_selected:
         native_note += ' / SELECTED'
     p.option(24, 'Unsloth V3.1 IQ4_XS', native_note, selected=native_selected, locked=not native_ok)
     p.row(p.ink('        Unsloth: Q8 PLE / projection ON / CPU vision / MTP', 'muted'))
-    p.row(p.ink('        2 x native 262K / 16 GiB / 8 cached histories', 'muted'))
+    p.row(p.ink('        [21-23]: native 262K / [24]: 512K YaRN2', 'muted'))
+    p.row(p.ink('        2 chats / 2 groups / 16 GiB / 8 cached histories', 'muted'))
     p.row()
     p.section('LOCAL HOSTING')
     if p.width >= 70:
@@ -334,9 +336,11 @@ def details():
     print('  Functional smoke is not full-context/quality/speed qualification.')
     print('  Long-prefill pauses remain possible. Current .46 ignores its')
     print('       pipeline-windows=2 with batch slots; its two groups still run.')
+    print('  [24] .66: 524288 per chat via YaRN2 (trained262144); UI output65536.')
+    print('       Separate long-context state; native state retained. API default unlimited.')
     print('  Hive switching verifies ownership; rentals/manual sessions never stop.')
     print('  Admission stays running. Key-free API: trusted, firewalled LAN only.')
-    print('  Stable IDs: local [1]/[7], Hive [12]/[18]/[21]/[22]/[23].')
+    print('  Stable IDs: local [1]/[7], Hive [12]/[18]/[21]/[22]/[23]/[24].')
 
 
 def main():

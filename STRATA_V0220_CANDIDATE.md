@@ -1,6 +1,10 @@
 # Separate Strata 0.2.20 / engine 0.1.66 option
 
-## Current — 2026-11-24, separate 510K bounded trial passed; normal [24] still262K
+## Current — 2026-11-24, operator-approved [24] defaults512K/UI64K applied, RUNNING
+
+[Applied settings and evidence](STRATA_V0166_524K_DEFAULTS_20261124.md): [24]/low[12] now524288 via YaRN2 (trained262144), StrataUI output65536, API unlimited-1. New isolated generic long-state; old native data retained. Model-scoped browser16K migration/other-model prefs/chat/custom blank preservation verified. Signed runtime and all model/features/2slots2groups/cache/tuning unchanged. Real normal-Hive UID1000/token-parent/loaded524288/2slots/UI POST65536/key-free63 passed, ownedstop/newtoken/newprocess restart/final LAN63 passed. OSN+miner active on latest explicit request; no lease/journal/stop marker/worker pending. No assistant OSN stop/GPU setting/reset/reboot/renter stop/cloud restore. Full suite649Python/4skipped+8shell+14JS. Previous510K result remains bounded, not broadIQ/full-window concurrency/64K-longoutput/stability qualification; original bus-fault cause unknown. Hard-refresh web UI to use default64K.
+
+## Earlier — 2026-11-24, separate 510K bounded trial passed; then-normal [24]262K
 
 [Fresh trial](STRATA_V0166_510K_20261124.md): with OSN already inactive, actual UID1000 .66/YaRN2/524288 loaded and completed510000 cold input/8-of-8 records correct in94.667s,5447.7prefill/124.2decode tok/s. Correct cached510139-input follow-up reused510098 tokens in0.501s. No new hardware fault. Raw cached-helper assertion failure is preserved and independently validated, not hidden or rerun. Original weights/features/two slots/histories/config/grants/current flight sheet retained. **No permanent512K promotion: selected [24] stays native262144.** Temporary model cleaned up, grants revoked/own lease gone, pretrial owned stop marker preserved; OSN inactive/Hive stopped, nothing queued. Server remains unlimited-output by default;16K is not a server ceiling. Not broad quality/full-window concurrency/long-output/soak qualification. All gates unchanged, no assistant service or GPU-setting action.
 

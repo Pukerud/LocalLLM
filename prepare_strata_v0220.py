@@ -10,7 +10,8 @@ ROOT=Path('/home/user/.local/share/localllm-strata')
 def prepare():
  if os.geteuid()!=1000 or os.environ.get('CUDA_VISIBLE_DEVICES')!='':raise SafetyError('Prepare as UID1000 with GPUs hidden')
  base=R.folder(ROOT)
- if (base/'prepared.json').exists():return R.ready(ROOT)
+ if (base/'prepared.json').exists():
+  R.patch_server(base/'source');R.UI.patch(base/'source');return R.ready(ROOT)
  docker_empty();archive=R.checked_file(base/R.ASSET)
  if archive.stat().st_size!=R.ASSET_BYTES or R.digest(archive)!=R.ASSET_SHA256:raise SafetyError('Pinned archive incomplete/different')
  checkout=base/'source';R.source_check(checkout,patched=False);source=checkout/'terminal';package=base/'package'
@@ -22,7 +23,7 @@ def prepare():
   subprocess.run([str(python),'-m','pip','install','--only-binary=:all:','--index-url','https://pypi.org/simple','-r',str(source/'requirements.txt')],check=True)
  script='from pathlib import Path;from strata_control import engine_component as E;c=E.read_manifest(Path('+repr(str(package))+'));assert c.version=="0.1.66" and "sm_86" in c.archs;assert E.verify_signature(c)=="verified";E.verify(c,full=True)'
  subprocess.run([str(python),'-c',script],cwd=source,check=True)
- R.patch_server(checkout);payload=base/'payload';payload.mkdir(mode=0o700,exist_ok=True)
+ R.patch_server(checkout);R.UI.patch(checkout);payload=base/'payload';payload.mkdir(mode=0o700,exist_ok=True)
  for name,pin in R.OFFICIAL_FILES.items():
   p=R.checked_file(package/name)
   if (p.stat().st_size,R.digest(p))!=pin:raise SafetyError('Official payload differs: '+name)

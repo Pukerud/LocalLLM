@@ -50,9 +50,9 @@ profile_label() {
         unsloth-v31-iq4xs-q8-cvec-2slot-v0166)
             if /usr/bin/env -i HOME=/home/user USER=root LOGNAME=root PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 \
               /usr/bin/python3 -c 'import sys;sys.path.insert(0,"/home/user/LocalLLM");import unsloth_v31_v0166_profile as C;C.authorize_activation()' >/dev/null 2>&1; then
-                printf '%s' 'Unsloth V3.1 IQ4_XS - app0.2.20 / engine.66 / TRIAL AUTHORIZED'
+                printf '%s' 'Unsloth V3.1 IQ4_XS - .66 / 512K YaRN2 / UI64K / TRIAL AUTHORIZED'
             else
-                printf '%s' 'Unsloth V3.1 IQ4_XS - app0.2.20 / engine.66 / LOCKED'
+                printf '%s' 'Unsloth V3.1 IQ4_XS - .66 / 512K YaRN2 / UI64K / LOCKED'
             fi ;;
         *) return 1 ;;
     esac

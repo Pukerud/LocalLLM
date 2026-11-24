@@ -2,6 +2,7 @@
 import hashlib,json,os,stat,subprocess
 from pathlib import Path
 from engine_safety import SafetyError
+import strata_v0166_ui_defaults as UI
 from strata_v0213_runtime import digest,checked_file,record,check_record,SERVER_OLD,SERVER_NEW
 VERSION='0.1.66'
 TAG='v0.2.20'
@@ -26,8 +27,9 @@ def source_check(source,*,patched=True):
  if subprocess.check_output(git+['rev-parse','HEAD'],text=True).strip()!=PIN:raise SafetyError('Strata0220 source pin changed')
  changed=subprocess.check_output(git+['diff','HEAD','--name-only'],text=True).splitlines()
  sha=digest(checkout/'terminal/serve/server.py')
- if changed not in ([],['terminal/serve/server.py']) or sha not in ((SERVER_PATCHED_SHA256,) if patched else (SERVER_ORIGINAL_SHA256,SERVER_PATCHED_SHA256)):
-  raise SafetyError('Strata0220 source differs beyond exact external-lifecycle patch')
+ if set(changed)-{'terminal/serve/server.py',UI.WEB_PATH} or sha not in ((SERVER_PATCHED_SHA256,) if patched else (SERVER_ORIGINAL_SHA256,SERVER_PATCHED_SHA256)):
+  raise SafetyError('Strata0220 source differs beyond exact lifecycle/UI patches')
+ UI.check(checkout,patched=patched)
 def patch_server(checkout):
  p=Path(checkout)/'terminal/serve/server.py';data=p.read_bytes();sha=digest(p)
  if sha==SERVER_PATCHED_SHA256:return

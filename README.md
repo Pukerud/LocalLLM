@@ -1,8 +1,12 @@
 # LocalLLM — Swift, SC117 and Unsloth V3.1
 
-HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default. Unsloth app0.2.20/engine0.1.66 Hive[24]/low[12] remains selected with native262144/two slots. The operator's new boot is healthy; a separate YaRN2 trial passed510K retrieval and cached follow-up, but the permanent context was not changed. OSN remains inactive/Hive stopped/no running LLM; no assistant service or GPU-setting action.** Tuned .59[23], original .46[21], official .59[22], Swift and SC117[18] remain retained.
+HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default. Unsloth app0.2.20/engine0.1.66 Hive[24]/low[12] is selected and RUNNING with524288 context via YaRN2/two slots and65536 web-UI output default. OSN is active. API output remains unlimited; no GPU/power/clock/driver/reset change.** Tuned .59[23], original .46[21], official .59[22], Swift and SC117[18] remain retained.
 
-## Latest — 2026-11-24, separate .66 510K bounded trial PASSED
+## Latest — 2026-11-24, menu[24] defaults512K context /64K UI output, RUNNING
+
+[Applied defaults and live proof](STRATA_V0166_524K_DEFAULTS_20261124.md): operator explicitly requested524288/YaRN2 and65536 StrataUI default on[24], then OSN+miner running. Real browser old16K migration/UI POST65536/stream/key-free63 and actual loaded .66/524288/2slots/UID1000/Hive token-parent proof passed, then owned stop/fresh-token new-process restart and final LAN63 with OSN active. API stays unlimited; no hard64K clamp. Old native state and other options retained; current cloud/OC untouched; no GPU setting/reset or renter stop.649PythonOK/4skipped+8shell+14JS. Hard-refresh UI; input+thinking+output must still fit. No pending test/controller. [Evidence](results/strata-v0166-524k-ui64k-defaults-20261124.json).
+
+## Earlier — 2026-11-24, separate .66 510K bounded trial PASSED
 
 [Results and limits](STRATA_V0166_510K_20261124.md): actual510000 cold input,8/8 distributed records correct,**94.667s /5447.7prefill /124.2decode tok/s**; correct cached510139-input follow-up reused510098 tokens in**0.501s**. No hardware fault; same weights/quantization/vision/projection/MTP3/two slots/cache. Original raw helper error is disclosed: a cold-only assertion rejected the completed cached sample; independent CPU validation passed, no inference rerun. [Evidence](results/strata-v0166-510k-live-20261124.json). **[24] stays native262144 until separately changed; no permanent512K promotion, broad quality or stability claim.** OSN already inactive was preserved; user flight sheet untouched, temporary test cleaned up, no task pending. Server output default remains unlimited; UI Max tokens blank=Until done,65536 supported within remaining context.
 

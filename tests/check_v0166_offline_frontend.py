@@ -39,7 +39,8 @@ def run(out):
         child = S.child_env(cfg)
         assert S.mtp_retry_args(cfg, cfg['exe']) is None
         assert S.nodraft_retry_args(cfg, cfg['exe']) is None
-    for flag, value in (('--max-context','262144'),('--batch','2'),('--batch-groups','2'),('--kv','int8'),
+    for flag, value in (('--max-context','524288'),('--rope-scaling','yarn'),('--rope-scale','2'),('--yarn-orig-ctx','262144'),
+                        ('--batch','2'),('--batch-groups','2'),('--kv','int8'),
                         ('--kv-resident','32768'),('--conversation-cache-mib','16384'),
                         ('--conversation-cache-slots','8'),('--spec','3'),('--layer-split','12,24,36')):
         assert assembled.count(flag) == 1 and assembled[assembled.index(flag) + 1] == value, flag
