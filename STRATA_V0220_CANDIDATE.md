@@ -1,6 +1,10 @@
 # Separate Strata 0.2.20 / engine 0.1.66 option
 
-## Current — ready for operator's post-reboot manual test, NOT qualified
+## Current — 2026-11-24, healthy new boot; new 500K+ attempt blocked PRE-GPU
+
+Operator reported successful manual use and explicitly requested a fresh extended-context test. New boot/original four GPUs/driver/kernel/VRAM/fault gates pass; observed caps300W each remain operator-owned, not requirements. Isolated UID1000/full-model/runtime checks and real pinned-frontend CPU mock **510000-token count/key-free63** passed. However, OSN-managed Hive Wildrig restarted despite the task pause. The monitor stopped before candidate frontend/model/inference: **no 500K speed/capacity/quality result**. No service/admission or hardware setting/reset/reboot changed. Prior normal Hive Wildrig restored; OSN active, original [24] config/grant/native262144/two slots retained, no running LLM or task lease/journal/stop marker/controller. Temporary experiment permission revoked. See [closed attempt](STRATA_V0166_500K_20261124.md). Future testing needs a verified miner-only pause preserving admission, fresh scope and normal gates; never replay the closed controller/grant/identities.
+
+## Historical — November23 post-reboot manual handoff, NOT qualified
 
 **New Hive[24]/low[12] is installed and selected. No LLM currently runs on this faulted boot.** GPU3 suffered confirmed Xid79 bus loss and Xid154 Node Reboot Required during the first131072-input prefill, last progress40960. Cause unknown. Assistant GPU tests stopped; only the fresh token/UID1000/parent/executable/birth-verified test family was cleaned up. No reset, reboot, power/clock/driver change, renter/container/service stop or hardware retry occurred; admission remains active.
 

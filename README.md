@@ -1,8 +1,12 @@
 # LocalLLM — Swift, SC117 and Unsloth V3.1
 
-HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default. New Unsloth app0.2.20/engine0.1.66 Hive[24]/low[12] is selected for manual testing after the operator reboots. No LLM runs on the current faulted boot.** Tuned .59[23], original .46[21], official .59[22], Swift and SC117[18] remain retained.
+HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default. Unsloth app0.2.20/engine0.1.66 Hive[24]/low[12] remains selected with native262144/two slots. The operator's new boot is healthy; actual normal Hive Wildrig fallback is running, not an LLM.** Tuned .59[23], original .46[21], official .59[22], Swift and SC117[18] remain retained.
 
-## Latest — 2026-11-23, new option/manual post-reboot test; no power-cap locking
+## Latest — 2026-11-24, fresh 500K+ request blocked BEFORE GPU/model start
+
+[Closed attempt](STRATA_V0166_500K_20261124.md): exact isolated 524288/YaRN2 preparation, UID1000/full-data/runtime checks and real pinned-frontend CPU mock **510000-token count/key-free63** passed. An intervening renter finished naturally. After owned miner stop, OSN-managed Wildrig restarted despite the task pause; monitor refused before any frontend/model/500K inference. **No extended-context capacity/speed/IQ result.** Normal prior Hive mining restored, OSN active; original profiles/configs/approvals/cloud/histories unchanged. Temporary experiment permission revoked, no lease/journal/stop marker/controller/test queued. Need a verified miner-only idle pause that preserves admission before a newly scoped test. No service stop or GPU/power/reset/reboot change. [Evidence](results/strata-v0166-500k-preflight-20261124.json).
+
+## Historical — 2026-11-23, new option/manual post-reboot test; no power-cap locking
 
 [New option and status](STRATA_V0220_CANDIDATE.md): exact signed separate runtime/private state, compatible existing tuning/fixes, same V3.1/Q8 PLE/projection/CPU vision/MTP3/native262K/2users/16GiB8histories/default-1. All power-cap comparisons removed; no LocalLLM power/clock writes, HiveOS owns its normal settings. GPU/VRAM/fault/renter/token/UID/pidfd/Host-Origin checks remain. Initial real .66 short feature suite passed;131K prefill failed with GPU3 Xid79/Xid154, cause unknown. Tests stopped, exact owned cleanup performed, no reset/reboot/retry. Latest user explicitly will reboot/test manually: fresh [24] permission excludes this faulted boot; normal Hive can load it only after a different healthy boot. **639Python OK/4skipped +all8shell**, no automated test/controller queued; [23] retained rollback, admission active. [Sanitized evidence](results/strata-v0220-trial-20261123.json). No full-context/quality/speed-win claim.
 
