@@ -1,6 +1,6 @@
 # LocalLLM — Swift, SC117 and Unsloth V3.1
 
-HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default. Unsloth app0.2.20/engine0.1.66 Hive[24]/low[12] remains selected with native262144/two slots. The operator's new boot is healthy; actual normal Hive Wildrig fallback is running, not an LLM.** Tuned .59[23], original .46[21], official .59[22], Swift and SC117[18] remain retained.
+HostLLM and Hive custom-miner profiles for `.69`: four RTX 3090s and approximately 128 GB RAM. **Swift remains the installation default. Unsloth app0.2.20/engine0.1.66 Hive[24]/low[12] remains selected with native262144/two slots. The operator's new boot is healthy; latest stop check found OSN already inactive, then the verified Hive miner was stopped. No GPU job or LLM is running; no assistant service stop/start or 500K test was executed.** Tuned .59[23], original .46[21], official .59[22], Swift and SC117[18] remain retained.
 
 ## Latest — 2026-11-24, fresh 500K+ request blocked BEFORE GPU/model start
 
