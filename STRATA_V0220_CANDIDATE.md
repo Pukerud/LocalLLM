@@ -1,6 +1,10 @@
 # Separate Strata 0.2.20 / engine 0.1.66 option
 
-## Current — 2026-11-24, healthy new boot; new 500K+ attempt blocked PRE-GPU
+## Current — 2026-11-24, separate 510K bounded trial passed; normal [24] still262K
+
+[Fresh trial](STRATA_V0166_510K_20261124.md): with OSN already inactive, actual UID1000 .66/YaRN2/524288 loaded and completed510000 cold input/8-of-8 records correct in94.667s,5447.7prefill/124.2decode tok/s. Correct cached510139-input follow-up reused510098 tokens in0.501s. No new hardware fault. Raw cached-helper assertion failure is preserved and independently validated, not hidden or rerun. Original weights/features/two slots/histories/config/grants/current flight sheet retained. **No permanent512K promotion: selected [24] stays native262144.** Temporary model cleaned up, grants revoked/own lease gone, pretrial owned stop marker preserved; OSN inactive/Hive stopped, nothing queued. Server remains unlimited-output by default;16K is not a server ceiling. Not broad quality/full-window concurrency/long-output/soak qualification. All gates unchanged, no assistant service or GPU-setting action.
+
+## Earlier — 2026-11-24, healthy new boot; first 500K+ attempt blocked PRE-GPU
 
 Operator reported successful manual use and explicitly requested a fresh extended-context test. New boot/original four GPUs/driver/kernel/VRAM/fault gates pass; observed caps300W each remain operator-owned, not requirements. Isolated UID1000/full-model/runtime checks and real pinned-frontend CPU mock **510000-token count/key-free63** passed. However, OSN-managed Hive Wildrig restarted despite the task pause. The monitor stopped before candidate frontend/model/inference: **no 500K speed/capacity/quality result**. No service/admission or hardware setting/reset/reboot changed. Prior normal Hive Wildrig restored; OSN active, original [24] config/grant/native262144/two slots retained, no running LLM or task lease/journal/stop marker/controller. Temporary experiment permission revoked. See [closed attempt](STRATA_V0166_500K_20261124.md). Future testing needs a verified miner-only pause preserving admission, fresh scope and normal gates; never replay the closed controller/grant/identities.
 
